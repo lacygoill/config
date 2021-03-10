@@ -21,7 +21,7 @@
 # Understand the commands which are given to restore our config on a new machine:
 #
 #     $ echo ".cfg" >> .gitignore
-#     $ git clone --bare https://github.com/nicsig/config/ $HOME/.cfg
+#     $ git clone --bare https://github.com/lacygoill/config/ $HOME/.cfg
 #     $ alias config='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
 #     $ config checkout
 #

@@ -51,7 +51,7 @@ git --git-dir="${HOME}/.cfg/" --work-tree="${HOME}" commit -m 'update'
 git --git-dir="${HOME}/.cfg" --work-tree="${HOME}" ls-tree --full-tree --name-only HEAD -r | sed "s:^:$HOME/:" | xargs -I'{}' rsync -ahPuzR --delete --stats --exclude='.git*' '{}' "${DEST}"
 
 # Vim plugins
-vimrc="$(sed "/^Plug\s*'nicsig/!d; s:Plug\s*'nicsig/\|'.*::g" ~/.vim/vimrc)"
+vimrc="$(sed "/^Plug\s*'lacygoill/!d; s:Plug\s*'lacygoill" ~/.vim/vimrc)"
 # Do *not* quote `vimrc`!{{{
 #
 #     IFS=' ' read -r -a plugins <<< "$vimrc"

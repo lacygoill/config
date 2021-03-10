@@ -56,8 +56,8 @@
         ;}}}
 	default = simple
 [user]
-	name = nicsig
-	email = nicsig@nicsig.me
+	name = lagygoill
+	email = lacygoill@lacygoill.me
 [diff]
         ; use "patience diff" algorithm when generating patches
         ; `man git-config /diff\.algorithm`

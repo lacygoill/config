@@ -80,7 +80,7 @@ def cmd_cb(data, buffer_cb, time_fmt):
 
 weechat.register(
     'toggle_time',    # internal name of the script
-    'nicsig',         # author name of the script
+    'lacygoill',      # author name of the script
     '1.0',            # script version
     'GPL3',           # license
     'Toggle timestamp in buffers',    # description
