@@ -1,0 +1,15 @@
+% XFCE
+
+$channel: xfconf-query --list --verbose | sed '1d; s/^ *//'
+
+# edit configuration in GUI
+xfce4-settings-editor & disown
+
+# list properties of given channel
+xfconf-query --channel=<channel> --list --verbose
+
+# (re-)start panel
+xfce4-panel --restart
+
+# reload desktop background
+xfdesktop --reload

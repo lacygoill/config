@@ -1,0 +1,123 @@
+# control flow {{{1
+# selection statements {{{2
+
+snippet t01 "if statement" Am
+if (${1:condition})
+{
+	$0
+}
+endsnippet
+
+snippet t02 "switch/case statement" Am
+switch (${1:controlling-expression})
+{
+	// several consecutive labels are allowed
+	//     case 1: case 2: case 3:
+	case ${2:label-constant-expression}:
+		${3:statements};
+		// If you need to remove \`break\`, replace it with a FALLTHROUGH comment,
+		// to make sure you don't think about "fixing" the code in the future.
+		break;
+	// more \`case\`s
+	$0
+	default:
+		${4:statements};
+		// not necessary but useful in case we move \`default\` before, or add
+		// another \`case\` after it
+		break;
+}
+endsnippet
+
+# loop statements {{{2
+
+snippet t03 "for statement" Am
+for (${1:init}; ${2:test}; ${3:change})
+{
+	$0
+}
+endsnippet
+
+snippet t04 "while statement" Am
+while (${1:condition})
+{
+	$0
+}
+endsnippet
+
+snippet t05 "do statement" Am
+// always put braces around the body, so that a careless reader does not mistake
+// the \`while\` word for the start of a \`while\` statement (instead of the end
+// of a \`do\` one)
+do
+{
+	$0
+} while (${1:condition});
+endsnippet
+# }}}1
+# data types {{{1
+# boolean {{{2
+
+snippet t06 "work around the absence of the Boolean type in C89" Am
+// define the \`Bool\` enumerated type, whose enumerated constants are TRUE and FALSE
+typedef enum {TRUE = 1, FALSE = 0} Bool;
+Bool flag = TRUE;
+// Don't write \`if (flag == TRUE)\`.
+// It would only  work when \`flag\` is  1.  But there are other  true values (any
+// non-zero value actually).
+if (flag)
+	printf("flag is true\n");
+if (!flag)
+	printf("flag is false\n");
+$0
+endsnippet
+
+snippet t07 "use booleans in C99" Am
+// supplies macros for the \`bool\` type (to replace the default \`_Bool\`),
+// and for the \`true\` and \`false\` values
+#include <stdbool.h>
+
+// NOTE: contrary to C89, this type of boolean variable can only hold 0 or 1;
+// any non-zero value is automatically turned into 1
+bool flag = true;
+endsnippet
+# }}}1
+# test {{{1
+
+# function {{{1
+
+snippet t08 "function definition" Am
+	int
+main(void)
+{
+	$0
+	return 0;
+}
+endsnippet
+
+# miscellaneous {{{1
+
+snippet t09 "include given library" Am
+// \`$1\` can be:
+//
+//    - \`assert\` (for \`assert()\`)
+//    - \`math\` (for \`pow()\`)
+//    - \`stdbool\` (for \`bool\` data type)
+//    - \`stdio\` (for \`printf()\`, \`scanf()\`)
+//    ...
+#include <${1:header file}.h>
+$0
+endsnippet
+
+snippet t10 "macro definition" Am
+// If \`$2\` is a mere constant/literal you can drop the parentheses.
+// If it contains an operator, keep them (omitting them is a common pitfall).
+#define ${1:identifier} (${2:replacement-list})
+$0
+endsnippet
+
+snippet t11 "ask for user input with scanf()" Am
+// \`%d\` and \`%f\` tell \`scanf()\` to read resp. an integer or a float.
+// \`&x\` tells \`scanf()\` to write that integer/float in the variable \`x\`.
+scanf("%${1:d|f}", &x)
+$0
+endsnippet
