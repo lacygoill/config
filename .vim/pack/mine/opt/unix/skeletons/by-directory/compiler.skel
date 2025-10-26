@@ -1,0 +1,8 @@
+vim9script
+
+# Set  `g:current_compiler`  so   that  we  skip  the   default  compilers  in
+# `$VIMRUNTIME/compiler`.  Useful if our compiler is in `~/.vim/compiler`.
+g:current_compiler = '❴expand('<afile>:t:r')❵'
+
+CompilerSet errorformat=%f:%l:%c:%m
+CompilerSet makeprg=cmd\ %:p:S

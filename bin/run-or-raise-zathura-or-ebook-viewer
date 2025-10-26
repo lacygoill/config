@@ -1,0 +1,40 @@
+#!/bin/bash
+
+readonly CACHE="$TMPDIR/jumpapp_last_app_raised"
+
+function is_zathura_visible {
+  (( $(jumpapp -L zathura | wc --lines) > 1 ))
+}
+
+function is_ebook_viewer_visible {
+  (( $(jumpapp -L ebook-viewer | wc --lines) > 1 ))
+}
+
+function raise_zathura {
+  jumpapp -r zathura
+  echo zathura >"$CACHE"
+}
+
+function raise_ebook_viewer {
+  jumpapp -r ebook-viewer
+  echo ebook-viewer >"$CACHE"
+}
+
+if is_zathura_visible && is_ebook_viewer_visible; then
+  if ! [[ -f "$CACHE" ]]; then
+    raise_zathura
+  else
+    last_app_raised="$(< "$CACHE")"
+    if [[ "$last_app_raised" == 'zathura' ]]; then
+      raise_ebook_viewer
+    else
+      raise_zathura
+    fi
+  fi
+
+elif is_zathura_visible; then
+  raise_zathura
+
+elif is_ebook_viewer_visible; then
+  raise_ebook_viewer
+fi
