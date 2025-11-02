@@ -1,0 +1,5 @@
+% perl
+
+# test regex
+printf '%s' '<text>' | perl -n -w -e 'm/<regex>/ and exit 0 or exit 1'
+    # Warning: Don't separate `-e` from the command.

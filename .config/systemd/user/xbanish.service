@@ -1,0 +1,8 @@
+[Unit]
+Description=hide the X11 mouse cursor when a key is pressed
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/xbanish
+ExecStop=/usr/bin/kill -STOP $MAINPID
