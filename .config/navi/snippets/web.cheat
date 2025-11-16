@@ -1,0 +1,65 @@
+% web
+
+# start web server using Python Flask framework
+flask --app=/path/to/server.py run --host=127.0.0.1 --port=5000
+    # Require the flask module:  `$ pipx install Flask`
+    #
+    # ---
+    #
+    # Here is a code example for `server.py`:
+    #
+    #     #!/usr/bin/env python3
+    #     # https://flask.palletsprojects.com/en/2.2.x/quickstart/#a-minimal-application
+    #
+    #     from flask import Flask
+    #
+    #     app = Flask(__name__)
+    #
+    #     # visible at:  http://127.0.0.1:5000
+    #     @app.route('/')
+    #     def hello_world():
+    #         return '❬p❭Hello, World!</p>'
+    #                 ^ ^
+    #                 < >
+    #
+    #     # visible at:  http://127.0.0.1:5000/exit
+    #     @app.route('/exit')
+    #     def bye():
+    #         return '❬p❭Bye!</p>'
+    #                 ^ ^
+    #                 < >
+
+# start web server serving all files from CWD
+python3 -m http.server 8080 >/dev/null 2>&1 \
+    & disown \
+    ; xdg-open http://127.0.0.1:8080
+    # Useful when you create a website, and you need to view how your HTML files
+    # are rendered, without having to manually open each of them with `C-o`.
+    #
+    # ---
+    #
+    # Here, we used the port `8080`.  If you omit it, `8000` is used by default.
+    #
+    # ---
+    #
+    # If you want to use a privileged port, like 80, you'll need `sudo(8)`.  But
+    # `&` is problematic;  it prevents you from providing  your password.  Hence
+    # why you need  to authenticate *before* starting the server,  and group the
+    # `python3(1)`  and  `disown(1)`  commands  (so that  `&`  does  not  affect
+    # `$ sudo --validate`):
+    #
+    #     $ sudo --validate \
+    #         && { sudo python3 -m http.server 80 >/dev/null 2>&1 & disown ;}
+    #            ^                                                ^         ^
+
+# send raw HTTP request
+nc -C <host> <port> < <(tee <<'EOF'
+GET /path/to/page.html HTTP/<version>
+Host: <host>
+
+EOF
+)
+    # If you don't have netcat, or it doesn't support `-C`:
+    #
+    #     $ echo -e 'GET /hypertext/WWW/TheProject.html HTTP/1.1\r\nHost: info.cern.ch\r\n\r\n' \
+    #         | curl telnet://info.cern.ch:80

@@ -1,0 +1,417 @@
+% time
+
+$ abbrev: --- --map 'tr [:upper:] [:lower:]'
+$ timezone: timedatectl list-timezones
+
+# print local, system, and hardware times
+timedatectl status
+    # The time maintained by the kernel (system time) is named "Universal time".
+    # The time maintained by the hardware clock is named "RTC time".
+    #
+    # ---
+    #
+    # `timedatectl(1)` is a CLI client to `systemd-timedated(8)`, which provides
+    # a time and date bus mechanism
+
+# print current date and time in standard format
+date --rfc-3339=seconds
+    # Output example:
+    #
+    #     2005-09-14 00:56:06+02:00
+    #
+    # This    uses    the    format    specified   by    Internet    RFC    3339
+    # (`%Y-%m-%d %H:%M:%S%:z`).  It's  like `--iso-8601=seconds`, except  that a
+    # space separates the date from the time, instead of a `T`.
+    #
+    # ---
+    #
+    # `%Y-%m-%d` is a good choice for a date format, because:
+    #
+    #    - it's easy to sort
+    #
+    #    - it's always suitable as input for `--date` and `--file`, regardless
+    #      of the  current locale
+    #
+    #    - it's consistent with how we express a time during  the day; that is,
+    #      from the biggest unit to the smallest one (`hours:minutes:seconds`)
+    #
+    # ---
+    #
+    # Faster bash alternative:
+    #
+    #     $ printf '%(%Y-%m-%d %H:%M:%S%z)T' -1
+    #                                  ^^
+    #                                  bash/strftime(3) only supports %z (not %:z)
+    #
+    # It's  faster  because `printf`  is  a  builtin,  whereas `date(1)`  is  an
+    # external command; but it's also arguably less readable.
+    #
+    # ---
+    #
+    # In the  output, `+02:00`  is a  numeric time-offset  which means  that the
+    # local time is two hours *ahead/east* of UTC.  `-02:30` would mean that the
+    # local time is two hours and thirty minutes *behind/west* of UTC.
+    #
+    # ---
+    #
+    # The format for Internet email (RFC 5322) is also available via  `--rfc-email`.
+    #
+    # It uses the  format `%a, %d %b %Y %H:%M:%S %z`, evaluated in  the C locale
+    # (so abbreviations are always in English).  For example:
+    #
+    #     Fri, 09 Sep 2005 13:51:39 -0700
+
+# convert Unix timestamp into human-readable form
+date --date='@<timestamp>' +'%Y-%m-%d %H:%M:%S %:::z'
+    # Faster bash alternative:
+    #
+    #     $ printf '%(%Y-%m-%d %H:%M:%S %z)T' ❬timestamp❭
+    #
+    # ---
+    #
+    # We  don't use  the  conversion  specifiers `%F`  and  `%T`  – which  are
+    # shorthands for resp. the formats `%Y-%m-%d` and `H:%M:%S` – because they
+    # make the code less readable.
+    #
+    # ---
+    #
+    # For more info:
+    #
+    #    - `info '(coreutils)Seconds since the Epoch'`
+    #    - `info '(coreutils)Examples of date'`
+
+# print time of last connection to Internet
+date --reference=/var/lib/systemd/timesync/clock --rfc-3339=seconds
+    # Actually, this prints the last successful time synchronization.  But since
+    # `systemd-timesyncd(8)`  often (*)  synchronizes  the system  clock with  a
+    # remote NTP server:
+    #
+    #     $ timedatectl show-timesync | grep PollIntervalUSec
+    #
+    # ... it might give a good enough approximation.
+    #
+    # (*) Polling starts  at a 32s interval,  and is adjusted up to  34min 8s in
+    # response to received packets (as per `PollInterval{Min,Max}Sec`).
+
+% time, sync
+@ time
+
+# print human-readable status of systemd-timesyncd (NTP daemon)
+timedatectl timesync-status
+    # The `Root distance:` line  gives the estimated time required  for a packet
+    # to  travel to  the server  you  are connected  to  (the one  given on  the
+    # `Server:` line)  from the server  with the  reference clock.  If  the root
+    # distance of your current  server exceeds `RootDistanceMaxSec` as specified
+    # in `/etc/systemd/timesyncd.conf`, `systemd-timesyncd(8)`  will switch to a
+    # different server.
+    #
+    # ---
+    #
+    # For a machine-readable status:
+    #
+    #     $ timedatectl show-timesync
+
+# override remote time server
+sudoedit /etc/systemd/timesyncd.conf
+    # To   specify  your   new   desired  remote   time   server(s),  assign   a
+    # space-separated list  of their host  names or  IP addresses to  `NTP`.  To
+    # find some, visit: https://www.ntppool.org/
+    #
+    # Then, run:
+    #
+    #     $ sudo systemctl restart systemd-timesyncd.service
+    #     $ timedatectl timesync-status | grep Server
+    #     # make sure your IP/host name is output
+    #
+    # ---
+    #
+    # Avoid overloaded servers.  As a suggestion, use `pool.ntp.org`.
+    #
+    # This  is a  group of  machines that  have agreed  to serve  as public  NTP
+    # servers.  You can also limit use to a sub-group specific to a country:
+    #
+    #    - `us.pool.ntp.org` for the United States
+    #    - `ca.pool.ntp.org` for Canada
+    #    ...
+
+# set time to fix/compensate for hardware/system clock drift
+sudo date --set='+<N> minutes +<M> seconds' \
+    && sudo hwclock --systohc --utc
+    # Only run  those commands if your  machine can't maintain the  time using a
+    # remote NTP server  (e.g. it's not meant to be  connected to the Internet),
+    # and  doesn't need  a very  accurate  clock.  They  might cause  time-based
+    # system events to  get lost or mangled.  Besides, your  system clock should
+    # give the exact time (or at least, as close as possible); you won't be able
+    # to set the exact time that way.
+    #
+    # ---
+    #
+    # In the  `--set` argument,  `+` assumes that  your hardware/system  time is
+    # *behind* the true time.  If it's *ahead*, replace `+` with `-`.
+    #
+    # ---
+    #
+    # The `hwclock(8)` command might not be necessary.  Debian automatically run
+    # it when the machine shuts down via `/etc/init.d/hwclock.sh`.
+    #
+    # ---
+    #
+    # Alternative: `$ timedatectl set-time ❬time❭`
+    #
+    # Set the  system clock to  the specified time.   This will also  update the
+    # hardware  clock accordingly.   The time  can  be specified  in the  format
+    # `%Y-%m-%d %H:%M:%S`.
+    #
+    # ---
+    #
+    # TODO: Investigate whether `adjtimex(8)` would be better than `date(1)` here.
+
+# use chronyd instead of systemd-timesyncd (better at timekeeping during disconnections)
+sudo systemctl disable --now systemd-timesyncd \
+    && sudo apt install chrony
+    # The `chronyd(8)` service will be enabled and started automatically.
+    #
+    # ---
+    #
+    # Its config file is at `/etc/default/chrony`.
+    #
+    # ---
+    #
+    # To change the time server(s), in the config file, edit the `pool` line:
+    #
+    #     pool 0.debian.pool.ntp.org
+    #          ^-------------------^
+    #          replace with your new desired host name
+    #
+    # For a single server, use `server` instead of `pool`:
+    #
+    #     server <your time server IP>
+    #
+    # ---
+    #
+    # To enable logging, uncomment this line in the config file:
+    #
+    #     #log measurements statistics tracking
+    #          ^----------^ ^--------^ ^------^
+    #            each of these can be logged
+    #
+    # And restart the service:
+    #
+    #     $ sudo systemctl restart chronyd
+    #
+    # It should now write logs under `/var/log/chrony`, or whatever directory is
+    # specified in the `logdir` line of the config file.
+    #
+    # ---
+    #
+    # For increased timekeeping accuracy, enable hardware timestamping.
+    #
+    # First, make sure your network adapter supports hardware timestamping:
+    #
+    #     $ ethtool -T ❬interface❭
+    #
+    # If it does not, the output might look like this:
+    #
+    #     Time stamping parameters for enp3s0:
+    #     Capabilities:
+    #             software-transmit     (SOF_TIMESTAMPING_TX_SOFTWARE)
+    #             software-receive      (SOF_TIMESTAMPING_RX_SOFTWARE)
+    #             software-system-clock (SOF_TIMESTAMPING_SOFTWARE)
+    #     PTP Hardware Clock: none
+    #     Hardware Transmit Timestamp Modes: none
+    #     Hardware Receive Filter Modes: none
+    #
+    # And if it does:
+    #
+    #     Time stamping parameters for enp3s0:
+    #     Capabilities:
+    #             hardware-transmit     (SOF_TIMESTAMPING_TX_HARDWARE)
+    #             software-transmit     (SOF_TIMESTAMPING_TX_SOFTWARE)
+    #             hardware-receive      (SOF_TIMESTAMPING_RX_HARDWARE)
+    #             software-receive      (SOF_TIMESTAMPING_RX_SOFTWARE)
+    #             software-system-clock (SOF_TIMESTAMPING_SOFTWARE)
+    #             hardware-raw-clock    (SOF_TIMESTAMPING_RAW_HARDWARE)
+    #     PTP Hardware Clock: 0
+    #     Hardware Transmit Timestamp Modes:
+    #             off                   (HWTSTAMP_TX_OFF)
+    #             on                    (HWTSTAMP_TX_ON)
+    #     Hardware Receive Filter Modes:
+    #             none                  (HWTSTAMP_FILTER_NONE)
+    #             all                   (HWTSTAMP_FILTER_ALL)
+    #             ptpv1-l4-sync         (HWTSTAMP_FILTER_PTP_V1_L4_SYNC)
+    #             ptpv1-l4-delay-req    (HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ)
+    #             ptpv2-l4-sync         (HWTSTAMP_FILTER_PTP_V2_L4_SYNC)
+    #             ptpv2-l4-delay-req    (HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ)
+    #             ptpv2-l2-sync         (HWTSTAMP_FILTER_PTP_V2_L2_SYNC)
+    #             ptpv2-l2-delay-req    (HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ)
+    #             ptpv2-event           (HWTSTAMP_FILTER_PTP_V2_EVENT)
+    #             ptpv2-sync            (HWTSTAMP_FILTER_PTP_V2_SYNC)
+    #             ptpv2-delay-req       (HWTSTAMP_FILTER_PTP_V2_DELAY_REQ)
+    #
+    # *On the `PTP Hardware Clock: 0` line, 0 is not a count but probably a 0-based index.*
+    #
+    # With proper  support, you can  uncomment the `#hwtimestamp *` line  in the
+    # config file.
+    #
+    # ---
+    #
+    # To print the host name or IP address of the remote time server that your machine is synchronized to:
+    #
+    #     $ chronyc tracking | grep 'Reference ID'
+    #
+    # ---
+    #
+    # To list all the time servers that your machine can access:
+    #
+    #     $ chronyc sources
+
+# use PTP instead of systemd-timesyncd/chronyd (for maximum accuracy)
+sudo apt install linuxptp \
+    && sudo systemctl disable --now chronyd systemd-timesyncd
+    # This should install the `ptp4l` and the `phc2sys` services.
+    #
+    # But you still need to configure `ptp4l` (and possibly `phc2sys` too).
+    #
+    # ---
+    #
+    # To configure PTP with software timestamping:
+    #
+    #     $ sudo systemctl edit --full ptp4l
+    #     :/ExecStart/ substitute/\ze-i/-S -s /
+    #     :/ExecStart/ substitute/eth0/enp3s0/
+    #                                  ^----^
+    #     replace with your network interface, as given by:
+    #
+    #         $ ip -4 route show | awk '/default/ { print $5 }'
+    #
+    # The substitutions should turn this line:
+    #
+    #     ExecStart=/usr/sbin/ptp4l -f /etc/linuxptp/ptp4l.conf -i eth0
+    #
+    # Into something like this:
+    #
+    #     ExecStart=/usr/sbin/ptp4l -f /etc/linuxptp/ptp4l.conf -S -s -i enp3s0
+    #                                                           ^---^    ^----^
+    #
+    # `-S`: use software timestamping.
+    # `-s`: run as a client, instead of a server.
+    #
+    # Finally, enable and start the `ptp4l` service:
+    #
+    #     $ sudo systemctl enable --now ptp4l
+    #
+    # ---
+    #
+    # To configure PTP with hardware timestamping (which gives you the most precise timekeeping that you can get):
+    #
+    # First,  make sure  your  network adapter  supports hardware  timestamping.
+    # That  should  be  the  case  if   your  computer  is  recent  enough  (run
+    # `$ ethtool -T enp3s0` to  be sure;  see our chrony  navi snippet  for more
+    # info).
+    #
+    # If it is, edit the unit file for the `ptp4l` service:
+    #
+    #     $ sudo systemctl edit --full ptp4l
+    #     :/ExecStart/ substitute/\ze-i/-s /
+    #     :/ExecStart/ substitute/eth0/enp3s0/
+    #
+    # The `ExecStart=` line should look like this:
+    #
+    #     ExecStart=/usr/sbin/ptp4l -f /etc/linuxptp/ptp4l.conf -s -i enp3s0
+    #
+    # Next, edit the unit file for the `phc2sys` service:
+    #
+    #     $ sudo systemctl edit --full phc2sys
+    #
+    # This time, make the `ExecStart=` line look something like this:
+    #
+    #     ExecStart=/usr/sbin/phc2sys -c CLOCK_REALTIME -s enp3s0 -w
+    #
+    # The goal  is for the computer  clock to synchronize with  the PTP hardware
+    # clock that's in the network adapter:
+    #
+    #    - `-c CLOCK_REALTIME`: clock that is to be synchronized
+    #      (`CLOCK_REALTIME` is the normal computer clock).
+    #
+    #    - `-s enp3s0`: device that will be used for synchronization.  Here,
+    #      we're using the PTP hardware clock that's in the `enp3s0` network
+    #      adapter to synchronize the normal system clock.
+    #
+    #    - `-w`: make the `phc2sys` service  wait until the `ptp4l` service is
+    #      in a synchronized state before attempting to synchronize the system
+    #      clock.
+    #
+    # Finally, run:
+    #
+    #     $ sudo systemctl enable --now ptp4l phc2sys
+
+% time, zone
+@ time
+
+# translate given alphabetic abbreviation of time zone (e.g. CET)
+awk '/"<abbrev>"/ { sub(/.*# /, ""); print $0 }' /usr/share/perl5/Time/Zone.pm
+    # Warning: Write `❬abbrev❭` in lowercase.
+    #
+    # ---
+    #
+    # Not sure how accurate the output is.  If in doubt, visit:
+    # http://www.twinsun.com/tz/tz-link.htm
+    # http://twiki.org/cgi-bin/xtra/tzdate
+    #
+    # Note  that such  an abbreviation  should be  avoided anyway,  because it's
+    # ambiguous.   Prefer  a  numeric  time  zone  correction  (e.g. `+0200`  or
+    # `-05:30`).
+    #
+    # ---
+    #
+    # `/usr/share/perl5/Time/Zone.pm` is owned by the `libtimedate-perl` package.
+
+# print alphabetic abbreviation(s) for given time zone (aka time zone item)
+TZ=<timezone> date --date='2000-06-30' +'%Z' \
+    ; TZ=<timezone> date --date='2000-12-30' +'%Z'
+
+# print current date and time in given time zone (now)
+TZ='<timezone>' date --date='now'
+    # Useful to answer the question: "What time is it now in New York?"
+
+# print local date/time matching given date/time in given time zone
+date --date='TZ="<timezone>" <datetime>'
+    # Useful to answer the question: "What time will it be here, when it is 20:00 PM in New York?"
+    #
+    #                                          optional: the 30th of December 2000
+    #                                          v--------v
+    #     $ date --date='TZ="America/New_York" 2000-12-30 20:00'
+    #                       ^                ^
+    #
+    # Note that `date(1)` requires double quotes around `❬timezone❭`.
+    # You can't drop them, nor replace them with single quotes.
+    #
+    # ---
+    #
+    # If you  only have  an alphabetic abbreviation  (e.g. `EDT`), append  it to
+    # `❬datetime❭` and drop the `TZ` assignment:
+    #
+    #     $ date --date='2000-12-30 20:00 EDT'
+    #                                     ^^^
+
+# re-set time zone interactively
+dpkg-reconfigure tzdata
+    # The chosen value is written in `/etc/timezone` (e.g. `Europe/Paris`).
+    #
+    # Additionally, `/etc/localtime` is symlinked to `/usr/share/zoneinfo/Europe/Paris`.
+    # This file contains the rules governing the dates when Daylight Saving Time
+    # (DST) is in effect.
+    #
+    # ---
+    #
+    # Alternative for a script: `$ timedatectl set-timezone ❬timezone❭`
+    #
+    # ---
+    #
+    # To re-set  the time zone  temporarily, use the `TZ`  environment variable,
+    # which takes priority over the configured system default.
+    #
+    # ---
+    #
+    # To only  find the  name of  the time  zone suited  for your  location, but
+    # without changing any configuration, run `tzselect(8)`.

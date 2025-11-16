@@ -1,0 +1,33 @@
+diff --git a/st.c b/st.c
+index ed72539..25ab28f 100644
+--- a/st.c
++++ b/st.c
+@@ -1989,8 +1989,26 @@ strhandle(void)
+ 				}
+ 			}
+ 			return;
+-		case 10: /* set dynamic VT100 text foreground color */
+-		case 11: /* set dynamic VT100 text background color */
++		case 10: /* set foreground color */
++			if (narg < 2)
++				break;
++
++			p = strescseq.args[1];
++			if (xsetcolorname(defaultfg, p))
++				fprintf(stderr, "erresc: invalid foreground color %d\n", p);
++			else
++				redraw();
++			break;
++		case 11: /* set background color */
++			if (narg < 2)
++				break;
++
++			p = strescseq.args[1];
++			if (xsetcolorname(defaultbg, p))
++				fprintf(stderr, "erresc: invalid background color %d\n", p);
++			else
++				redraw();
++			break;
+ 		case 12: /* set dynamic text cursor color */
+ 			if (narg < 2)
+ 				break;
