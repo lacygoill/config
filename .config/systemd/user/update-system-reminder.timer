@@ -1,0 +1,16 @@
+[Unit]
+Description=Remind us to update the system if we did not recently
+
+[Timer]
+# Once per day; once per week is not frequent enough.{{{
+#
+# Our `update-system`  script only sends  a reminder  if we haven't  updated the
+# system since more than a week.  So, if you only run it once per week, there is
+# a  chance the  system might  be  missing up  to  almost 2  weeks of  important
+# updates.
+#}}}
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

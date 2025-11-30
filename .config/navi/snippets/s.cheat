@@ -1,0 +1,34 @@
+% s
+
+; NOTE: Since the name of the program is  so short, it might be tricky to filter
+; relevant snippets in fzf.  Try this query: `^s\ `.
+;
+; Don't  use the  tag `ss`  instead of  `s`.  That  would be  confusing, because
+; `ss(8)` is a utility to investigate sockets.
+
+# list supported web search engines
+s --list-providers
+
+# list supported tags
+s --list-tags
+
+# search for given query on given web search engine
+s --provider=<provider> '<query>'
+    # the provider name can be shortened; e.g. `facebook` → `fa`
+
+# search for given query on all search engines with given tag
+s --tag=<tag> '<query>'
+    # the tag name can be shortened; e.g. `tech-news` → `te`
+
+# search for given query in incognito mode
+s --binary='firefox --private-window' '<query>'
+
+# search for given query in given subreddit
+s --provider=reddit '/r/<subreddit> <query>'
+
+# get URL for given query on given web search engine
+s --output --provider=<provider> '<query>'
+
+# start web server on given port
+s --server --port=<port>
+    # if `--port` is omitted, 8080 is used by default

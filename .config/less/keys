@@ -1,0 +1,276 @@
+# What's this file?{{{
+#
+# A config  file that  we ask `lesskey(1)`  to compile.  The  result is  read by
+# `less(1)` at runtime.
+#
+# See `man lesskey`.
+#}}}
+# What's the syntax of a key binding?{{{
+#
+# From `man lesskey /COMMAND SECTION`:
+#
+#    > string <whitespace> action [extra-string] <newline>
+#    >
+#    > The string is the command key(s) which invoke the action.  The  string  may
+#    > be a single command key, or a sequence of up to 15 keys.
+#}}}
+#   What are the available actions?{{{
+#
+#     back-bracket
+#     back-line
+#     back-line-force
+#     back-screen
+#     back-scroll
+#     back-search
+#     back-window
+#     clear-mark
+#     digit
+#     display-option
+#     end-scroll
+#     examine
+#     filter
+#     firstcmd
+#     forw-bracket
+#     forw-forever
+#     forw-line
+#     forw-line-force
+#     forw-screen
+#     forw-screen-force
+#     forw-scroll
+#     forw-search
+#     forw-until-hilite
+#     forw-window
+#     goto-end
+#     goto-end-buffered
+#     goto-line
+#     goto-mark
+#     help
+#     index-file
+#     left-scroll
+#     next-file
+#     next-tag
+#     no-scroll
+#     percent
+#     pipe
+#     prev-file
+#     prev-tag
+#     quit
+#     remove-file
+#     repaint
+#     repaint-flush
+#     repeat-search
+#     repeat-search-all
+#     reverse-search
+#     reverse-search-all
+#     right-scroll
+#     set-mark
+#     set-mark-bottom
+#     shell
+#     status
+#     toggle-option
+#     undo-hilite
+#     version
+#     visual
+#
+# You can find this list at `man lesskey /EXAMPLE`.
+#}}}
+#   How to write several keys/commands in the RHS?{{{
+#
+# Use the `noaction` command, then write your keys afterward.
+#
+# Example:
+#
+#     <LHS> noaction <key1><key2>...
+#
+# ---
+#
+# It's a hack, but it works.
+#
+# From `man lesskey /PRECEDENCE`:
+#
+# >     a key may be defined to do nothing by using the action "noaction".
+#
+# From `man lesskey /COMMAND SECTION`:
+#
+# >     An action may be followed by an "extra" string.
+# >     When such a command is entered  while running less, the action is performed,
+# >     and then the extra string is parsed, just as if it were typed in to less.
+# >     This feature can be  used in certain cases to extend  the functionality of a
+# >     command.
+#}}}
+
+# These lines should not be removed nor changed:  `#command`, `#line-edit`, `#env`{{{
+#
+# From `man lesskey /DESCRIPTION`:
+#
+#    > The  input  file consists of one or more sections.  Each section starts
+#    > with a line that identifies the type  of  section.   Possible  sections
+#    > are:
+#    > ...
+#    > #line-edit
+#    >         Defines new line-editing keys.
+#}}}
+
+#command
+# command key bindings {{{1
+
+# disable SPACE
+\  noaction
+# disable CR
+\n noaction
+
+# Useful to disable various keys at once:{{{
+#
+#     \e(
+#     \e)
+#     \e<
+#     \e>
+#     \e{
+#     \e}
+#     \em
+#     \ev
+#     \e^B
+#     \e^F
+#     \e\_
+#        ^
+#        actually, a literal space
+#}}}
+\e noaction
+
+# disable various keys
+( noaction
+) noaction
+< noaction
+> noaction
+[ noaction
+] noaction
+{ noaction
+} noaction
+
+= noaction
+Q noaction
+R noaction
+ZZ noaction
+^B noaction
+^E noaction
+^F noaction
+^K noaction
+^N noaction
+^P noaction
+^R noaction
+^V noaction
+^X^V noaction
+^X^X noaction
+^Y noaction
+b noaction
+d noaction
+f noaction
+p noaction
+r noaction
+u noaction
+w noaction
+y noaction
+z noaction
+
+# Jump in  the arglist (i.e. the  list of files specified  on the command-line).
+# We don't use `]a`/`[a` because it's too cumbersome to type in `less(1)`.
+a next-file
+A prev-file
+
+# toggle wrapping of long lines
+# Alternative:{{{
+#
+#     cow noaction -S
+#     cow noaction --chop-long-lines^M
+#
+# ---
+#
+# From `man lesskey /EXAMPLE`:
+#
+#    > The following input file describes the set of default command keys used
+#    > by less:
+#
+#    >     #command
+#    >      ...
+#    >      -         toggle-option
+#    >      ...
+#
+# From `man less /OPTIONS`:
+#
+#     -S or --chop-long-lines
+#            Causes  lines  longer than the screen width to be chopped (trun‐
+#            cated) rather than wrapped.  That is, the portion of a long line
+#            that does not fit in the screen width is not shown.  The default
+#            is to wrap long lines; that is, display  the  remainder  on  the
+#            next line.
+#}}}
+cow toggle-option S
+# TODO: The effect is not always visible immediately.{{{
+#
+# You might need to scroll horizontally or vertically.
+#
+# The issue happens when the number of text lines reaches `less(1)` command-line.
+# For example, in an xterm terminal with a default geometry (80 x 24), the issue
+# appears only when the text has 23 lines or more.
+#
+# We would need to add a repaint, but it doesn't work:
+#
+#     cow noaction -SR
+#                    ^
+#
+#     cow noaction --chop-long-lines^MR
+#                                     ^
+#
+# More generally,  it seems that keys  are buffered when they  are pressed while
+# less prints the “(press RETURN)” prompt.   That is, they are not pressed until
+# you quit  the prompt  by pressing  Enter or  some other  key (e.g.  `j`) which
+# causes a repaint.
+#}}}
+
+e visual
+# `visual` fails if `less(1)` reads from its STDIN:{{{
+#
+#     Cannot edit standard input  (press RETURN)
+#
+# Workaround: pipe the input of `less(1)` to Vim:
+# https://unix.stackexchange.com/a/43460/289772
+#}}}
+E noaction g|$vim --not-a-term -^M
+#          │││├────────────────┘│{{{
+#          ││││                 └ we're on the less(1) command-line; execute the command
+#          │││└ the arbitrary shell command is `vim --not-a-term -`
+#          ││└ the section goes from the current screen up to the bottom of the input
+#          │└ pipe a section of the input to an arbitrary shell command
+#          └ go to beginning of input
+# }}}
+
+# Scroll to the left/right by pressing `h` and `l`. `h` shadows the default help
+# command, but you can stil get the help screen by pressing `H`.
+h noaction 3\e(
+l noaction 3\e)
+
+\^ no-scroll
+_ no-scroll
+$ end-scroll
+#}}}1
+#line-edit
+# line-editing key bindings {{{1
+
+# motions
+^A home
+^E end
+^B left
+^F right
+\ef word-right
+
+# history
+\en down
+\ep up
+^N down
+^P up
+
+# deletions
+^D delete
+^W word-backspace
+\ed word-delete
+#}}}1
