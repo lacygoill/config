@@ -1,0 +1,1968 @@
+% admin
+
+$ cd_or_iso: echo '/dev/sr0'; locate '*.iso'
+$ device: lsblk --output=NAME,LABEL --noheadings --raw --- --map "sed 's,^,/dev/, ; s/ .*//'"
+; Do *not* use  `$FIND_OPTS` here. `bash(1)` would receive a  mangled version of
+; the original  value, in  which wildcards  have been  wrongly expanded,  and in
+; which parentheses are unquoted.
+$ file: find . -maxdepth 1 -type f -printf '%P\n' 2>/dev/null
+
+$ fslabel: lsblk --output=LABEL --noheadings --raw | sort --unique | sed '/^$/d'
+$ fstype: lsblk --output=FSTYPE --noheadings --raw | sort --unique | sed '/^$/d'
+$ label_and_dir: lsblk --output=FSTYPE,LABEL --noheadings --raw \
+    | grep "$fstype \S" \
+    --- --map "awk '{ print $2 \" /media/$USER/\" $2 }'"
+$ mount_point: lsblk --output=MOUNTPOINT --noheadings --raw \
+    | awk '/[^[:blank:]]/ && $0 != "/" && $0 != "[SWAP]"'
+
+$ group: getent group | awk -F':' '{ print $1 }' | sort
+
+$ kfile: printf '%s\n' '/etc/sysctl.conf' $(find /etc/sysctl.d/ -type f)
+$ kparam: sysctl --all --names
+
+$ locale: locale --all-locales
+
+$ sponge_append: printf '%s\n' 'Append to file?' yes no \
+    --- --header-lines 1 \
+        --map "\
+            case $(cat) in \
+                yes) printf -- '-a' ;; \
+                no) ;; \
+            esac \
+        "
+$ sponge_cmd: --- --header 'input some command'
+
+$ user: getent passwd | awk -F':' '{ print $1 }' | sort
+
+# read boot messages
+sudo cat /var/log/boot.log | ansi2txt
+
+# print OS codename/ID
+lsb_release --codename --short \
+    ; lsb_release --id --short
+    # For more info:
+    #     $ cat /etc/os-release
+    #     $ cat /etc/issue
+
+# rename machine
+sudoedit /etc/hosts /etc/hostname
+    # In vim:
+    #
+    #     :argdo %s/old_name/new_name/gc | update
+    #     :quitall!
+    #
+    # In the shell:
+    #
+    #     $ systemctl reboot
+
+# reboot machine
+systemctl reboot
+
+# shut down machine
+systemctl poweroff
+
+# create bootable Debian USB drive
+cat <ISO> >/dev/sd<a-z>; sync
+    # Warnings: The image  must be written  to the  whole-disk device; not  to a
+    # partition.  For example, `/dev/sdb`; not `/dev/sdb1`.
+    #
+    # Make  sure that  your USB  drive is  not mounted  (i.e. `/dev/sd[a-z]`  is
+    # listed in the  output of `lsblk(8)`, but there  is no `/dev/sd[a-z][0-9]+`
+    # with a non-empty mount point in the last field).
+    #
+    # Make sure it does not contain  any valuable file, because the command will
+    # destroy anything already existing on the physical device.
+    #
+    # Finally, make sure that you use  the correct block device.  If you provide
+    # a wrong name, all information on that device will be lost.
+    #
+    # ---
+    #
+    # When the USB drive is inserted, it  will be mapped to a block device named
+    # `/dev/sdX`,  where “X”  is a  letter  in the  range a-z.   To get  the
+    # correct name,  run `lsblk(8)`  before and after  inserting the  stick.  Or
+    # check the output of `dmesg(1)` (as root).
+    #
+    # ---
+    #
+    # For more info: https://www.debian.org/releases/stable/amd64/ch04s03
+    #
+    # Note that the installation guide documents `cp(1)` instead of `cat(1)`.
+    # But the admin handbook, as well as the arch wiki, recommend `cat(1)`.
+    # For a comparison between `cat(1)`, `cp(1)`, and other tools, see:
+    # https://unix.stackexchange.com/a/224314
+    # https://www.vidarholen.net/contents/blog/?p=479
+    #
+    # Basically, with  `cp(1)`, you might  accidentally swap the source  and the
+    # target, or  `cp(1)` might  be unexpectedly  invoked with  some problematic
+    # options (e.g. if you have an alias/abbreviation/function).
+    #
+    # In contrast, it's harder to invoke  `cat(1)` in a damaging way, because it
+    # has fewer  options, is usually not  aliased, and if you  accidentally pass
+    # two files instead of one, they  will be concatenated, leaving you a chance
+    # to recover the contents of the extra one.
+
+# set environment variable in virtual console
+sudoedit /etc/profile.d/<somefile>.sh
+
+# test existence of AppArmor profile for given command (and in which mode it is set)
+sudo grep '\b<cmd>\b' /sys/kernel/security/apparmor/profiles
+    # The mode can be "enforce" or "complain".
+    # The former  gives more security, but  limits what the command  can do, and
+    # can break some of its features.
+
+# disable AppArmor profile for given command
+find /etc/apparmor.d/ -regex '.*\b<cmd>\b' -print0 \
+    | xargs --null sudo aa-disable
+    # Other useful `aa-*` commands:
+    #
+    #     aa-complain: set AppAparmor profile to complain mode
+    #     aa-enforce: set AppAparmor profile to enforce mode
+    #
+    # Warning: Do *not* set an AppArmor profile to complain mode permanently.
+    # It's only meant to temporarily test and refine a profile before setting it
+    # to enforce mode.
+    #
+    # In   complain   mode,  a   profile   can   cause  `auditd(8)`   to   flood
+    # `/var/log/audit/audit.log`, and in turn give frequent kernel errors:
+    #
+    #     $ journalctl --dmesg --priority=err
+    #     ... kernel: audit: backlog limit exceeded
+
+% admin, backup
+@ admin
+
+# create backup with cp(1)
+for f in * ; cp $f $f.bak ; end
+
+# restore backup with cp(1)
+for f in *.bak ; cp $f $(string sub --end=-4 $f) ; end
+    #                    ^--------------------^
+    # Remove the last 4 characters of the backup files.
+    # Here, we assume that they all end with the `.bak` extension.
+
+# create backup with rsync(1)
+cd <root> \
+    && rsync --archive \
+    --cvs-exclude \
+    --human-readable \
+    --info=progress2 \
+    --one-file-system \
+    --partial \
+    --relative \
+    <relative_sources> <backup>
+    # `❬root❭` is the root directory containing all your sources.
+    # For example, if you back up `~/Documents` and `~/.mozilla/firefox/`, their
+    # root is `$HOME`.
+    #
+    # ---
+    #
+    # Warning: Make  sure  all the  paths  to  your  sources are  *relative*  to
+    # `❬root❭`.  Any path  component you write will be backed  up because of
+    # `--relative`.  And you  don't want to back up something  like `home`; it's
+    # useless and too tricky to handle because it's owned by the root user.
+    #
+    # ---
+    #
+    # `--cvs-exclude` auto-ignore files in the same way CVS does.
+    # It also takes into account the rules set in our `~/.cvsignore`.
+    #
+    # ---
+    #
+    # If  you  want  `❬backup❭`  to   actually  "mirror"  the  sources,  use
+    # `--delete`.  That is, only if you want  the backup not to contain any file
+    # which is no longer present in the sources.
+    #
+    # ---
+    #
+    # If you want to exclude some directory use `--exclude=relative/path/to/dir/`.
+    #
+    # ---
+    #
+    # If you  want to  see which files  will be backed  up, use  `--dry-run` and
+    # replace `--info=progress2` with `--verbose`.
+    #
+    # ---
+    #
+    # If  `❬backup❭` is  on  a  remote machine,  `rsh(1)`  will  use SSH  to
+    # connect.  But if the SSH server  listens on a non-standard port, you might
+    # need to specify it with `--rsh`:
+    #
+    #     $ rsync --rsh='ssh -p ❬port❭' ...
+    #             ^-------------------^
+    #
+    # Alternatively, configure the port in a `Host` block in `~/.ssh/config`.
+
+# restore backup with rsync(1)
+rsync --archive \
+    --human-readable \
+    --info=progress2 \
+    --partial \
+    <backup>/ <root>
+    # Do *not* omit the trailing slash at the end of `❬backup❭`.
+    #
+    # ---
+    #
+    # `❬root❭` is the root directory of the original source(s).
+    # If you restore the backup created by `~/bin/backup`, `❬root❭` is `$HOME`.
+    #
+    # ---
+    #
+    # Do *not* use `--update`.  It causes a  file to be skipped if a more recent
+    # version already exists  in the destination.  But I'm not  sure it's always
+    # reliable (e.g. we  might restore a backup  on a new system  where time has
+    # not yet been configured correctly).
+    #
+    # We don't  even use it  when we back up  files (see `~/bin/backup`  for the
+    # rationale).  But here, it might make even less sense.  We mostly intend to
+    # use that snippet to restore  our Ebooks/Music/Pictures/... when we install
+    # a new system.  When that happens, there's  no reason to skip any file from
+    # our backup,  because in  the home of  a new system,  there is  no valuable
+    # (i.e. non-reproducible) file.
+    #
+    # ---
+    #
+    # Do *not* use  `--delete`; it only makes sense when  creating a backup, and
+    # only if you want it to "mirror" the source(s).
+    #
+    # For example:
+    #
+    #    - you have `$HOME/file1` and `$HOME/file2`
+    #    - you've backed up `$HOME/file1`
+    #    - you want to restore `$HOME/file1`
+    #
+    # You don't want to delete `$HOME/file2`.
+    #
+    # ---
+    #
+    # Do *not*  use `--relative` either;  it causes `rsync(1)` to  re-create the
+    # whole hierarchy  of directories  in `❬backup❭`, exactly  as specified,
+    # which you don't want nor need here.
+    # `--relative` is  useful to  isolate several sources  inside `❬backup❭`
+    # when you *create* the latter; but  it's useless when you *restore* it (the
+    # original sources are already isolated).
+    #
+    # ---
+    #
+    # If  you want  to see  which files  will be  restored, use  `--dry-run` and
+    # replace `--info=progress2` with `--verbose`.
+    #
+    # ---
+    #
+    # If `❬root❭` is on a remote  machine, `rsh(1)` will use SSH to connect.
+    # But if the  SSH server listens on  a non-standard port, you  might need to
+    # specify it with `--rsh`:
+    #
+    #     $ rsync --rsh='ssh -p ❬port❭' ...
+    #             ^-------------------^
+    #
+    # Alternatively, configure the port in a `Host` block in `~/.ssh/config`.
+
+% admin, file
+@ admin
+
+# print file permissions in octal format (easier to read setuid, setgid and sticky bits)
+stat --format='%a %A %n' <file>
+    # `%a`: access rights in octal
+    # `%A`: access rights in human readable form
+    # `%n`: file name
+    #
+    # ---
+    #
+    # The octal format makes it easier to read special mode bits.
+    #
+    # Because then the human readable form gets confusing to read:
+    #
+    # - a single character ("s"/"t"/"S"/"T") is used to encode both the
+    #   execution bit (`x`) and a special bit (`s`/`t`)
+    #
+    # - the case matters:
+    #     * with "s"/"t", `x` is set
+    #     * with "S"/"T", `x` is not set
+    #
+    # In contrast, in octal format, if at  least one of the special bits is set,
+    # a fourth digit is prepended on the left:
+    #
+    #     $ stat --format='%a %A %n' /usr/bin/su
+    #     4755 -rwsr-xr-x /usr/bin/su
+    #     ^
+    #
+    # And contrary to the  other digits, it does not encode all  the rights of a
+    # given entity (owner, group members, others), but all the special bits:
+    #
+    #         u  g  o
+    #         rwxrwxrwx
+    #     0 = .........
+    #     1 = ........t
+    #     2 = .....s...
+    #     3 = .....s..t
+    #     4 = ..s......
+    #     5 = ..s.....t
+    #     6 = ..s..s...
+    #     7 = ..s..s..t
+    #
+    # "t" encodes the sticky bit, and can only be written in the others column.
+    # "s" encodes the setuid (owner column), or the setgid (group column).
+
+# print extended attributes of given file
+xattr -l <file>
+    # Useful to read the capability sets of a binary file:
+    #
+    #     $ xattr -l /usr/bin/ping
+    #     security.capability:
+    #     ...
+
+# print file type of all entries in CWD
+file *
+    # file(1) can't tell you whether a file contains C or python code.
+    #
+    # What it can tell, is whether an  entry in the filesystem is a directory, a
+    # regular file,  or some  other of  type of  special file  (binary, symbolic
+    # link, character device, ...). And if it is a regular file, it can tell you
+    # its encoding (UTF-8, ISO-8859, ASCII, ...).
+    #
+    # It's useful to detect a binary:
+    #
+    #     $ file $(which ls)
+    #     /usr/bin/ls: ELF 64-bit LSB shared object, x86-64, ...
+    #                  ^^^
+    #                  Executable and Linkable Format
+
+# follow a logfile as new lines are being appended to it
+less -+F +F <file>
+    # Benefit over `$ tail -f log`: you're not stuck at the end of the file, you
+    # can scroll  back.  To  do so,  you need  to interrupt  the `F`  command by
+    # pressing `C-c`.  At any moment, you can re-execute the `F` command to keep
+    # trying to read the file if it's updated, by pressing `F`.
+    #
+    # ---
+    #
+    # `-+F`: reset the `F` option to its default setting.
+    # The `F` option causes less to automatically exit if the entire file can be
+    # displayed on the first screen.
+    #
+    # `+F`: execute the `F` command.
+    # The `F` command scrolls  forward, and keep trying to read  when the end of
+    # file is reached.
+    #
+    # ---
+    #
+    # Q: Why do I need to reset the `F` option?
+    # A: To handle a corner case:
+    #
+    #     $ echo text >/tmp/logz
+    #     $ LESS='--quit-if-one-screen --RAW-CONTROL-CHARS' less +F /tmp/file.logz
+    #     # expected: less does not quit
+    #     # actual: less quits
+    #
+    # No issue if `file.logz` is renamed into `file.log`.
+    # No issue if we remove one of the 2 options out of `LESS`.
+
+
+# run command which reads from file, and writes to same file
+<sponge_cmd> < <file> | sponge <sponge_append> <file>
+    # We can't read from a file and write to it at the same time simply using redirections.
+    #
+    #     cmd <file >file
+    #         ^---------^
+    #             ✘
+    #
+    # Because, when  processing `>file`, bash  would empty `file`,  preventing `cmd`
+    # from reading its contents.
+    #
+    # Alternative 1:
+    #
+    #     # use a temporary file
+    #     cmd <file >tmp_file
+    #     mv tmp_file file
+    #
+    # Alternative 2:
+    #
+    #     # use sponge(1)
+    #     cmd <file | sponge file
+    #
+    # We prefer `sponge(1)` because:
+    #
+    #    - it preserves the permissions of `file`
+    #    - creating a temporary file might fail because of a lack of permissions
+
+# generate patch for single file
+diff --unified=3 --text --new-file --recursive <original_file> <updated_file> >/tmp/patch.txt
+    # --recursive: recursively compare any subdirectories found
+    # --unified=3: output 3 lines of unified context
+    # --text: treat all files as text
+    # --new-file: treat absent files as empty
+
+# generate patch for whole directory
+diff --context=3 --ignore-blank-lines --recursive <original_dir> <updated_dir> >/tmp/patch.txt
+    # --context=3: output 3 lines of copied context
+    # --ignore-blank-lines: ignore changes where lines are all blank
+
+# make file executable for everybody on the condition that it's executable for somebody
+chmod a+X <file>
+    # `[ugoa][-+=]X` actually means:
+    #
+    #    - if `❬file❭` is a directory, remove/add/set the executable bit
+    #      unconditionally
+    #
+    #    - if `❬file❭` is a file, remove/add/set the executable bit on the
+    #      condition that it's already set for at least one entity (owner,
+    #      group, other)
+
+# copy file's owner permissions to file's group
+chmod g=u <file>
+    # This shows that in `$ chmod USERS OPERATOR PERMISSIONS`, `PERMISSIONS` can be `[ugo]`.
+    #
+    # To refer to the permissions of a given entity.
+    #
+    # Similarly, to *add* the permissions of the file's group to other users:
+    #
+    #     $ chmod o+g ❬file❭
+    #              ^^
+
+# set up shared directory
+sudo addgroup <new_group> \
+    && sudo mkdir -p /usr/local/share/<dir> \
+    && sudo chgrp <new_group> /usr/local/share/<dir> \
+    && sudo chmod u=rwx,g=rwxs,o= /usr/local/share/<dir>
+    # You also need to add each user who wants to share files to `❬new_group❭`.
+    #
+    #     $ sudo adduser ❬user1❭ ❬new_group❭
+    #     $ sudo adduser ❬user2❭ ❬new_group❭
+    #     ...
+    #
+    # ---
+    #
+    # And you need to make sure that `umask(1)` is `0002`, and not `0022`.
+    #
+    # If it's not, try to execute `$ umask 0002` in a shell initialization file.
+    #
+    # `0022` prevents `❬new_group❭`'s users from modifying a file which they
+    # don't  own.  That's  probably not  an issue  for multimedia  files (audio,
+    # video, ...) which  you usually only want  to read.  However, it  can be an
+    # issue for  newly created  subdirectories.  For example,  if Alice  and Bob
+    # are  in  `❬new_group❭` and  Alice  has  created `❬subdir❭`  inside
+    # `❬dir❭`, Bob needs  to be able to create  files inside `❬subdir❭`;
+    # that is, he needs `❬subdir❭` to be group-writable.
+    #
+    # ---
+    #
+    # Typical names for `❬dir❭` and `❬new_group❭` might be `music` and `Music`.
+    #
+    # That would be for several users to share their music files.
+    #
+    # ---
+    #
+    # The most important/significant modes in the `chmod(1)` command are `g+ws`.
+    #
+    # Using the octal form, those become:
+    #
+    #     && sudo chmod 2770
+    #                   ^ ^
+    #                 g+s g+rwx
+    #                   ^    ^
+    #
+    # `g+w`  allows  `❬new_group❭`'s  users  to create  files  at  the  root
+    # of  `❬dir❭` (only  necessary  if  `umask(1)` was  `0022`  at the  time
+    # `❬dir❭` was created).
+    #
+    # `g+s`  makes  sure that  all  newly  created files/subdirectories  inherit
+    # `❬dir❭`'s group owner (i.e.  `❬new_group❭`), rather than the FSGID
+    # `of the creating process.
+
+# remove file/directory with special characters
+ls --inode --escape \
+    | fzf \
+    | awk '{ print $1 }' \
+    | xargs --open-tty --replace='{{}}' find . -maxdepth 1 -inum '{{}}' -okdir /usr/bin/rm -f '{}' \;
+    # Useful if  you're concerned  that `rm(1)` might  delete the  wrong file(s)
+    # because the  supplied name  contains characters which  are special  to the
+    # shell, to  `rm(1)` itself,  or too  tricky to input  (e.g. `*`,  `~`, `-`,
+    # `$'\n'`...).
+    #
+    # ---
+    #
+    # The command will work even if the file name contains quotes.
+    #
+    # In particular, an  embedded single quote would not break  the command even
+    # if the `{}` placeholder is quoted:
+    #
+    #     | xargs --open-tty --replace='{{}}' find . -maxdepth 1 -inum '{{}}' -okdir /usr/bin/rm '{}' \;
+    #                                                                                            ^  ^
+    #
+    # Those quotes  are only  necessary to  prevent the  current shell  (the one
+    # executing this whole pipeline) from  interpreting `{}` in some special way
+    # if it has some meaning in a shell-specific syntax. `xargs(1)` will execute
+    # `find(1)`, which in turn will execute `rm(1)`, both without any shell.
+    #
+    # ---
+    #
+    # If you don't want to confirm the removal, then use `-delete` instead of `-okdir ...`.
+    #
+    # Useful if the  file name contains a strange character  sequence that would
+    # mess up your screen when printed.
+
+# interactively rename files with given extension
+vidir --verbose *.<ext>
+    # Alternative:
+    #
+    #     $ qmv --format=destination-only *.❬ext❭
+
+# copy timestamps from given file to another
+touch --reference=<file1> <file2>
+    # Warning: This only  works for the  last access and modification  time; not
+    # for the last status change.
+
+% admin, filesystem
+@ admin
+
+# list whole-disk devices and partitions
+lsblk --output=NAME,SIZE,FSUSE%,FSTYPE,MOUNTPOINT,LABEL
+    # For the whole list of available output columns:
+    #
+    #     $ lsblk --help | sed -n '/^Available output columns:$/,/^$/p'
+    #
+    # In particular you might be interested in `UUID`, `VENDOR`, `MODEL`, and `SERIAL`.
+    #
+    # ---
+    #
+    # Prefer `lsblk(8)` over `blkid(8)`:
+    #
+    #    > It  is  **recommended  to  use  lsblk(8)** command to get information about
+    #    > block devices, or lsblk --fs to get  an  overview  of  filesystems,  or
+    #    > findmnt(8) to search in already mounted filesystems.
+    #
+    # Source: `man blkid`
+    #
+    # ---
+    #
+    # Alternative:
+    #
+    #     $ less /proc/partitions
+    #
+    # ---
+    #
+    # If  your physical  device is  missing from  the output,  run one  of these
+    # commands to debug the issue:
+    #
+    #     $ dmesg --kernel --decode --human [--level=info|notice|err]
+    #     $ journalctl --dmesg [--priority=info|notice|err]
+    #     $ journalctl --unit=systemd-udevd.service
+    #     $ udevadm monitor --kernel
+
+# partition physical device
+sudo fdisk <device>
+    # Then, execute these commands:
+    #
+    #    - `g`: create GPT partition table
+    #    - `F`: check how much unpartitioned space there is left
+    #    - `n`: add new partition
+    #    - `w`: write table to disk and exit
+    #
+    # When executing  `n` to  add a  partition, you'll  be prompted  for various
+    # information.  You don't have to provide anything; you can just press Enter
+    # to accept the default values:
+    #
+    #     Partition number (1-128, default 1):
+    #     First sector (2048-15759326, default 2048):
+    #
+    # That said, when you're asked for the "Last sector":
+    #
+    #     Last sector, +/-sectors or +/-size{K,M,G,T,P} (2048-15759326, default 15759326):
+    #
+    # If  you intend  to create  yet another  partition afterward,  don't simply
+    # press  Enter; the  currently created  partition would  take all  the space
+    # left.  Instead, provide the desired size with the syntax:
+    #
+    #     +❬N❭❬unit❭
+    #
+    # Where `❬unit❭`  is `K`, `M`,  `G`, `T` or  `P`, and `❬N❭`  is your desired
+    # size expressed  in the given unit.  For example,  if you want your
+    # partition to occupy 200 megabytes, type `+200M`.
+    #
+    # ---
+    #
+    # You don't have  to create a new  partition table if there  is already one;
+    # you can just delete existing partitions before adding yours.
+    #
+    # ---
+    #
+    # If there is already a filesystem on the partition, you might get this kind
+    # of prompt:
+    #
+    #     Partition #1 contains a ext4 signature.
+    #
+    #     Do you want to remove the signature? [Y]es/[N]o:
+    #
+    # I  think  you  can  answer  yes.   Or  pass  `--wipe-partition=always`  to
+    # `fdisk(8)` to answer yes automatically.
+
+# build filesystem on given partition
+sudo mke2fs -t ext4 -L <new_fslabel> <device>
+    # If the filesystem is  meant to be owned by your  regular `$USER`, mount it
+    # immediately afterward, then run:
+    #
+    #                  for lost+found/
+    #                  vv
+    #     $ sudo chown -R $USER:$USER ❬mount_point❭
+    #     $ chmod g+w ❬mount_point❭
+    #
+    # Otherwise, every time you mount it, the owner and group of the mount point
+    # directory will be temporarily reset to  `root`.  And the root's umask will
+    # be  used, which  often means  that the  group-writable bit  is temporarily
+    # unset  (002 vs  022).  You  only need  to run  these commands  once; their
+    # effect will persist even after unmounting and re-mounting the filesystem.
+    #
+    # Don't pass  `-E root_owner=$UID:$UID` to  `mke2fs(8)`.  It would  only fix
+    # the  issue of  the  owner/group  of the  mount  point  directory; not  the
+    # owner/group of `lost+found/` inside.  And you  would still need to set the
+    # group-writable bit.
+    #
+    # ---
+    #
+    # Even  though it  seems  that you  can  build a  filesystem  directly on  a
+    # device  block, without  having created  any partition,  I think  it's more
+    # conventional to create at least 1 partition:
+    #
+    #    > mke2fs  is used to create an ext2, ext3, or ext4 filesystem, **usually in**
+    #    > **a disk partition** (or file) named by device.
+    #
+    # Source: `man mke2fs(8)`
+
+# print UUID
+sudo tune2fs -l LABEL=<fslabel> | awk '/UUID/ { print $NF }'
+    # The UUID  was generated  by `mke2fs(8)`  when initializing  the filesystem
+    # data structure.
+    #
+    # When  inserting a  physical device,  many  distributions use  the UUID  of
+    # its  filesystem  as the  name  of  the directory  on  which  it should  be
+    # automounted.  For  example, on  `/media/$USER/❬UUID❭`.  Unless  it has
+    # a  label,  in  which  case  they  will  automount  it  on  something  like
+    # `/media/$USER/❬label❭`.
+    #
+    # A UUID  is not  unique to a  physical device, but  to a  filesystem.  This
+    # means that  if you  copy the  complete filesystem from  a given  device to
+    # another, they will have the same UUID.
+
+# list parameters of given filesystem
+sudo tune2fs -l <device>
+    # Commands  which  operate  on  a  filesystem  and  which  expect  a  device
+    # file  argument (like  `mount(8)` and  `tune2fs(8)`) need  the one  where a
+    # filesystem can be found.
+    #
+    # For example, if  you have a USB  key available at `/dev/sdb`,  with only 1
+    # single  partition `/dev/sdb1`,  `tune2fs(8)`  will expect  the latter;  it
+    # won't work with `/dev/sdb`, even though there is no other partition on the
+    # physical device.  That's because the filesystem's superblock is not at the
+    # start of `/dev/sdb`, but at the start of `/dev/sdb1`.
+    #
+    # But  if you  didn't  partition the  USB key,  and  made `mke2fs(8)`  build
+    # the  filesystem  directly on  `/dev/sdb`,  then  `tune2fs(8)` will  expect
+    # `/dev/sdb`.
+
+# set/change label
+sudo tune2fs -L <new_fslabel> <device>
+    # Alternatively, you can refer to the filesystem via its label:
+    #
+    #     $ sudo tune2fs -L ❬new_fslabel❭ LABEL=existing_label
+    #                                     ^------------------^
+
+# display table of swap areas
+swapon --show=NAME,TYPE,SIZE,USED --noheadings
+
+% admin, group, user
+@ admin
+
+# list users
+getent passwd | awk -F':' '{ print $1 }' | sort
+
+# list groups
+getent group | awk -F':' '{ print $1 }' | sort
+
+# list groups to which given user belong
+id --groups --name <user>
+    # Alternative: `$ getent group | awk -F':' '/❬user❭/ { print $1 }' | sort`
+
+# list users in given group
+getent group <group> \
+    | awk -F':' '{ split($4, array, ","); for (i in array) print array[i] }' \
+    | sort
+
+# add given user to given group(s)
+sudo adduser <user> <group>
+    # If `❬user❭` is already logged in, they will need to log out for the command to take effect.
+    #
+    # Rationale:
+    #
+    #    > Primary and supplementary groups for a process are normally inherited
+    #    > from its parent and are usually unchanged since login.  This means that
+    #    > if you change the group database after logging in, ‘groups’ will not
+    #    > reflect your changes within your existing login session.  Running
+    #    > ‘groups’ with a list of users causes the user and group database to be
+    #    > consulted afresh, and so will give a different result.
+    #
+    # Source: `info '(coreutils)groups invocation'`
+    #
+    # ---
+    #
+    # `usermod(8)` alternative:
+    #
+    #     $ sudo usermod --append --groups=❬group❭ ❬user❭
+
+# remove given user from given group
+sudo gpasswd --delete=<user> <group>
+
+# add new user
+sudo adduser <new_user>
+    # Do *not* use `useradd(8)`
+    #
+    #    > useradd is a low level utility for adding users. On Debian,
+    #    > administrators should usually use adduser(8) instead.
+    #
+    # Source: `man useradd`
+    #
+    # `useradd(8)` is more complex to use:
+    #
+    #     $ sudo useradd --create-home --shell=/bin/bash ❬new_user❭ \
+    #         && sudo passwd ❬new_user❭ \
+    #         && sudo chmod 700 /home/❬new_user❭
+    #
+    # I'm  not even  sure this  command  gives the  same results  as the  Debian
+    # installer when it  creates the main user account.  More  things might need
+    # to be set: see `/etc/adduser.conf` and `adduser.conf(5)`.
+    #
+    # ---
+    #
+    # More generally,  prefer `adduser(8)` and `addgroup(8)`  over `useradd(8)`,
+    # `groupadd(8)`, `usermod(8)`,  and `groupmod(8)`,  because the  formers are
+    # friendlier front ends to the latters:
+    #
+    #    > They are friendlier front ends to the low level tools like useradd,
+    #    > groupadd and usermod programs, by default choosing Debian policy
+    #    > conformant UID and GID values, creating a home directory with skeletal
+    #    > configuration, running a custom script, and other features.
+    #
+    # Besides, you only have one single man page to read (instead of four):
+    #
+    #                   v------v
+    #     $ man --where addgroup
+    #     /usr/share/man/man8/adduser.8.gz
+    #                         ^-----^
+    #
+    # ---
+    #
+    # Similarly, prefer `deluser(8)` and `delgroup(8)` over `userdel(8)`, and `groupdel(8)`.
+    #
+    # The formers read `/etc/{del,add}user.conf` to do their job.
+
+# delete user
+sudo deluser --remove-all-files <user>
+    # If you  only want  to remove  their home directory  and their  mail spool,
+    # replace `--remove-all-files` with `--remove-home`.
+    #
+    # If   you  want   to   backup   all  files   before   deleting  them,   use
+    # `--backup --backup-to=❬path❭`.  These  options will create  an archive
+    # file `❬user❭.tar(.gz|.bz2)` in `❬path❭`.
+
+# add new group
+sudo addgroup <new_group>
+
+# delete group
+sudo delgroup <group>
+
+# enable root account
+sudo passwd root
+
+# lock root account
+sudo passwd --lock root
+
+% admin, kernel
+@ admin
+
+# list all current kernel settings
+sysctl --all
+
+# print value of given kernel parameter at runtime
+sysctl --values <kparam>
+    # `--values` is optional; it just gets rid of the parameter names.
+    #
+    # ---
+    #
+    # Alternatively, read the file `/proc/sys/❬kparam:s,\.,/,g❭`.
+    #                                               ^-------^
+    #                                               substitute each dot with a slash
+    #
+    # For example:
+    #
+    #                          v    v
+    #     $ sysctl --values net.unix.max_dgram_qlen
+    #     512
+    #
+    #                        v    v
+    #     $ cat /proc/sys/net/unix/max_dgram_qlen
+    #     512
+
+# set kernel parameter at runtime
+sysctl --write '<kparam>=<kvalue>'
+    # Alternatively:
+    #
+    #     $ echo '❬kvalue❭' | sudo tee /proc/sys/❬kparam:s,\.,/,g❭
+    #                                                   ^-------^
+    #                                                   substitute each dot with a slash
+    #
+    # ---
+    #
+    # For the setting to persist across reboots, edit `/etc/sysctl.conf` or a drop-in file in `/etc/sysctl.d/`.
+    #
+    # And for such a new setting to be applied without restarting the system:
+    #
+    #     $ sysctl --load=FILE
+
+# set kernel parameter at boot time
+echo '<kparam>=<kvalue>' | sudo tee --append /etc/sysctl.d/999-local.conf
+    # To apply the new parameter immediately:
+    #
+    #     $ sudo sysctl --load=/etc/sysctl.d/999-local.conf
+
+# load settings from given file
+sysctl --load=<kfile>
+
+# reload kernel settings from all system configuration files
+sudo sysctl --system
+    # This is useful if you've tampered with some setting.
+    #
+    # ---
+    #
+    # Files are read from directories in the following list (in given order):
+    #
+    #     /run/sysctl.d/*.conf
+    #     /etc/sysctl.d/*.conf
+    #     /usr/local/lib/sysctl.d/*.conf
+    #     /usr/lib/sysctl.d/ *.conf
+    #     /lib/sysctl.d/*.conf
+    #     /etc/sysctl.conf
+    #
+    # Once a file  with a given name is  loaded, any file with the  same name in
+    # subsequent directories is ignored.  This  lets you override a setting from
+    # a file in `/usr/lib/sysctl.d/` by creating a file in `/etc/sysctl.d/` with
+    # the same name.
+
+% admin, locale
+@ admin
+
+# list all settings of current locale
+locale
+    #    > Values for  variables set  in the environment  are printed  without double
+    #    > quotes, implied values are printed with double quotes.
+
+# list all generated locales
+locale --all-locales --verbose
+    # Alternatives:
+    #
+    #     $ localectl list-locales
+    #     $ grep '^[^#]' /etc/locale.gen
+    #
+    # ---
+    #
+    # You can find the list of valid supported locales at `/usr/share/i18n/SUPPORTED`.
+
+# generate given locale
+sudo dpkg-reconfigure locales
+    # The chosen local is saved in `/etc/default/locale`.
+    #
+    # ---
+    #
+    # Any selected locale will be generated.
+    # Any existing locale not selected will be purged.
+    #
+    # ---
+    #
+    # Alternative:
+    #
+    #     $ sudoedit /etc/locale.gen
+    #     # comment out desired locale
+    #     $ sudo locale-gen
+
+# set default locale
+sudo update-locale LANG=<locale>
+    # The chosen  locale is  saved in  `/etc/default/locale`.  From  there, it's
+    # picked up  by all user sessions  since PAM (`pam_env.so`) will  inject its
+    # contents in the `LANG` environment variable.
+    #
+    # Other  environment variables  are  set in  `/etc/environment`.  Thanks  to
+    # this  split, some  PAM users  can inherit  a complete  environment without
+    # localization.  Indeed, it is generally  discouraged to run server programs
+    # with localization  enabled; on the  other hand, localization  and regional
+    # settings are recommended for programs that open user sessions.
+    #
+    # ---
+    #
+    # Alternative:
+    #
+    #     $ sudo localectl set-locale LANG=❬locale❭
+    #
+    # ---
+    #
+    # All  `LC_*`  variables  inherit  their  values  from  `LANG`  or  `LC_ALL`
+    # (`LC_ALL` > `LC_*` > `LANG`).  See: `man 7 locale`:
+    #
+    #    > If the second argument to setlocale(3) is an empty string, "", for  the
+    #    > default locale, it is determined using the following steps:
+    #    >
+    #    > 1. If  there  is  a  non-null environment variable LC_ALL, the value of
+    #    >    LC_ALL is used.
+    #    >
+    #    > 2. If an environment variable with the same name as one  of  the  cate‐
+    #    >    gories above exists and is non-null, its value is used for that cat‐
+    #    >    egory.
+    #    >
+    #    > 3. If there is a non-null environment variable LANG, the value of  LANG
+    #    >    is used.
+
+% admin, module
+@ admin
+
+# list currently loaded kernel modules
+lsmod
+
+# print info about kernel module(s)
+modinfo <modulename>
+
+# insert module(s) into kernel
+sudo modprobe --all <modulename>
+
+# remove module from kernel
+sudo rmmod <modulename>
+
+% admin, mount
+@ admin
+
+# automount USB device (key, external hard drive, ...)
+gio mount --device=/dev/sd<letter><number>
+    # One  benefit of  `gio(1)` over  `mount(8)` is  that it  also automatically
+    # creates  the mount  point directory  before mounting  the filesystem,  and
+    # removes that same directory after unmounting the filesystem.
+    #
+    # ---
+    #
+    # Thunar  probably  calls  `dbus-send(1)`  or `gdbus(1)`  to  interact  with
+    # `udisksd(8)`:
+    #
+    #    > Instead, applications should only use the D-Bus API, the libudisks2
+    #    > library or tools such as **dbus-send(1) or gdbus(1)** to interact with
+    #    > udisksd(8).
+    #
+    # Source: `man 8 udisks /API STABILITY`
+    #
+    # That would explain how it's able to mount the filesystem without asking us
+    # for our password:
+    #
+    #    > By default, **logged-in users** in active log-in sessions are **permitted** to
+    #    > perform operations (for example, **mounting**, unlocking or modifying) on
+    #    > devices attached to the seat their session is on.
+    #
+    # Source: `man 8 udisks /ACCESS CONTROL`
+    #
+    # Also, if you  `strace(1)` Thunar right before clicking on  the USB stick's
+    # label,  you should  see  that it  opens  `/run/mount/utab` which  mentions
+    # `udisks(8)` (note that the file is empty before the key is inserted):
+    #
+    #     SRC=... TARGET=... ROOT=/ OPTS=uhelper=udisks2
+    #                                            ^-----^
+
+# eject automounted USB device
+gio mount --eject <mount_point>
+
+# safely remove / eject unmounted device
+udisksctl power-off --block-device=<device>
+
+# mount filesystem
+sudo mount --types=<fstype> --options=rw,nosuid,nodev,relatime LABEL=<label_and_dir>
+    # If the mount point directory does not exist, an error will be given:
+    #
+    #     mount: ...: mount point does not exist.
+    #
+    # Create it with `mkdir(1)` as your regular user.
+    #
+    # ---
+    #
+    # If  `/etc/mtab`  can't  be  written  to, use  `--no-mtab`.   That  can  be
+    # necessary if it's  on a filesystem in read-only mode;  also when trying to
+    # fix an  issue after booting in  single-user mode, because the  file is not
+    # available then.
+    #
+    # ---
+    #
+    # In a script, you should use a UUID rather than a label or a block device:
+    #
+    #     $ sudo mount --types=❬fstype❭ --options=rw,nosuid,nodev,relatime UUID=❬UUID❭ ❬dir❭
+    #                                                                      ^---------^
+    #
+    # Rationale: A label  might often  change, and  the name  of a  block device
+    # depends on the order  in which it was found by the  kernel (e.g. `sda1` vs
+    # `sda2`).
+    #
+    # While  the UUID  can be  changed via  `tune2fs(8)`, it's  still much  more
+    # stable than a label (you have fewer reasons to change the UUID).
+    #
+    # ---
+    #
+    # The filesystem options are copied from:
+    #
+    #     $ findmnt --noheadings --output=OPTIONS --raw ❬dir❭
+    #     rw,nosuid,nodev,relatime
+    #
+    # Where `❬dir❭`  is the directory  on which Thunar automounted  a random
+    # USB stick, when we clicked on its label.
+    #
+    # For more info: `man 8 mount /FILESYSTEM-INDEPENDENT MOUNT OPTIONS`.
+    #
+    # ---
+    #
+    # `relatime`: only update access time if the file was written or changed since last read.
+    #
+    # Rationale: If a file  is not frequently written nor  changed, updating its
+    # access  time  every time  it's  read  is  mostly  (*) useless,  and  might
+    # needlessly slow down the system.
+    #
+    # (*) What matters  to applications is to  know if a file  has been modified
+    # since  its last  read or  vice versa  (e.g. for  `mutt(1)` to  distinguish
+    # *un*read from read mail).  And for that,  the access time only needs to be
+    # updated once after a file has been written.  After that, if the file is no
+    # longer written, there is no point keeping updating its access time.
+
+# unmount filesystem
+sudo --validate; sync; sudo umount <mount_point>
+    # To  provide better  performance, the  kernel buffers  writes to  the disk.
+    # That  is, it  doesn't immediately  write changes  to a  filesystem when  a
+    # process requests them.   Instead, it stores those changes in  RAM until it
+    # determines a good time to write them.
+    #
+    # `umount(8)` should cause the kernel  to automatically synchronize with the
+    # disk; that is,  write the changes in  its buffer to the disk.   But if for
+    # some reason that  doesn't happen, `unmount(8)` will fail.   To avoid that,
+    # we run `sync(1)`  first, to force the kernel to  synchronize all the disks
+    # on the system.
+
+# remount filesystem
+sudo --validate; sync; sudo mount --options=remount <mount_point>
+    # This command assumes that the  correct entry for `❬mount_point❭` is in
+    # `/etc/fstab`.   If it  isn't,  you must  specify the  block  device as  an
+    # additional option:
+    #
+    #     $ ... sudo mount --options=remount ❬device❭ ❬mount_point❭
+    #                                        ^------^
+    #
+    # But in that case, `mount(8)`  ignores all options from `/etc/fstab`, which
+    # means  that  you  must  specify  any  desired  option  explicitly  on  the
+    # command-line:
+    #
+    #     $ ... sudo mount --options=remount,... ❬device❭ ❬mount_point❭
+    #                                       ^--^
+    #
+    # ---
+    #
+    # If  the  filesystem is  in  read-only  mode,  use `--no-mtab`  to  prevent
+    # `mount(8)` from trying to write `/etc/mtab` which would give an error.
+    #
+    # ---
+    #
+    # Useful to change the mount options  for a filesystem, especially to make a
+    # read-only filesystem writable (e.g. after  a crash recovery).  It does not
+    # change the block device or mount point.
+    #
+    # If you  omit the  block device, `mount(8)`  reads `/etc/fstab`  and merges
+    # `--options=...`  with the  options of  the entry  for `❬mount_point❭`.
+    # So, if your filesystem is currently read-only, but uses the `rw` option in
+    # `/etc/fstab`, you can omit `--options=rw`.
+
+# mount CD / ISO
+sudo mkdir -p /media/cdrom0 \
+    && sudo mount --options=ro <cd_or_iso> /media/cdrom0
+    # Don't use `-t iso9660`:
+    #
+    #    > That  worked fine 10 years  ago, but these  days not all ISOs  use ISO9660
+    #    > file systems. Many use  the UDF (Universal Disk Format) file  system, and if
+    #    > you  specify ISO9660  when  mounting a  UDF ISO  file,  subtle problems  can
+    #    > occur. For instance,  file names that  contain upper  case letters on  a UDF
+    #    > file  system will  appear  in lower  case  when that  ISO  is mounted  using
+    #    > ISO9660.
+    #
+    # Source: https://earlruby.org/2015/02/stop-mounting-iso-files-in-linux-with-t-iso9660/
+    #
+    # Let `mount(8)` infer the type.
+
+# unmount and eject CD
+sudo umount /media/cdrom0 && sudo eject
+
+# list mounted filesystems
+findmnt --noheadings --real
+    # This excludes pseudo filesystems such as `proc`.
+    # To include them, you can run any of these:
+    #
+    #     $ mount
+    #     $ less /etc/mtab
+    #     $ findmnt --noheadings
+    #
+    # ---
+    #
+    # To limit the listing to a given filesystem type use `--types=❬fstype❭`.
+
+# print mount point of filesystem containing given directory
+df --output=target <dir> | grep '^/'
+
+# print type of current filesystem
+findmnt --noheadings --output=FSTYPE -- $(df --output=target . | grep '^/')
+
+# print options with which current filesystem was mounted
+findmnt --noheadings --output=OPTIONS -- $(df --output=target . | grep '^/')
+
+# print info about filesystem mounted on given mount point
+findmnt --noheadings <mount_point>
+
+# print mount point where filesystem with given label is mounted
+findmnt --noheadings --output=TARGET LABEL=<fslabel> --evaluate --raw
+
+# monitor mount, unmount, remount and move on given mount point
+findmnt --poll --mountpoint=<mount_point>
+
+# wait for filesystem mounted on given mount point to unmount
+findmnt --poll=umount --first-only --mountpoint=<mount_point>
+
+# specify filesystems which should be automatically mounted at boot time
+sudoedit /etc/fstab
+    # `/etc/fstab` is read by `mount(8)`, `umount(8)`, `fsck(8)` and `swapon(8)`.
+    #
+    # ---
+    #
+    # `/etc/fstab` also  lets you  omit the  options and the  block device  in a
+    # `mount(8)` command,  provided you  write an entry  for the  relevant mount
+    # point:
+    #
+    #     # `/etc/fstab` is read because `❬device❭` is absent
+    #     $ mount ❬mount_point❭
+    #
+    # Compare to this longer command:
+    #
+    #     # `/etc/fstab` is ignored because both `❬device❭` and `❬mount_point❭` are present
+    #     $ mount --options=... ❬device❭ ❬mount_point❭
+    #             ^--------------------^
+    #
+    # ---
+    #
+    # In the first field, a UUID is the preferred way to specify a filesystem.
+    #
+    # ---
+    #
+    # The number in the  last but one field on each line  is no longer relevant;
+    # set it to 0 and ignore it.
+    #
+    # The number  in the  last field  determines the  order in  which filesystem
+    # checks are  done at boot  time.  For the most  part, it's a  legacy field,
+    # because checks are fast nowadays; the  only thing that matters is that the
+    # root filesystem is checked first.  Set it to:
+    #
+    #    - 1 for the root filesystem
+    #    - 2 for any other locally attached filesystem on a hard disk or SSD
+    #    - 0 for other filesystems (to  disable the checks); that  includes
+    #      read-only devices, swap, and the `/proc` filesystem
+    #
+    # ---
+    #
+    # Some options can only be written in `/etc/fstab` (not on the command-line).
+    #
+    # `defaults`: Sets  `rw,suid,dev,exec,auto,nouser,async`.  Use  it when  you
+    # don't want to give  the filesystem any special options but  you do want to
+    # fill all fields.
+    #
+    # `errors`: Specific  to  ext2/3/4;  sets   the  kernel  behavior  when  the
+    # system  has  trouble  mounting  a filesystem.   The  default  is  normally
+    # `errors=continue`, meaning that  the kernel should keep  running.  To make
+    # the  kernel try  to  mount the  filesystem again  in  read-only mode,  use
+    # `errors=remount-ro`.
+    #
+    # `noauto`: Tells `mount(8)`  to ignore  the entry at  boot time  (also with
+    # `$ mount --all`).
+    #
+    # `user`: Lets unprivileged users mount the filesystem.
+    # Also sets `nosuid`, `noexec`, and `nodev`.
+
+
+% admin, pkg
+@ admin
+
+$ member: ar t *.deb
+
+$ deb: find . -maxdepth 1 -name '*.deb' -printf '%P\n' 2>/dev/null
+
+$ origin: apt-cache policy \
+          | grep --perl-regexp --only-matching 'o=\K[^,]*' \
+          | sort --unique
+
+$ pkg: aptitude search '?installed' --display-format='%p' --disable-columns
+
+$ PPA: apt-cache policy \
+    | awk -F'=' '/o=/ { match($0, /o=[^,]*,/); print substr($0, RSTART + 2, RLENGTH - 3) }' \
+    | sed '/\<Ubuntu\>/d' \
+    | sort --unique
+; Alternative:
+;
+;     find /var/lib/apt/lists -name '*_InRelease' -print0 2>/dev/null \
+;         | while IFS= read -d '' file; do \
+;             grep '^Origin:' "$file"; \
+;           done \
+;         | sort --unique \
+;         | sed '/Origin: Ubuntu/d' \
+;         | awk '{ print $2 }'
+
+# update system
+sudo apt-get update && sudo apt-get --with-new-pkgs upgrade
+
+# print date beyond which packages won't receive security updates anymore (Ubuntu only)
+pro security-status
+
+# debug unattended-upgrade
+sudo unattended-upgrade --debug --dry-run
+    # Also look at the resulting logfile in:
+    # `/var/log/unattended-upgrades/unattended-upgrades.log`
+
+# extract given file (aka member) out of .deb package
+ar x *.deb <member>
+    # You can then further extract the  file you're interested in with `tar(1)`,
+    # which is probably in `data.tar.{bz2|gz|xz}`.  For example:
+    #
+    #     $ tar --extract --file=data.tar.xz --xz ❬file❭
+
+# force package installation (ignore file conflict errors)
+sudo dpkg --install=<deb> --force-overwrite
+    # To make this permanent (not recommended):
+    #
+    #     $ echo "DPkg::Options { \"--force-overwrite\"; };" \
+    #         | sudo tee --append /etc/apt/apt.conf.d/99zz-local
+
+# install given package from backports distribution
+sudo apt install <package>/"$(lsb_release --codename --short)-backports"
+    # Even  though  the  backports   distribution  provides  newer  versions  of
+    # packages, APT will not install  them unless you give explicit instructions
+    # to do so (or unless you have already  done so with a former version of the
+    # given backport).
+    #
+    # That's because,  by default, the  priority of uninstalled packages  in the
+    # backports  archive  is only  100.   Whereas  the priority  of  uninstalled
+    # packages in other archives is 500,  and the priority of installed packages
+    # is also 100.
+    #
+    # IOW, `apt(8)` never installs a  package from the backports archive; unless
+    # you make the latter to be the "target release", in which case the priority
+    # of its packages is increased to 990.
+    #
+    # ---
+    #
+    # If  the installation  fails due  to some  unsatisfiable dependencies,  let
+    # `apt(8)` solve those dependencies within the backports distribution:
+    #
+    #     $ sudo apt install --target-release="$(lsb_release --codename --short)-backports" ❬package❭
+    #
+    # The effect of `--target-release` only lasts  for one command.  To make the
+    # backports archive the target release permanently (not recommended):
+    #
+    #     $ echo "APT::Default-Release \"$(lsb_release --codename --short)-backports\";" \
+    #         | sudo tee --append /etc/apt/apt.conf.d/99zz-local
+    #
+    # ---
+    #
+    # I suggest you also use `--dry-run` to check what will happen:
+    #
+    #     $ sudo apt install --dry-run ...
+    #                        ^-------^
+
+# install given package from repository of given origin
+sudo apt install --target-release='o=<origin>' <package>
+    # Targeting a package using its origin is  useful when you want to install a
+    # package outside the official mirrors.
+    #
+    # ---
+    #
+    # Without the `o=` prefix, `a=` is implied.
+
+# install given package without installing other given recommended package
+apt install <package1> <package2>-
+    #                            ^
+    #
+    # Similarly, to remove a given package without removing another one:
+    #
+    #     $ apt remove ❬package1❭ ❬package2❭+
+    #                                       ^
+
+# mark given package as automatically/manually installed
+aptitude [un]markauto <pkg>
+    # `❬package❭` can be an APT search pattern (`man 7 apt-patterns`).
+    #
+    # ---
+    #
+    # It's a  good habit to  mark as automatic any  package that you  don't need
+    # directly so that they are automatically removed when they aren't necessary
+    # anymore.
+
+# purge manual packages which have pulled in many dependencies
+sudo debfoster && sudo apt autoremove --purge
+    # For each prompt, press:
+    #
+    #    - `y` to keep the package (you won't be asked again for this package
+    #      during the next invocation)
+    #
+    #    - `p` to purge the package
+    #
+    #    - `s` to skip the question (you'll be asked again during the next
+    #      invocation)
+    #
+    #    - `x` to stop further questions, and purge packages previously selected
+    #
+    # It seems  the first prompts are  associated with packages which  pulled in
+    # more dependencies than  the ones from the last prompts.   Which means that
+    # you can  quickly purge  a lot  of packages, without  having to  answer all
+    # questions.
+
+# list contents of .deb package
+ar t *.deb
+
+# list file diversions
+dpkg-divert --list
+    # An  example of  diversion occurs  when  you install  the `parallel`  *and*
+    # `moreutils` packages.  Because both install a file at `/usr/bin/parallel`.
+    #
+    # The maintainer  of the `parallel`  package knows about this  conflict, and
+    # they want to  win (rightfully so considering their program  is better); so
+    # they've included  a `preinst` script  inside their package  which executes
+    # this command on installation:
+    #
+    #     $ dpkg-divert --package parallel --add --rename \
+    #         --divert /usr/bin/parallel.moreutils \
+    #         /usr/bin/parallel
+    #
+    # It  moves  the  `/usr/bin/parallel`   file  installed  by  `moreutils`  to
+    # `/usr/bin/parallel.moreutils`.   They've also  included a  `postrm` script
+    # which executes this command on removal:
+    #
+    #     $ dpkg-divert --package parallel --remove --rename \
+    #         --divert /usr/bin/parallel.moreutils \
+    #         /usr/bin/parallel
+    #
+    # It moves back `/usr/bin/parallel.moreutils` to `/usr/bin/parallel`.
+
+# install given file diversion
+sudo dpkg-divert --add --rename --divert=/path/to/diversion /file/to/divert
+
+# remove given diversion
+sudo dpkg-divert --remove --rename /path/to/diversion
+
+# list dependencies of given package
+aptitude search '?reverse-depends(<package>)' [--disable-columns]
+    # `?depends()` lists packages which depend on `❬package❭`
+
+# list files owned by given package
+dpkg-query --listfiles <pkg>
+    # If the package is not installed, run either of these:
+    #
+    #     $ apt-file list ❬package❭
+    #     $ apt download ❬package❭ && dpkg-deb --contents ./*.deb
+
+# list available versions of given package across all archives
+rmadison <package>
+    # Require the `devscripts` package.
+    #
+    # `$ apt-cache policy`  only  lists  versions  which are  available  in  the
+    # archive(s)  configured in  your APT  sources (e.g.  `stable` in  Debian or
+    # `focal` and `focal-{updates,security,...}` in Ubuntu).
+    #
+    # `rmadison(1)` lists all  available versions in *any* archive.   Even in an
+    # archive  which is  not  currently  configured in  your  APT sources.   For
+    # example, in Debian 12, for the `postgresql` package:
+    #
+    #    - `oldoldstable`
+    #    - `oldstable`
+    #    - `stable`
+    #    - `testing`
+    #    - `unstable`
+    #
+    # And in Ubuntu 20.04:
+    #
+    #    - `trusty`, `xenial`, `bionic`, `focal`
+    #    - `trusty,xenial,bionic,focal-{security,updates}`
+    #    - `jammy`
+    #    - `jammy-proposed`
+    #    - `lunar`
+    #    - `mantic`
+
+# list installed packages including given keyword
+aptitude search '?installed ?name(<keyword>)' [--disable-columns]
+    # Alternative: `$ apt list --installed '*❬keyword❭*'`
+    #
+    # More generally,  `$ aptitude search` can probably always  be replaced with
+    # `$ apt list`.  For example:
+    #
+    #     $ aptitude search '?narrow(?installed, ?origin(❬PPA❭))'
+    #     ⇔
+    #     $ apt list '?narrow(?installed, ?origin(❬PPA❭))'
+    #
+    # But it's annoying to use because of the warning message to suppress:
+    #
+    #     WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+    #
+    # Besides, it doesn't support `--display-format`.
+    #
+    # ---
+    #
+    # By  default,  `aptitude(8)`  aligns  fields into  columns,  truncating  or
+    # padding them with spaces as necessary.  This behavior is suppressed when:
+    #
+    #    - `--disable-columns` is used
+    #    - `aptitude(8)`'s output is connected to a pipe
+    #    - `aptitude(8)` runs in a command substitution
+
+# list manually installed packages (i.e. not installed automatically as dependency)
+comm -23 <(apt-mark showmanual | sort --unique) \
+    <(gzip --decompress --stdout /var/log/installer/initial-status.gz \
+    | sed -n 's/^Package: //p' \
+    | sort --unique \
+    )
+    # `$ aptitude search` already gives a good listing, but some of the packages
+    # it mentions were already there in a fresh OS install.
+    # You're probably not interested in those, which is why we call `comm(1)` to
+    # filter them out.
+    #
+    # Source: https://askubuntu.com/a/492343/867754
+    #
+    # ---
+    #
+    # Alternatives to `$ apt-mark showmanual`:
+    #
+    #     $ apt list --manual-installed
+    #     $ aptitude search '?installed !?automatic' --display-format='%p'
+    #
+    # But `$ apt-mark showmanual`  is 3  times faster  than `$ aptitude search`,
+    # and less noisy than `$ apt list`.
+
+# list archives/origins
+apt-cache policy \
+    | grep --perl-regexp --only-matching 'a=\K[^,]*' \
+    | sort --unique
+    # This is for archives.  For origins, replace `a=` with `o=`.
+
+# list sections
+aptitude search '?installed' --display-format='%s' | sort --unique
+
+# list packages from given archive/origin/section
+aptitude search '?section(<section>)' [--disable-columns]
+    # for archives/origins, replace `?section` with `?archive`/`?origin`
+
+# list packages which have been installed from given PPA
+aptitude search '?narrow(?installed, ?origin(<PPA>))' [--disable-columns]
+    # Without `?narrow()`:
+    #
+    #     $ aptitude search '?installed ?origin(❬PPA❭)'
+    #
+    # Or with `?and()`:
+    #
+    #     $ aptitude search '?and(?installed, ?origin(❬PPA❭))'
+    #
+    # You would get a list of packages which are both installed and available in
+    # the given  PPA.  But you  would not have  the guarantee that  the versions
+    # installed on  your system come from  that PPA; they could  come from other
+    # repositories (because a package can be present in several).
+    #
+    # Warning: If you have pending upgrades  (i.e. you've run `$ apt update` but
+    # not  `$ apt upgrade`), make  sure to  install them;  otherwise `?narrow()`
+    # will cause  an upgradeable  package to be  missing (because  the installed
+    # version and the available one don't match).
+
+# list packages which have been installed from a third-party repository
+set DISTRO_ID $(lsb_release --id --short) \
+    ; aptitude search '?installed' --display-format='%p %O' \
+        | awk '!/'"$DISTRO_ID"':|installed locally/ { print $1 }'
+    # Alternative (Ubuntu only):
+    #
+    #     $ pro security-status --thirdparty --format=text \
+    #         | sed -n '/^Packages:/,/^$/p' \
+    #         | tr ' ' '\n' \
+    #         | sed '/^$\|^Packages:/d'
+
+# list packages which were installed from a local .deb
+aptitude search '?installed' --display-format='%p %O' \
+    | awk '/installed locally/ { print $1 }'
+    # Alternatives:
+    #
+    #     # https://www.debian.org/doc/manuals/aptitude/ch02s04s05.en.html#searchObsolete
+    #     $ aptitude search '?obsolete'
+    #
+    #     $ apt-show-versions | grep -i 'no available version'
+    #
+    # Unfortunately, they  might miss a  package if a  version of the  latter is
+    # also available in a package source from `/etc/apt/sources.list[.d]`.
+    #
+    # ---
+    #
+    # This one is limited to Ubuntu:
+    #
+    #     $ pro security-status --unavailable --format=text \
+    #         | sed -n '/^Packages:/,/^$/p' \
+    #         | tr ' ' '\n' \
+    #         | sed '/^$\|^Packages:/d'
+
+# list pinned packages
+apt-cache policy | sed -n '/^Pinned packages:/,$ p'
+
+# print changelog of given package
+apt changelog <pkg>
+
+# print properties of APT package sources
+apt-cache policy \
+    | sed '
+        1,3 d
+        /^Pinned packages:$/,$ d
+        / i386 Packages$/,/^\s*origin /d
+        s/^ //
+        /^\s*origin /s/.*/\0\n/
+        / \(amd64 \)\?Packages$/ { s///; s/ http[^ ]*// }
+        /^\s*release / { s/\(,c=[^,]*\)\?,b=amd64$//; s/,/\n            /g }
+    '
+    #     a= Suite
+    #     b= Architectures
+    #     c= Components
+    #     l= Label
+    #     n= Codename
+    #     o= Origin
+    #     v= Version
+    #
+    # "Suite",  "Architectures",  ... are  properties  of  a package  source  as
+    # specified in its Release file.  You can grep their values with:
+    #
+    #     $ grep -E '^(Suite|Architectures|Components|Label|Codename|Origin|Version):' \
+    #         /var/lib/apt/lists/*InRelease \
+    #         | grep -v GnuPG
+    #
+    # See: `man apt_preferences /DESCRIPTION/;/Determination of Package Version and Distribution Properties`
+    #
+    # ---
+    #
+    # We've removed  `b=i386` because we're  only interested in the  `amd64` CPU
+    # architecture.  And we've removed `c=*` because it's already written on the
+    # first line (after the slash):
+    #
+    #     500 focal/main
+    #               ^--^
+
+# print size of given package
+aptitude search '?name(^<package>$)' --display-format='%p %D %I' [--disable-columns]
+    # `%D`: downloaded size
+    # `%I`: installed size
+
+# sort installed packages by size
+aptitude search '?installed' --display-format='%p %I' \
+    | sed '/<N\/A>/d ; s/,/./' \
+    | numfmt --to=iec --field=2 \
+    | sed 's/\([0-9]\+\)\s\+\([kKmMgG]\?[bB]\)$/\1\2/' \
+    | sort --key=2bh,2
+
+# read {pre,post}{inst,rm} scripts for given package
+editor /var/lib/dpkg/info/<pkg>.{pre,post}{inst,rm}
+
+# test whether file from given package has been modified
+sudo dpkg --verify <pkg>
+    # If no file has been modified, the output is empty.
+    # If a file *has* been modified, the output looks like this:
+    #
+    #     $ sudo dpkg --verify transmission-daemon
+    #     ??5?????? c /etc/transmission-daemon/settings.json
+    #
+    # In the first output field, each  character denotes a test on some specific
+    # metadata.  Unfortunately, `dpkg(1)` does not store the metadata needed for
+    # most tests and thus outputs question  marks for them.  Currently, only the
+    # checksum test can yield a `5` on the third character (when it fails).
+    #
+    # ---
+    #
+    # The test is not completely reliable.
+    # `dpkg(1)`  will only test files which are present in the `.deb` package.
+    # Not a file which – during installation  – is copied from a skeleton or
+    # written by a script.
+    #
+    # ---
+    #
+    # The output should only contain files under `/etc`.
+    # If it contains a file under  a different directory (e.g. `/usr/lib/`), the
+    # system administrator probably  made a mistake by editing a  file which was
+    # not meant to be.
+
+# test whether package is installed
+dpkg-query --show --showformat='${Status}' <package>
+    # `installed` means that the package was installed.
+    # It can be printed separately by replacing `${Status}` with `${db:Status-Status}`.
+    #
+    # ---
+    #
+    # `ok` means that the installation did not encounter any error.
+    # It can be printed separately by replacing  `${Status}` with `${db:Status-Eflag}`.
+    #
+    # ---
+    #
+    # `$ dpkg --status ❬package❭` is simpler, but not completely reliable.
+    # I  had  a  case where  the  command  exited  without  error, and  yet  the
+    # package  was not  installed.   The  first two  columns  in  the output  of
+    # `$ dpkg --list ❬package❭`  were  `in`  (the  desired  action  for  the
+    # package was "install", but it was not installed).
+
+% admin, pkg, auth
+@ admin
+
+# list trusted APT keys
+apt-key list
+
+# install APT key of third-party repository
+curl <URL>/<keyfile>.gpg | sudo gpg --output=/etc/apt/keyrings/<keyfile>.gpg --dearmor
+    # The key *must* be placed in `/etc/apt/keyrings/`:
+    #
+    #    > If  future updates  to  the certificate  will be  managed  by an  apt/dpkg
+    #    > package  as  recommended   below,  then  it  SHOULD   be  downloaded  into
+    #    > /usr/share/keyrings using the  same filename that will be  provided by the
+    #    > package.  **If it  will be  managed locally, it  SHOULD be  downloaded into**
+    #    > **/etc/apt/keyrings instead**.
+    #
+    # Source: https://wiki.debian.org/DebianRepository/UseThirdParty#OpenPGP_certificate_distribution
+    #
+    # Then, in `/etc/apt/sources.list.d/some-repo.list`, assign  the key file to
+    # the `signed-by` option:
+    #
+    #     deb [signed-by=/etc/apt/keyrings/❬keyfile❭.gpg] URL DISTRO COMPONENTS
+    #         ^-----------------------------------------^
+    #
+    # ---
+    #
+    # If you're dealing with an Ubuntu PPA, like this one:
+    # https://launchpad.net/~git-core/+archive/ubuntu/ppa
+    #
+    # Click on "Technical details about this PPA".
+    # Then, click on the fingerprint below the "Signing key:" line:
+    #
+    #     1024R/E1DD270288B4E6030699E45FA1715D88E1DF1F24 (What is this?)
+    #
+    # You'll be redirected to:
+    # https://keyserver.ubuntu.com/pks/lookup?fingerprint=on&op=index&search=0xE1DD270288B4E6030699E45FA1715D88E1DF1F24
+    #
+    # Finally, click on the fingerprint in the "pub" line.
+    # That should give you a file containing the ASCII-Armored key:
+    # https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xe1dd270288b4e6030699e45fa1715d88e1df1f24
+    #
+    # ---
+    #
+    # Do *not* put an APT key in `/etc/apt/trusted.gpg.d/`, nor in `/etc/apt/trusted.gpg~`!
+    #
+    #     ✘
+    #     $ sudo apt-key add ❬keyfile❭
+    #     ✘
+    #     $ sudo mv ❬keyfile❭ /etc/apt/trusted.gpg.d/
+    #
+    #    > The certificate MUST NOT be placed in /etc/apt/trusted.gpg.d or loaded by apt-key add.
+    #
+    # Source: https://wiki.debian.org/DebianRepository/UseThirdParty#OpenPGP_certificate_distribution
+    #
+    # Rationale: The third-party keyholders of these keys can sign *any* archive
+    # that doesn't have a `signed-by`  option (that includes the official Debian
+    # repositories).  IOW, your  system could accept packages  from a repository
+    # which pretends  to be  an official  Debian mirror,  while in  reality it's
+    # owned by a  threat actor who has  stolen one of these keys.   The fewer of
+    # them you have, the less risk you take.
+    #
+    # ---
+    #
+    # With a  recent enough APT,  you no longer need  to handle an  extra `.gpg`
+    # file.  You can embed the PGP key right inside a `.sources` file.
+    #
+    # Requirements:
+    #
+    #    - APT version 2.3.10 or later
+    #    - specify the source in `/etc/apt/sources.list.d/❬archive❭.source` (not in a `*.list` file)
+    #    - use the deb822 format (`man 5 sources.list /DEB822-STYLE FORMAT`)
+    #
+    # Edit  `❬archive❭.source`  to  add   a  `Signed-By`  field,  using  the
+    # following template copied exactly as it is (including the leading spaces):
+    #
+    #     Signed-By:
+    #      -----BEGIN PGP PUBLIC KEY BLOCK-----
+    #      -----END PGP PUBLIC KEY BLOCK-----
+    #
+    # Between the `BEGIN` and `END` lines, insert the output of:
+    #
+    #     $ curl ❬URL❭/❬keyfile❭.gpg | sed 's/^$/./g ; s/^/ /g'
+    #
+    # This assumes that `❬keyfile❭` is  ASCII-armored (i.e. you did not pipe
+    # it to `$ gpg --dearmor`).
+
+# remove APT key from list of trusted keys
+sudo apt-key del <keyid>
+    # `❬keyid❭`: fingerprint
+    #
+    # Example:
+    #
+    #     $ apt-key list
+    #     /etc/apt/trusted.gpg
+    #     --------------------
+    #     pub   rsa4096 2016-04-12 [SC]
+    #           EB4C 1BFD 4F04 2F6D DDCC  EC91 7721 F63B D38B 4796
+    #           ^------------------------------------------------^
+
+% admin, pkg, config
+@ admin, pkg
+
+$ configurable_package: debconf-get-selections 2>/dev/null \
+    | awk '/^[^#]/ { print $1 }' \
+    | sort --unique
+
+# print APT configuration
+apt-config dump
+
+# print configuration of all packages
+sudo debconf-get-selections
+    # This dumps the  whole debconf database.
+    #
+    # The  entries  are printed  in  a  random order,  and  are  not grouped  by
+    # packages.   So you'll  need to  grep for  the name  of the  package you're
+    # interested in.
+    #
+    # Require the package `debconf-utils` to be installed.
+
+# print configuration of given package
+debconf-show <pkg>
+    # Settings which have already been set are prefixed with an `*`.
+    #
+    # ---
+    #
+    # Alternative:
+    #
+    #     $ sudo debconf-get-selections \
+    #         | sed -n ':loop; /^#/ { H; n; b loop }; /^❬pkg❭\s/ { H; x; p }; z; h'
+    #
+    # `:loop; /^#/ { H; n; b loop }`: accumulate multiline comment in hold space until config line.
+    # `/^❬pkg❭\s/ { H; x; p }`: print comment and config line of given package.
+    # `z; h`: clear hold space on any config line.
+    #
+    # You can't run this:
+    #
+    #     $ sudo debconf-get-selections | sed -n '/^#/,/^❬pkg❭\s/ p'
+    #
+    # Because `^#` is ambiguous: it can start  a block for any package (not just
+    # `❬pkg❭`).  IOW, the  range `/start/,/end/` only works  when `start` is
+    # specific to a given type of block.
+
+# list config files for given package
+cat /var/lib/dpkg/info/<pkg>.conffiles
+
+# list packages for which a config file has been modified
+sudo debsums --config --changed
+    # Require the `debsums` package.
+    #
+    # Useful to  find all packages for  which you've deleted or  edited a config
+    # file (which  you probably shouldn't have).   Editing a config file  from a
+    # package is bad because it introduces a conflict between the local copy and
+    # the one installed during future package updates.
+    #
+    # ---
+    #
+    # As soon as you no longer need the package, I suggest you remove it because
+    # it installs 3 cron jobs (in `/etc/cron.{dai,week,month}ly/`); I don't like
+    # cron jobs (I prefer systemd timers), let alone 3 of them.
+    #
+    # ---
+    #
+    # If you've removed a config file, you'll read something like:
+    #
+    #     debsums: missing file /etc/zsh_command_not_found (from command-not-found package)
+    #                                                            ^---------------^
+    #
+    # To fix this, run:
+    #
+    #     $ sudo apt --option='DPkg::Options::=--force-confask' reinstall command-not-found
+    #                                                                     ^---------------^
+    #
+    # ---
+    #
+    # If you've edited a config file, find the package which owns it:
+    #
+    #     $ dpkg-query --search /etc/sysctl.conf
+    #     procps: /etc/sysctl.conf
+    #     ^----^
+    #
+    # Then, re-install the package:
+    #
+    #     $ sudo apt --option='DPkg::Options::=--force-confask' reinstall procps
+    #                                                                     ^----^
+    #
+    # During the  installation, `debconf(1)` will ask  you what to do  about the
+    # conflict between  the local  config file,  and the  one from  the package.
+    # Answer `I` to install the one from the package.
+    #
+    # Your local config file should have been moved using the `.dpkg-old` suffix
+    # (or `.ucf-old`).  If  you want to restore its settings,  move it inside an
+    # existing `.d/` directory:
+    #
+    #     $ sudo cp /etc/sysctl.conf.dpkg-old /etc/sysctl.d/999-local.conf
+    #               ^-----------------------^
+    #               automatically created when the package was re-installed
+    #
+    # Prefix the name  of your drop-in file  with a big number so  that it sorts
+    # last, and it's parsed *after* all the ones shipping the default values.
+
+# list packages which can be reconfigured
+debconf-show --listowners
+
+# configure all unpacked but not yet configured packages
+sudo dpkg --configure --pending
+    # Useful if an unclean dpkg state is detected, which happens when the system
+    # got interrupted during a previous update.
+
+# re-configure given package
+sudo dpkg-reconfigure <configurable_package>
+    # To be asked *all* configuration questions:
+    #
+    #     $ sudo dpkg-reconfigure --priority=low ❬package❭
+    #                             ^------------^
+    #
+    # And if you prefer a CLI interface instead of the default TUI:
+    #
+    #     $ sudo dpkg-reconfigure --frontend=readline ❬package❭
+    #                             ^-----------------^
+    #
+    # See `man 8 dpkg-reconfigure`.
+    #
+    # ---
+    #
+    # To do the same immediately at install-time:
+    #
+    #     $ sudo DEBIAN_PRIORITY=low apt install ❬package❭
+    #            ^-----------------^
+    #
+    #     $ sudo DEBIAN_FRONTEND=readline apt install ❬package❭
+    #            ^----------------------^
+    #
+    # See `man 7 debconf /^ENVIRONMENT`.
+    #
+    # ---
+    #
+    # To set those options permanently reconfigure `debconf` itself:
+    #
+    #     $ sudo dpkg-reconfigure debconf
+
+# re-install configuration file from given package (useful if it was wrongly removed)
+sudo apt --option='DPkg::Options::=--force-confask' reinstall <pkg>
+    # When re-installing a  package, `dpkg(1)` tries to preserve  any change you
+    # applied to a  configuration file; that includes  its removal. `debconf(1)`
+    # does *not* ask you what to do.  Unless the package is upgraded.
+    #
+    # But with  `--force-confask`, `debconf(1)`  *always* asks  you what  to do:
+    # re-install the configuration file or keep it removed.
+    #
+    # ---
+    #
+    # The  command assumes  that the  configuration file  is present  inside the
+    # `.deb`  package.   If it's  created  during  installation (copied  from  a
+    # skeleton or written by a script), the command won't re-install it.
+    #
+    # ---
+    #
+    # If  you  replace  `confask`  with  `confmiss`,  a  missing  file  will  be
+    # re-installed, without being asked anything.
+    #
+    # ---
+    #
+    # Do *not* include nested quotes in the option's value:
+    #
+    #     $ sudo apt --option='DPkg::Options::="--force-confask"' reinstall ❬pkg❭
+    #                                          ^               ^
+    #                                          ✘               ✘
+    #
+    # It would give an error:
+    #
+    #     dpkg: error: need an action option
+    #
+    # ---
+    #
+    # Do *not* omit the trailing double colon:
+    #
+    #     $ sudo apt --option='DPkg::Options::=--force-confask' reinstall ❬pkg❭
+    #                                       ^^
+    #
+    # It's necessary to append an item to a list option (such as `DPkg::Options`).
+
+# purge all removed packages with lingering config files
+sudo apt-get purge $(aptitude search '?config-files' --display-format='%p')
+    # Alternative: `$ sudo apt-get purge $(dpkg-query --list | awk '/^rc/ { print $2 }')`
+
+% admin, pkg, find
+@ admin
+
+# list categories of tags (aka facets)
+debtags tagcat | awk -F':' '/^Tag:/ { print $2 }' | sort --unique
+
+# list tags grouped in given facet
+debtags tagsearch '<facet>::'
+
+# list tags
+debtags tagcat | awk '/^Tag:/ { print $2 }'
+
+# print description of given facet
+debtags tagcat | sed -n '/^Facet: <facet>$/,/^$/p'
+
+# print description of given tag
+debtags tagshow <tag>
+
+# list tags related to given topic
+debtags tagsearch <topic>
+
+# packages with given tags
+debtags search 'works-with::video && use::editing'
+    # A tag expression also supports the logical operators `||`, `!`, as well as
+    # the grouping operator `()`.
+    #
+    # ---
+    #
+    # For a simple tag expression, an alternative is:
+    #
+    #     $ aptitude search '?tag(❬tag❭)'
+    #
+    # ---
+    #
+    # Warning: Tags are only useful in Debian; not in Ubuntu.
+    # In Ubuntu 23.04, only 9 packages are tagged.
+    # In Debian 12, 30322 packages are tagged.
+
+# package which owns given file/directory
+dpkg-query --search <file>
+    # If no match is found, pass `❬file❭` to `realpath(1)`.
+    #
+    # Still no match?  Then remove the `/usr` prefix.
+    # Even  if a  file  is under  `/usr`,  that doesn't  mean  that the  package
+    # installed  it there;  it might  have  been installed  in `/bin`,  `/lib*`,
+    # `/sbin`, because those are actually symlinks to subdirectories in `/usr`.
+    #
+    # ---
+    #
+    # `❬file❭` can also be a directory:
+    #
+    #     $ dpkg-query --search /var/local/
+    #     base-files: /var/local
+    #
+    # ---
+    #
+    # `❬file❭` is used as a  substring matched against filenames (unless its
+    # first character  matches `[[*?/]`). And  if any character after  the first
+    # one matches `[[*?\\]`, it's handled like a glob pattern.
+    #
+    # ---
+    #
+    # If the package you're looking for is not installed, run this instead:
+    #
+    #     $ apt-file search "$(realpath ❬file❭)"
+    #
+    # Again, if no match is found, remove the `/usr/` prefix.
+    #
+    # `❬file❭` can also be a regex if you pass `--regexp` to `apt-file(1)`.

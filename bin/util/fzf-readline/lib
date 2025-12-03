@@ -1,0 +1,51 @@
+#!/bin/bash -
+
+# Purpose: Get the query string (`query`) and the cursor position (`curpos`) for
+# all our scripts which implement a readline key binding.
+#
+# Unfortunately,  `fzf(1)` doesn't  provide any  primitive  to get  nor set  the
+# cursor position on  the command-line (you can only set  the cursor position in
+# the list  of matches via  `pos()`).  Instead, we have  to use tmux  formats to
+# compute the  cursor position; and  later, we'll use `$ tmux send-keys`  to set
+# the new cursor position.
+
+# All our scripts  expect the query string as first  argument (passed as `{q}`),
+# when you call them from your `fzf(1)` key `--bind`ings.
+if (( $# == 0 )); then
+  exit 1
+fi
+
+# shellcheck disable=SC2034
+query="$1"
+
+# We need tmux to infer the cursor position on `fzf(1)`'s command-line.
+if [[ -z "$TMUX" ]]; then
+  # We can't preserve  the cursor position (it will unconditionally  jump at the
+  # end of the  command-line).  But we can at least  preserve the existing query
+  # string.
+  echo "$query"
+  exit 1
+fi
+
+shopt -s lastpipe
+# Warning: Do not use `$'\x01'` as a delimiter.
+# Tmux would print it as `\001`.
+tmux copy-mode \
+    \; display-message -p '#{cursor_x}'$'\t''#{copy_cursor_line}' \
+    \; send-keys -X cancel \
+  | IFS=$'\t' read -r curpos curline
+shopt -u lastpipe
+
+up_to_end_of_prompt="${curline%"$FZF_PROMPT"*}$FZF_PROMPT"
+(( curpos -= ${#up_to_end_of_prompt} ))
+
+function _Set_Cursor_Position {
+  local -i i
+  local -i pos=$1
+  seq='C-a'
+  for (( i = 1; i <= pos; i++ )); do
+    seq+=' C-f'
+  done
+  # shellcheck disable=SC2086
+  tmux send-keys $seq
+}

@@ -1,0 +1,6 @@
+[Unit]
+Description=Remind us to update the system if we did not recently
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/update-system --reminder

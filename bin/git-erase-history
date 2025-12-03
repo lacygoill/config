@@ -1,0 +1,46 @@
+#!/bin/bash -
+
+set -o pipefail
+
+readonly SCRIPT="${0##*/}"
+
+if (( $# == 0 )); then
+  tee >&2 <<EOF
+Usage:
+  # to erase the history of the config repository
+  $SCRIPT config
+
+  # to erase the history of the current regular repository
+  $SCRIPT repo
+EOF
+  exit 1
+fi
+
+if [[ "$1" == 'config' ]]; then
+  readonly -a GIT_OPTIONS=( --git-dir="$HOME/.cfg/" --work-tree="$HOME" )
+elif [[ "$1" == 'repo' ]]; then
+  readonly -a GIT_OPTIONS=()
+else
+  printf '%s: invalid argument\n' "$SCRIPT" >&2
+  exit 1
+fi
+
+current_branch="$(git "${GIT_OPTIONS[@]}" branch --show-current)"
+
+git "${GIT_OPTIONS[@]}" checkout --orphan erase_history
+
+# `--all` stages all our config files before committing.
+git "${GIT_OPTIONS[@]}" commit --all --message='first commit'
+# Warning: Do not run `add --all` for the config repo:{{{
+#
+#     $ git --git-dir="$HOME/.cfg/" --work-tree="$HOME" add --all
+#                                                       ^-------^
+#                                                           ✘
+#
+# It would add every file in your `$HOME`, which is obviously not what you want.
+#}}}
+
+git "${GIT_OPTIONS[@]}" branch --delete --force "$current_branch"
+git "${GIT_OPTIONS[@]}" branch --move main
+git "${GIT_OPTIONS[@]}" gc --aggressive --prune=all
+git "${GIT_OPTIONS[@]}" push --set-upstream --force origin main
