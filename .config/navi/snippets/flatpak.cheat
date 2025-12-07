@@ -1,0 +1,10 @@
+% flatpak
+
+# install an application
+flatpak --user install <app>
+
+# uninstall an application
+flatpak --user --delete-data uninstall <app>
+
+# list all installed applications
+flatpak list --app

@@ -1,0 +1,8 @@
+[Unit]
+Description=Make xterm(1) read its config file whenever it changes
+
+[Path]
+PathChanged=%h/.Xresources
+
+[Install]
+WantedBy=paths.target

@@ -1,0 +1,568 @@
+#!/bin/bash -
+
+# TODO: Back up GPG keys in `~/.config/gnupg/`.{{{
+#
+# Is it as simple as backing up the directory?
+# Or do we need to export some kind of database, then import it back?
+# https://www.howtogeek.com/816878/how-to-back-up-and-restore-gpg-keys-on-linux/
+#
+# Also, when you add  a key in your keyring, try to attach  a comment so that we
+# remember its purpose.  Can `--comment` help?  `man gpg /OPTIONS/;/--comment`
+#}}}
+
+# `rsync(1)` is a tactic, not a strategy.  We need a strategy:
+#
+# TODO: Validate and restore-test backups.
+#
+# TODO: Save up to 10 (?) backups in case the file we're looking for was wrongly
+# deleted recently, and we need an old backup to restore it.
+#
+# TODO: Achieve immutability:  neither a hacker,  nor a bogus process  should be
+# able to corrupt, modify, or delete our backups.
+#
+# I guess  it means to compute  some kind of  hash of our backup,  and regularly
+# making  sure that  hash doesn't  change.   But that  also means  that we  need
+# to  be  sure  that  nobody  tampers  with whatever  file  we  store  the  hash
+# into.   This  looks familiar  to  the  issue that  `apt(8)`  has  to solve  in
+# `/var/lib/apt/lists/*InRelease`;  try  to  draw   some  inspiration  from  the
+# solution it uses.  From `~/Wiki/linux/Debian.md`:
+#
+#    > - a trusted GPG key authenticates an `*InRelease` file (via an in-line signature)
+#    > - a SHA256 hash from `*InRelease` authenticates a `*Packages` file
+#    > - a SHA256 hash from `*Packages` authenticates a `.deb` file
+#
+# I guess  we need  a manifest, which  includes one or  several hashes  (for the
+# overall backup or for each file inside) as well as an in-line signature.
+#
+# TODO: Encrypt and send the backup to a remote server.
+# Keep the encryption key on a  dedicated-purpose machine (on our home network?)
+# that only gets booted (automatically?) when you need to back up.
+#
+# That's in addition to a local storage device: we need redundancy.
+
+# There are many ways to specify the source(s) and destination.
+# How does `rsync(1)` process them exactly?{{{
+#
+# First,  it changes  its CWD  to the  specified destination.   Then, from  each
+# source path argument, it skips over the  longest path to a directory, with the
+# internal  definition that  a directory  must end  with a  slash.  Finally,  it
+# restores files/directories from whatever path remains (in its CWD).
+#
+# For example:
+#
+#             options
+#             vvv
+#     $ rsync ... /path/to/source dest
+#                          ^----^
+#                          let's assume that's a directory, and not a file
+#
+# Here, `rsync(1)`:
+#
+#    - changes its CWD to `dest/`
+#    - skips over `/path/to/` from the source argument because it's the longest
+#      path to a directory ending with a slash
+#    - creates `source/`, because that's what remains from the source argument
+#      now, and copies all its contents inside `dest/`
+#
+# Another example:
+#
+#                                v
+#     $ rsync ... /path/to/source/ dest
+#
+# Here, `rsync(1)`:
+#
+#    - changes its CWD to `dest/`
+#    - skips over `/path/to/source/` from the source argument
+#    - copies the contents of the source directly inside `dest/`
+#}}}
+# What about trailing slashes?  When do they matter?{{{
+#
+# They don't matter for the destination path.
+#
+# But they do for the source(s).
+#
+#     $ cd /tmp
+#     $ mkdir -p orig/dir backup
+#     $ touch orig/{a,dir/b}
+#
+#                           v
+#     $ rsync --archive orig/ backup; tree backup; rm -r backup/*
+#     backup
+#     ├── a
+#     └── dir
+#         └── b
+#
+#                          v
+#     $ rsync --archive orig backup; tree backup; rm -r backup/*
+#     backup
+#     └── orig
+#         ├── a
+#         └── dir
+#             └── b
+#
+# Notice that when  you append a slash  to `orig/`, only its  contents is copied
+# into `backup/`.   OTOH, if you omit  the slash, `orig/` itself  is copied into
+# `backup/`.
+#}}}
+
+# What do "ir-chk" and "to-chk" mean in rsync's output?{{{
+#
+# rsync  doesn't know  immediately how  many files  it has  to back  up.  That's
+# because  it has  to recurse  into directories  (we specify  `--archive`, which
+# implies `--recursive`).
+#
+# And yet, it prints and updates a temporary number during the transfer:
+#
+#     ... (xfr#..., ir-chk=123/456)
+#                   ^^
+#
+# Here, rsync tells us that it has still 123 files to back up out of 456 in total.
+#
+# That's possible because  it simultaneously scan the list of  files to back up:
+# it performs  an "**i**ncremental **r**ecursion **ch**ec**k**".  At  some point
+# during the transfer, the scan will end, and rsync will know the **to**tal list
+# of  files it  needs to  back  up; that's  when  it switches  from "ir-chk"  to
+# "to-chk":
+#
+#     ... (xfr#..., to-chk=123/789)
+#                   ^^
+#
+# As long  as you can  read "ir-chk", the  total count of  files to back  up can
+# still increase.
+#}}}
+
+# Init {{{1
+#
+# Leave this section  *before* we `cd` into  our HOME, so that we  can support a
+# relative path like:
+#
+#     $ backup ./some_dir
+#              ^
+#              the original semantics will be lost after `cd`
+
+# Make sure we did provide a backup directory.
+if [[ -z "$1" ]]; then
+  echo 'Provide the path to the backup directory.' >&2
+  exit 1
+
+elif ! [[ -d "$1" ]] && [[ "$1" != '--reminder' ]]; then
+  printf '%s is not a directory\n' "$1" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC2155
+readonly BACKUP="$(realpath -- "$1")"
+# }}}1
+# Need to be in our `$HOME`; now.{{{
+#
+# Since we use `--relative`, `rsync(1)` backs up every path component written in
+# a source argument.  But  we don't want to back up  something like `home`; it's
+# owned by the root  user.  We need to specify paths  without `home`, i.e. paths
+# relative to `$HOME`.  That's why we need to be in our `$HOME`.
+#
+# ---
+#
+# Also, we  need to  be in  our `$HOME`  *now*, so  that the  glob in  the `CFG`
+# assignment is correctly expanded.
+#}}}
+cd || exit 1
+# Config {{{1
+
+# Minimum of days to  wait before reminding us of making a  backup (if we forgot
+# to make one recently).
+declare -i -r MIN_DAYS=8
+
+# We use an array for the glob to be expanded in the assignment.
+# See: https://github.com/koalaman/shellcheck/wiki/SC2125
+readonly -a CFG=( .cfg* )
+
+# Some  of  those  files might  not  exist  on  our  machine.  If  that  happens
+# `rsync(1)` will give an error.  To  suppress it, we temporarily set `nullglob`
+# and sometimes append a useless wildcard.
+shopt -s nullglob
+readonly -a SSH=(
+  .ssh/authorized_keys*
+  .ssh/known_hosts*
+  # user authentication keys
+  .ssh/id_*
+  # task-specific keys
+  .ssh/task-*
+)
+shopt -u nullglob
+
+# Warning: All paths should be relative to our `$HOME`.{{{
+#
+# Outside, the files are owned by root or other regular users.
+# But system  files shouldn't be  tampered with by  a backup restoration  from a
+# different system; and we're the only user to log into this machine.
+#
+# ---
+#
+# Besides, if  you write absolute  paths, we would  be backing up  `home`, which
+# would give errors later during the restoration:
+#
+#     $ rsync "${OPTIONS[@]}" "$BACKUP" /
+#     [...]
+#     rsync: [generator] chgrp "/home" failed: Operation not permitted (1)
+#
+# That's because:
+#
+#    - `/home` is owned by the root user
+#
+#    - `rsync(1)` failed to preserve the `root` group of `/home` in the backup
+#      (it actually changed from `root` to `lgc`), because it didn't have enough
+#      rights to create a `home` directory owned by the `root` group
+#
+#    - `rsync(1)` can't change the `root` group of `/home` in the host (to `lgc`)
+#
+# In that case, do not use `sudo(8)`!   You don't want to change the group/owner
+# of `/home` from `root:root` to `lgc:lgc`.
+#
+# Unless you used `sudo(8)` for the `rsync(1)` command which created the backup;
+# because in  that case, the  `rsync(8)` process  had enough rights  to preserve
+# `home`'s ownership.  IOW, either you use `sudo(8)` all the time, or never; but
+# not just when `rsync(1)` gives an  error (i.e. when you restore).  Anyway, all
+# of that  illustrates how  it's tricky  to correctly  handle paths  outside our
+# `$HOME`.
+#}}}
+# Do *not* move any of those files/directories into our config:{{{
+#
+# Even if they don't contain any sensitive information.
+# For example, don't add the EFF wordlist:
+#
+#     ✘
+#     $ config add ~/.local/share/eff_large_wordlist.txt
+#
+# It might create too much noise when we use `$ config grep`.
+#
+# Besides,   `$ config ls-files`   should   only  list   files   which   contain
+# essential/non-reproducible  (and non-sensitive)  data.   Not  files which  are
+# generated by some script, or downloaded from some website.
+#}}}
+readonly -a SOURCES=(
+  # files
+  "${SSH[@]}"
+  '.config/gnupg/passphrase'
+  '.config/htop/htoprc'
+  '.config/mpv/scripts/interSubs.disable/interSubs.py'
+  '.config/mpv/scripts/interSubs.disable/interSubs_config.py'
+  '.config/mpv/scripts/interSubs.lua'
+  '.config/weechat/python/weechat.pyi'
+  # https://www.eff.org/deeplinks/2016/07/new-wordlists-random-passphrases
+  '.local/share/eff_large_wordlist.txt'
+  '.local/share/fish/fish_history'
+  '.local/share/frec'
+  '.local/share/vim/bookmarks'
+  '.local/share/vim/info'
+  '.local/share/vim/oldfiles'
+  '.vim/pack/mine/opt/awk/indent/awk.vim'
+  '.vim/pack/mine/opt/systemd/tools/parameters'
+  '.vim/pack/mine/opt/unichar/autoload/unichar/Session.vim'
+
+  # directories
+  '.config/nnn/bookmarks'
+  '.config/weechat/certs'
+  '.config/wireshark/profiles'
+  '.local/share/vim/session'
+  '.local/share/weechat/logs'
+  '.vim/pack/mine/opt/vim9-syntax'
+  '.vim/pack/mine/opt/vim9asm'
+  'Desktop'
+  'Documents'
+  'Ebooks'
+  'Music'
+  'Pictures'
+  'VCS'
+  'Videos'
+
+  # config
+  "${CFG[@]}"
+  'bin/linux-installation-checklist'
+)
+
+# `--archive`: recurse and preserve almost everything
+# `--delete`: delete a file which no longer exists in the sources{{{
+#
+# It's a dangerous option.
+#
+# For example, if you've backed up `foo/`, then later want to update the backup,
+# but wrongly  specify `bar/`  as the  source, `foo/` will  be deleted  from the
+# backup.  The  risk is  low if you  use it in  a script,  where a typo  is less
+# likely than in an interactive shell (you only write a script once), but still,
+# be cautious.
+#
+# Whether it should be used depends on  how you want to handle your sources.  If
+# you're only interested in their  *present* contents, then you need `--delete`;
+# but if  you're also  interested in  their *past* contents  (a source  could no
+# longer exist, or just some of its files), then you must avoid `--delete`.
+#
+# We use it here, because it prevents keeping stale files which might take a lot
+# of space (e.g. music which we liked, but no longer listen to...).
+#}}}
+# `--exclude`: ignore files which take too much space and are usually not important{{{
+#
+# BTW if you want to exclude a directory,  and not a file, append a slash to its
+# pattern:
+#
+#     --exclude=dir/
+#                  ^
+#
+# Without, a file named `dir` would be wrongly excluded too.
+#}}}
+# `--human-readable`: output numbers in human-readable format
+# `--info=progress2`: draw progress bar during transfer
+# `--one-file-system`: don't cross filesystem boundaries when recursing
+# `--partial`: keep partially transferred files{{{
+#
+# By default,  a partially  transferred file is  deleted. `--partial`  keeps it,
+# which  helps after  a transfer  has  been interrupted;  next time,  `rsync(1)`
+# doesn't have to re-transfer the whole file, but only what the missing part.
+#}}}
+# `--relative`: useful to back up several sources at different levels {{{
+#
+# Several sources  might have  the same  last path component,  and even  if they
+# don't, at  restoration time, you'll  need to remember  where each of  them was
+# originally.
+#
+# `--relative`  helps by  preserving  the intermediate  directories between  the
+# sources' root down to the  sources themselves (aka "implied directories").  It
+# no longer  matters if  2 sources  have the same  last path  component; they're
+# isolated in  their own implied directories.   And at restoration time,  you no
+# longer have  to remember where  each source was  originally; you just  need to
+# remember where their common root was.
+#
+# For example, files in `~/Documents` are located on level 4.  And their root is
+# `$HOME`.  With `--relative`, you get:
+#
+#     $BACKUP
+#     ├── Documents
+#     │   └── ...
+#
+# `Documents` is an implied directory.
+#
+# ---
+#
+# Technically, instead  of skipping over  the longest  path to a  directory from
+# each source argument, `rsync(1)` no longer skips any path component:
+#
+#                 v--------v
+#     $ rsync ... --relative /path/to/source "$BACKUP"
+#
+# Here, `rsync(1)`:
+#
+#    - changes its CWD to `$BACKUP`
+#    - re-creates the tree hierarchy `path/to/source` inside `$BACKUP`, then
+#      copies the contents of `/path/to/source/` inside `$BACKUP/path/to/source/`
+#}}}
+readonly -a OPTIONS=(
+  '--archive'
+  '--delete'
+  '--exclude=Ebooks/AudioBooks/'
+  '--exclude=Videos/TV/'
+  '--human-readable'
+  '--info=progress2'
+  '--one-file-system'
+  '--partial'
+  '--relative'
+)
+# Other options you might be interested in.
+# -----------------------------------------
+# `--bwlimit`: limit the maximum transfer rate at the requested limit
+# `--cvs-exclude`: auto-ignore files in the same way CVS does{{{
+#
+# This also takes into account the rules set in our `~/.cvsignore`.
+# We don't  use it  here, because  it would cause  some files/directories  to be
+# ignored which  we want  to back  up (e.g. `.git/`  directories in  `~/VCS`).
+#}}}
+# `--include`: don't exclude files matching given pattern
+# `--info` and `--debug`: more control over `rsync(1)`'s output{{{
+#
+# They expect a comma-separated list of flags.
+# For more info:
+#
+#     $ rsync --info=help
+#     $ rsync --debug=help
+#}}}
+# `--progress`: useful if you have a big file, and use the script interactively{{{
+#
+# It's equivalent to `--info=flist2,name,progress`.
+#}}}
+# `--rsh='ssh -p <port>'`: use SSH with different port than the default one
+# `--update`: do not transfer a file if it exists on the destination, and is newer over there{{{
+#
+# I prefer to avoid this.  Suppose we create  a file (A), trash it, create a new
+# version (B), back it up, then realize  that actually A was good and should not
+# have been trashed; we restore it, which overwrites B.  During the next backup,
+# `--update` will cause `rsync(1)`  to skip A because it will  be older than the
+# backed up  B.  We  will need  to wait  until we edit  A to  get a  more recent
+# version (assuming we ever edit it).  It's easy to miss that A was skipped, and
+# the day we  use the backup, we'll  restore B whose contents  is wrong.  That's
+# not OK; we  want `rsync(1)` to back up  our sources as they are  right now, no
+# matter what the backup directory contains.
+#}}}
+# `--verbose`: equivalent to `--info=flist,name,stats` (at least I *think*)
+# `--verbose --verbose`: no idea to which `--info=FLAGS` it's equivalent (but it's valid)
+
+# Options to avoid.
+# -----------------
+# `--compress`: compress file data during transfer {{{
+#
+# First, `--compress` is meant to reduce the amount of data transfer required to
+# copy a file, which only makes sense if your backup is on a remote machine, and
+# your upload is slow or the latency between the hosts is high.  That's probably
+# not our case; for  the moment, we intend to create our  backups on a removable
+# storage device (typically a USB drive).
+#
+# Second, we  care much more  about our  CPU usage; we  want to consume  as less
+# electricity as possible, and we don't  want our OS to get degraded performance
+# while the files are compressed.
+#
+# Third, `--compress`  works well on  text files, but  not on media  files (e.g.
+# music, movies, ...). This can be confirmed by reading the "speedup" factor:
+#
+#     speedup = (bytes sent + bytes received)/total size
+#
+# ATM, when  we use `--compress` for  files in `~/Documents/`, we  get a speedup
+# factor of 2.40:
+#
+#     sent 13.68K bytes  received 229 bytes  27.81K bytes/sec
+#     total size is 33.34K  speedup is 2.40
+#                                      ^--^
+#
+# Compared to 0.97 without:
+#
+#     sent 34.16K bytes  received 229 bytes  68.79K bytes/sec
+#     total size is 33.34K  speedup is 0.97
+#                                      ^--^
+#
+# This confirms that `--compress` can make  sense for text files.  But for music
+# files in `~/Music`, we get a speedup factor of 1.01 with `--compress`:
+#
+#     sent 474.01M bytes  received 1.36K bytes  25.62M bytes/sec
+#     total size is 477.96M  speedup is 1.01
+#                                       ^--^
+#
+# Which is almost the same without:
+#
+#     sent 478.08M bytes  received 1.36K bytes  136.60M bytes/sec
+#     total size is 477.96M  speedup is 1.00
+#                                       ^--^
+#
+# There is virtually  no gain in using `--compress`.  On  the contrary, it makes
+# the operation much  slower because audio files take much  more space than text
+# files:
+#
+#     # with `--compress`
+#     Executed in   17.63 secs    fish           external
+#        usr time   20.43 secs  819.00 micros   20.43 secs
+#                                               ^---^
+#
+#     # without `--compress`
+#     Executed in    1.66 secs    fish           external
+#        usr time    1.87 secs    0.00 millis    1.87 secs
+#                                                ^--^
+#}}}
+# `--copy-links`: resolve symlinks{{{
+#
+# That is, copy the target of a symlink, rather than the symlink itself.
+#
+# But  usually,  we  want  to  back   up  the  symlink,  not  its  target.   For
+# example,  ATM, we  want  to  back up  the  symlinks  in `~/.vim/doc/`.   Also,
+# `~/.config/nnn/bookmarks/`   might  contain   symlinks   to  potentially   big
+# directories which we have no interest in backing up.  For example:
+#
+#     $ ls -l ~/.config/nnn/bookmarks/Downloads
+#     ... /home/lgc/.config/nnn/bookmarks/Downloads -> /home/lgc/Downloads/
+#}}}
+
+# Reminder {{{1
+
+if [[ "$1" == '--reminder' ]]; then
+  # shellcheck disable=SC1091
+  source "$HOME/bin/util/lib"
+  if ! _Did_Wait_Enough "$MIN_DAYS"; then
+    exit
+  fi
+
+  IFS= read -r -d '' msg <<EOS
+You have not run your backup script in the last $MIN_DAYS days.
+
+If you  have created  or downloaded  non-reproducible files  (password database,
+bills,  photos,  ...)  during  that  time  frame,  and  if  your  machine/system
+breaks in  the near  future, you  will not  be able  to recover  them.  Consider
+creating/updating a backup.
+EOS
+  printf '%s' "$msg" | mail --subject='remember to back up data' "$USER@localhost"
+
+  _Update_Timestamp_File
+  exit
+fi
+
+# Checks {{{1
+
+# Bail out if the filesystem is different on the destination.{{{
+#
+# Once, we tried to back up our files on a USB stick formatted with the FAT file
+# system.  The results were bad:
+#
+#    - poor performance (4 times slower the first time)
+#    - permissions not preserved
+#
+#    - during an immediate subsequent backup, *all* the files were needlessly
+#      re-transferred (because of different permissions?), unless we used
+#      `--checksum` (which is still a bit slow)
+#
+#    - a few unexpected errors for symlinks
+#
+# We lost quite some time trying to understand the issue.
+#}}}
+backup_mount_point="$(df --output=target "$BACKUP" | grep '^/')"
+root_fstype="$(findmnt --output=FSTYPE --noheadings --raw /)"
+backup_fstype="$(findmnt --output=FSTYPE --noheadings --raw "$backup_mount_point")"
+if [[ "$backup_fstype" != "$root_fstype" ]]; then
+  tee >&2 <<EOF
+The filesystem type on $backup_mount_point is: $backup_fstype
+It is different than the root filesystem which is: $root_fstype
+EOF
+  exit 1
+fi
+
+# Make sure not to back up a file with a newline in its path.
+# Such a file can cause too many issues down the line.
+for entry in "${SOURCES[@]}"; do
+  if [[ "$entry" == *$'\n'* ]]; then
+    printf 'cannot back up a file with a newline in its path: %q\n' "$entry" >&2
+    exit 1
+  fi
+  # `dir/`  (no  newline in  the  name)  might  contain a  file/directory  named
+  # `foo\nbar` (where `\n` stands for a newline).  We don't want to back that up
+  # either.
+  if [[ -d "$entry" ]]; then
+    find "$entry" -name $'*\n*' -type f,d,l -print0 \
+      | while IFS= read -r -d '' disallowed; do
+          printf 'cannot back up a file with a newline in its path: %q\n' "$disallowed" >&2
+          exit 1
+        done
+  fi
+done
+
+# Execution {{{1
+
+rsync "${OPTIONS[@]}" "${SOURCES[@]%/}" "$BACKUP"
+#                                  ^^
+#                                  |
+# Trim  a possible  trailing slash  to be  sure we  back up  files *with*  their
+# containing  directories, so  that they're  isolated and  don't overwrite  each
+# other.  That  should not be necessary  thanks to `--relative`, but  let's code
+# defensively (think future refactoring).
+#
+# Alternative: `realpath(1)`.
+# Pro: Trim *consecutive* trailing slashes.
+# Con: Seems overkill for now.  Not sure what the effect would be on a symlink.
+
+# We have a timer which sends a reminder when we forget to back up for a too long time.
+# It needs to know the last time we backed up our files.
+#
+# shellcheck disable=SC1091
+source "$HOME/bin/util/lib"
+_Update_Timestamp_File

@@ -1,0 +1,311 @@
+# control flow {{{1
+# selection statements {{{2
+
+snippet t01 "if statement" Am
+if (${1:condition})
+{
+	$0
+}
+endsnippet
+
+snippet t02 "switch/case statement" Am
+switch (${1:controlling-expression})
+{
+	// several consecutive labels are allowed
+	//     case 1: case 2: case 3:
+	case ${2:label-constant-expression}:
+		${3:statements};
+		// If you need to remove \`break\`, replace it with a FALLTHROUGH comment,
+		// to make sure you don't think about "fixing" the code in the future.
+		break;
+	// more \`case\`s
+	$0
+	default:
+		${4:statements};
+		// not necessary but useful in case we move \`default\` before, or add
+		// another \`case\` after it
+		break;
+}
+endsnippet
+
+# loop statements {{{2
+
+snippet t03 "for statement" Am
+for (${1:init}; ${2:test}; ${3:change})
+{
+	$0
+}
+endsnippet
+
+snippet t04 "while statement" Am
+while (${1:condition})
+{
+	$0
+}
+endsnippet
+
+snippet t05 "do statement" Am
+// always put braces around the body, so that a careless reader does not mistake
+// the \`while\` word for the start of a \`while\` statement (instead of the end
+// of a \`do\` one)
+do
+{
+	$0
+} while (${1:condition});
+endsnippet
+# }}}1
+# data types {{{1
+# arrays {{{2
+
+snippet t06 "declare an array of integers" Am
+int ${1:variable name}[${2:array size}];
+
+// Initialize array's elements.
+//
+// This is  not necessary if you  simply assign to the  array's elements without
+// referring to  their existing value.   OTOH, something like  \`++$1[i]\` would
+// give garbage results, because it's equivalent to:
+//
+//     $1[i] = $1[i] + 1
+//             ^---^
+//             if it's uninitialized, it can be anything
+int i;
+for (i = 0; i < $2; ++i)
+	$1[i] = 0;
+$0
+endsnippet
+
+# strings {{{2
+
+snippet t07 "get length of string" Am
+#include <string.h>
+// the trailing NULL is not counted
+strlen(${1:string})
+$0
+endsnippet
+
+# booleans {{{2
+
+snippet t08 "work around the absence of the Boolean type in C89" Am
+// define the \`Bool\` enumerated type, whose enumerated constants are TRUE and FALSE
+typedef enum {TRUE = 1, FALSE = 0} Bool;
+Bool flag = TRUE;
+// Don't write \`if (flag == TRUE)\`.
+// It would only  work when \`flag\` is  1.  But there are other  true values (any
+// non-zero value actually).
+if (flag)
+	printf("flag is true\n");
+if (!flag)
+	printf("flag is false\n");
+$0
+endsnippet
+
+snippet t09 "use booleans in C99" Am
+// supplies macros for the \`bool\` type (to replace the default \`_Bool\`),
+// and for the \`true\` and \`false\` values
+#include <stdbool.h>
+
+// NOTE: contrary to C89, this type of boolean variable can only hold 0 or 1;
+// any non-zero value is automatically turned into 1
+bool flag = true;
+endsnippet
+
+# integers {{{2
+
+snippet t10 "express number as hexadecimal or octal" Am
+// 0x123 is 291 in decimal, and 0123 is 83.
+${1:0x123} or ${2:0123}
+endsnippet
+
+snippet t11 "printf()'s syntax" Am
+// For \`flags\`, \`modifier\` and \`specifier\`, see the annex.
+//
+// ---
+//
+// \`width\`: The  minimum field  width.   A wider  field will  be  used if  the
+// printed number or string won't fit in the field (example: \`%4d\`).
+// \`width\` can be \`*\`, which means that the width is an expression which you
+// must supply as an extra argument.
+//
+// ---
+//
+// \`.precision\`: For  \`%e\`, \`%E\`  and  \`%f\` conversions,  the number  of
+// digits  to  be  printed  to  the  right  of  the  decimal.   For  \`%g\`  and
+// \`%G\` conversions,  the maximum  number of  significant digits.   For \`%s\`
+// conversions, the  maximum number  of characters to  be printed.   For integer
+// conversions, the minimum  number of digits to appear; leading  zeros are used
+// if necessary  to meet  this minimum.   Using only  \`.\` implies  a following
+// zero, so \`%.f\` is the same as \`%.0f\`.
+// Example: \`%5.2f\` prints  a float in a  field five characters wide  with two
+// digits after the decimal point.
+//
+// \`precision\` can be  \`*\`, which means that the precision  is an expression
+// which you must supply as an extra argument.
+//
+// ---
+//
+// \`printf()\` returns the number of characters it printed, or a negative value
+// if an output error occurred.
+printf("... %[flags][width][.precision][modifier]specifier ...", ...)
+endsnippet
+
+snippet t12 "assign octal/hexadecimal value to char variable" Am
+// octal (you can only use 2 digits; also, you can omit the leading 0(s); the max is \`\077\`)
+char ${1:var} = '\0${2:12}'
+// hexadecimal (you can only use 3 digits; the max is \`\x07f\`)
+char $1 = '\x${3:013}'
+endsnippet
+
+# floats {{{2
+
+snippet t13 "express float in hexadecimal" Am
+0xa.1fp10 = (10 + 1/16 + 15/256) * 2^10 = 10364
+//           ^^   ^--^   ^----^    ^
+//           a     1       f       [pP] (!= [eE])
+endsnippet
+
+# complex numbers {{{2
+snippet t14 "assign and print a complex number" Am
+#include <stdio.h>
+#include <complex.h>
+	int
+main(void)
+{
+	// You can use \`complex\` instead of  \`_Complex\` if you don't have to
+	// worry  about  conflicts  with  past  usage (e.g.  you  never  used  a
+	// \`struct\` named \`complex\`).
+	float ${1:complex | _Complex} ${2:z} = ${3:12.34} + ${4:56.78}*I;
+	printf("%f + %fi\n", creal($2), cimag($2));
+
+	return 0;
+}
+// There    are     three    complex    types,     called    \`float _Complex\`,
+// \`double _Complex\`,  and  \`long double _Complex\`.   Similarly,  there  are
+// three  imaginary types,  called \`float _Imaginary\`,  \`double _Imaginary\`,
+// and \`long double _Imaginary\`.
+endsnippet
+
+# misc {{{2
+
+snippet t15 "print size of given type or variable" Am
+printf("Type ${1:type | var} has a size of %zd bytes.", sizeof($1));
+// NOTE: The size of  \`char\` is necessarily 1 byte because  C defines the size
+// of 1 byte in terms of \`char\`.  So, on a system with a 16-bit char (as given
+// by \`CHAR_BIT\` from  \`limits.h\`) and a 64-bit  \`double\`, \`sizeof\` will
+// report \`double\` as having a size of 4 bytes (not 8).
+endsnippet
+
+snippet t16 "assign size of given type or variable" Am
+size_t ${1:var1} = sizeof(${2:type | expr}) | strlen(${3:string});
+$0
+endsnippet
+
+snippet t17 "create a symbolic constant" Am
+const ${1:type} ${2:VAR} = ${3:value};
+// This make \`$2\` into a read-only value.
+endsnippet
+
+snippet t18 "cast operator" Am
+(${1:type})${2:expr}
+endsnippet
+# }}}1
+# test {{{1
+
+# function {{{1
+
+snippet t19 "function definition" Am
+	int
+main(void)
+{
+	$0
+	return 0;
+}
+endsnippet
+
+# miscellaneous {{{1
+
+snippet t20 "include given library" Am
+// \`$1\` can be:
+//
+//    - \`assert\` (for \`assert()\`)
+//    - \`math\` (for \`pow()\`)
+//    - \`stdbool\` (for \`bool\` data type)
+//    - \`stdio\` (for \`printf()\`, \`scanf()\`)
+//    ...
+#include <${1:header file}.h>
+$0
+endsnippet
+
+snippet t21 "macro definition" Am
+// If \`$2\` is a mere constant/literal you can drop the parentheses.
+// If it contains an operator, keep them (omitting them is a common pitfall).
+#define ${1:identifier} (${2:replacement-list})
+$0
+endsnippet
+
+snippet t22 "ask for user input with scanf()" Am
+// \`%d\`, \`%f\`, \`%lf\`, \`%Lf\` tell \`scanf()\` to read resp. an integer, a
+// float, a double, or a long double. // \`&$2\` tells \`scanf()\` to write that
+// value in the variable \`$2\`.
+//
+// ---
+//
+// \`scanf()\` returns  the number of items  that it successfully reads,  or EOF
+// when it detects the condition known as “end of file.”
+//
+// ---
+//
+// For more  info about the  available conversion specifiers and  modifiers, see
+// the annex.
+scanf("%${1:d|f|lf|Lf}", &${2:var})
+// Note that if \`$2\` is an array, you must drop \`&\`.
+$0
+endsnippet
+
+snippet t23 "iterate over input lines" Am
+#include <stdio.h>
+#define ${1:MAXLINE} ${2:1000}
+
+int get_line(char ${3:line}[]);
+
+	int
+main(void)
+{
+	char $3[$1];
+
+	int ${4:len};
+	while (($4 = get_line($3)) > 0)
+		printf("%s", line);
+
+	return 0;
+}
+
+	int
+get_line(char $3[])
+{
+	int i, c;
+	for (i = 0; (i < MAXLINE - 1) && (c = getchar()) != EOF && c != '\n'; ++i)
+		$3[i] = (char)c;
+	if (c == '\n')
+	{
+		$3[i] = (char)c;
+		++i;
+	}
+	$3[i] = '\0';
+	return i;
+}
+$0
+endsnippet
+
+snippet t24 "copy string into another variable" Am
+void copy(char ${2:from}[], char ${3:to}[]);
+
+	void
+copy(char $1[], char $2[])
+{
+	int i = 0;
+	while (($2[i] = $1[i]) != '\0')
+		++i;
+}
+$0
+endsnippet

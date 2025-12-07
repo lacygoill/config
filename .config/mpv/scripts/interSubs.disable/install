@@ -1,0 +1,248 @@
+#!/bin/bash -
+
+# Make sure the python scripts, and any directory/file they generate at runtime don't pollute `scripts/`.{{{
+#
+# That's why we download `interSubs{,_config}.py` in `scripts/interSubs.disable`.
+# And that's  why we substitute  some paths to include  the `interSubs.disable/`
+# component.
+#
+# If `mpv(1)` finds a file/director which is not a script, it will complain with
+# a message like:
+#
+#     Cannot find main.* for any supported scripting backend in: ~/.config/mpv/scripts/urls
+#
+# That's    because   interSubs    automatically   creates    some   directories
+# (`__pycache__/` and `urls/`); but `~/.config/mpv/scripts/` should only contain
+# lua scripts, or files/directories with the extension `.disable`.
+#
+# For more info:
+#
+#    - `man mpv /LUA SCRIPTING/;/^\s*Script location/`.
+#    - https://github.com/mpv-player/mpv/commit/00cdda2ae80f2f3c5b6fc4302d7edaf14755d037
+#}}}
+
+# download the remote scripts {{{1
+
+# If they contain tab characters, we replace them with spaces with `expand(1)`.{{{
+#
+# ATM, the remote files are indented with tabs.  If you keep them and later edit
+# one of  the files, you  might introduce a line  indented with spaces;  in that
+# case, the  python interpreter will give  an error because it  doesn't like the
+# mix of indentation (some lines indented with tabs, others with spaces).
+#}}}
+wget --output-document=- --quiet 'https://raw.githubusercontent.com/oltodosel/interSubs/master/interSubs.lua' \
+  | expand >"$HOME/.config/mpv/scripts/interSubs.lua"
+
+wget --output-document=- --quiet 'https://raw.githubusercontent.com/oltodosel/interSubs/master/interSubs.py' \
+  | expand >"$HOME/.config/mpv/scripts/interSubs.disable/interSubs.py"
+
+wget --output-document=- --quiet 'https://raw.githubusercontent.com/oltodosel/interSubs/master/interSubs_config.py' \
+  | expand >"$HOME/.config/mpv/scripts/interSubs.disable/interSubs_config.py"
+
+# edit them {{{1
+
+# `autostart_in` substitution{{{
+#
+# Make  interSubs start  automatically  when we  watch a  video  in a  directory
+# containing `/Videos/` in its path.
+#}}}
+# `keybinding{,_hide}` substitutions{{{
+#
+# By default, to start/quit interSubs, we need to press `F5` and `F6`.
+# I prefer `F1` and `F2`; easier to remember.
+#}}}
+# `pyname` substitution{{{
+#
+# It's necessary to inform `interSubs.lua` of the new location of `interSubs.py`
+# (we've moved it under a `interSubs.disable/` directory).
+#}}}
+# `start_command` substitution{{{
+#
+# Problem: interSubs depend on some libraries,  which can no longer be installed
+# via pip.  Libraries  can't be installed by  pipx either.  And I  don't want to
+# install them via (possibly outdated) Debian packages.
+#
+# Solution: Install libraries in a virtual environment.
+# The purpose of the substitution is to activate that environment.
+#}}}
+# `terminator` substitution{{{
+#
+# For debugging purposes, the original script can start the terminator terminal.
+# I  don't  want to  install  it.   Let's use  xterm  instead,  which should  be
+# installed by default.
+#}}}
+sed -i "
+  /^autostart_in = /s/.*/autostart_in = {'Videos'}/
+  /^keybinding = /s/.*/keybinding = 'F1'/
+  /^keybinding_hide = /s/.*/keybinding_hide = 'F2'/
+  /^pyname = /s@.*@pyname = '~/.config/mpv/scripts/interSubs.disable/interSubs.py'@
+  /^start_command = /s@python3@. $HOME/.config/mpv/scripts/interSubs.disable/venv/bin/activate; python3@
+  s/\<terminator\>/xterm/g
+" "$HOME/.config/mpv/scripts/interSubs.lua"
+
+# `pth` substitution{{{
+#
+# Inform  `interSubs.py` of  the  new location  of `interSubs_config.py`  (we've
+# moved it under a `interSubs.disable/` directory).
+#}}}
+sed -i "
+  /^pth = /s@.*@pth = os.path.expanduser('~/.config/mpv/scripts/interSubs.disable/')@
+  s/== None/is None/
+  s/!= None/is not None/
+" "$HOME/.config/mpv/scripts/interSubs.disable/interSubs.py"
+
+# `show_in_browser` substitution{{{
+#
+# Set the browser and the site opened when we left-click on a word.
+# By default, chromium is started, which we don't have installed.
+# Let's make sure Firefox is started instead.
+#}}}
+# `subs_screen_edge_padding` substitution{{{
+#
+# Increase the distance between the subtitles and the bottom of the video.
+# By default, it has the value 1 which I find too low.
+#}}}
+sed -i "
+  /^lang_from = /s/.*/lang_from = 'en'/
+  /^lang_to = /s/.*/lang_to = 'fr'/
+  /^show_in_browser = /s@.*@show_in_browser = 'firefox \"https://www.linguee.com/english-french/search?query=\$word\"'@
+  /^subs_screen_edge_padding = /s/.*/subs_screen_edge_padding = 40/
+  /font-weight: bold;/s@/\*\|\*/@@g
+  /font-size: 52px;/s//font-size: 60px;/
+" "$HOME/.config/mpv/scripts/interSubs.disable/interSubs_config.py"
+
+# install dependencies {{{1
+# Python libraries {{{2
+
+# interSubs doesn't depend on pip, but we can't rely on the pip binary inside the venv; it might be too outdated.{{{
+#
+# For example, on Ubuntu 20.04:
+#
+#     (venv) $ pip --version
+#     pip 20.0.2 ...
+#
+#     ✘
+#     (venv) $ python3 -m pip install pyqt5
+#     ...
+#     AttributeError: module 'sipbuild.api' has no attribute 'prepare_metadata_for_build_wheel'
+#     ...
+#
+#     (venv) $ python3 -m pip install --upgrade pip
+#     (venv) $ pip --version
+#     pip 23.1.2 ...
+#
+#     ✔
+#     (venv) $ python3 -m pip install pyqt5
+#}}}
+readonly -a LIBS=(
+  'pip'
+  'bs4'
+  'httpx'
+  'lxml'
+  'numpy'
+  'pyqt5'
+  'requests'
+  'six'
+)
+
+# I don't want interSubs to run inside a venv!{{{
+#
+# In that case, you'll need to install these Debian packages:
+#
+#     python3-bs4
+#     python3-httpx
+#     python3-lxml
+#     python3-numpy
+#     python3-pyqt5
+#     python3-requests
+#     python3-six
+#}}}
+venv_dir="$HOME/.config/mpv/scripts/interSubs.disable/venv"
+if ! [[ -d "$venv_dir" ]]; then
+  python3 -m venv "$venv_dir"
+fi
+# shellcheck disable=SC1091
+source "$venv_dir/bin/activate"
+
+for lib in "${LIBS[@]}"; do
+  python3 -m pip install --upgrade "$lib"
+done
+
+# Debian packages {{{2
+
+# `procps`: `pkill(1)`
+# `socat`: called in some functions in `interSubs.py`{{{
+#
+#    - `mpv_fullscreen_status()`
+#    - `mpv_message()`
+#    - `mpv_pause()`
+#    - `mpv_pause_status()`
+#    - `mpv_resume()`
+#}}}
+# `xdotool`: for hiding subtitles when minimizing mpv or switching window
+readonly -a PACKAGES=(
+  # utilities
+  'lua5.1'
+  'procps'
+  'socat'
+  'xdotool'
+
+  # Those libraries are necessary to load the Qt plugin `xcb`.{{{
+  #
+  # Without those, interSubs – inside a venv – doesn't work on Debian 12.
+  # mpv gives an error at runtime:
+  #
+  #     qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "" even though it was found.
+  #     This  application failed  to  start because  no Qt  platform  plugin could  be
+  #     initialized. Reinstalling the application may fix this problem.
+  #
+  #     Available     platform    plugins     are:     eglfs,    linuxfb,     minimal,
+  #     minimalegl,  offscreen,  vnc,  wayland-egl,  wayland,  wayland-xcomposite-egl,
+  #     wayland-xcomposite-glx, webgl, xcb.
+  #
+  # ---
+  #
+  # Here is a method to reliably find these missing libraries:
+  #
+  #     $ export QT_DEBUG_PLUGINS=1
+  #     $ mpv --sid=1 /path/to/video
+  #     # wait until a subtitle should be visible
+  #     # quit
+  #
+  # Toward the end of the output, you should find an error such as:
+  #
+  #     Cannot load library .../venv/lib/python3.11/site-packages/PyQt5/Qt5/plugins/platforms/libqxcb.so:
+  #     (libxcb-icccm.so.4: cannot open shared object file: No such file or directory)
+  #
+  # Look for a package which owns that missing `libxcb-icccm.so.4`:
+  #
+  #     $ apt-file search libxcb-icccm.so.4
+  #     libxcb-icccm4: /usr/lib/x86_64-linux-gnu/libxcb-icccm.so.4
+  #     libxcb-icccm4: /usr/lib/x86_64-linux-gnu/libxcb-icccm.so.4.0.0
+  #     ^-----------^
+  #
+  # That's one missing package.  Rinse and repeat to find all the other ones.
+  #
+  # See: https://askubuntu.com/a/1316850
+  #
+  # ---
+  #
+  # Note that all those libraries are pulled in by `python3-pyqt5`.  But I don't
+  # install the latter because it pulls in too many unnecessary dependencies (31
+  # in total on Debian 12).
+  #}}}
+  'libxcb-icccm4'
+  'libxcb-image0'
+  'libxcb-keysyms1'
+  'libxcb-render-util0'
+  'libxcb-xinerama0'
+)
+
+for pkg in "${PACKAGES[@]}"; do
+  if ! dpkg-query --show --showformat='${Status}' "$pkg" 2>/dev/null \
+      | grep --quiet 'ok installed' \
+      && ! sudo apt-get --assume-yes install "$pkg"; then
+    printf '%s: failed to install Debian package: %s\n' "$0" "$pkg" >&2
+    exit 1
+  fi
+done

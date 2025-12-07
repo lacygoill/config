@@ -1,0 +1,42 @@
+# To sort the lines from a given paragraph:
+#
+#     :'<,'>!sort --field-separator='/' --key=5b,5
+
+# How to get an RSS feed for a project hosted on GitLab?{{{
+#
+# Using `ansifilter` as an example, navigate to the project repository:
+# https://gitlab.com/saalen/ansifilter
+#
+# Then append `/-/tags?format=atom` to the URL:
+# https://gitlab.com/saalen/ansifilter/-/tags?format=atom
+#
+# Source: https://www.privacyguides.org/en/android/#gitlab
+#}}}
+
+https://github.com/ankitects/anki/releases.atom  # anki
+https://github.com/fish-shell/fish-shell/releases.atom  # fish-shell
+https://github.com/junegunn/fzf/releases.atom  # fzf
+https://github.com/cli/cli/releases.atom  # gh
+https://github.com/golang/go/releases.atom  # Golang
+https://github.com/Clavelito/indent-awk.vim/commits/master.atom  # indent-awk.vim
+https://github.com/oltodosel/interSubs/commits/master.atom  # interSubs
+https://github.com/mkropat/jumpapp/releases.atom  # jumpapp
+https://github.com/rvaiya/keyd/releases.atom  # keyd
+https://github.com/wofr06/lesspipe/releases.atom  # lesspipe
+https://github.com/denisidoro/navi/releases.atom  # navi
+https://github.com/jarun/nnn/releases.atom  # nnn
+https://github.com/zquestz/s/releases.atom  # s
+https://gitlab.com/screenkey/screenkey/-/tags?format=atom  # screenkey
+https://sebsauvage.net/links/?do=rss  # sebsauvage
+https://github.com/koalaman/shellcheck/releases.atom  # shellcheck
+https://github.com/containers/skopeo/releases.atom  # skopeo
+https://github.com/JohnnyMorganz/StyLua/releases.atom  # StyLua
+https://github.com/tmux/tmux/releases.atom  # tmux
+https://github.com/soimort/translate-shell/releases.atom  # translate-shell
+https://github.com/vim/vim/releases.atom  # vim
+https://github.com/weechat/weechat/releases.atom  # WeeChat
+https://github.com/jcs/xbanish/releases.atom  # xbanish
+https://github.com/yt-dlp/yt-dlp/releases.atom  # yt-dlp
+
+https://sourceforge.net/projects/bashdb/rss?path=/bashdb  # bash debugger
+https://calibre-ebook.com/changelog.rss  # calibre
