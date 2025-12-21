@@ -1,0 +1,32 @@
+# Let's make sure `~/.profile` is sourced when we log in graphically.{{{
+#
+# This matters  for `PATH`  to be  set as we  want.  On  Ubuntu, this  wasn't an
+# issue; `.profile` was sourced.  But on Debian 12, it might not:
+#
+#    > If you  log in in a graphical  environment (that is, if the  program where you
+#    > type your password  is running in graphics mode), you  don't automatically get a
+#    > login shell that reads ~/.profile. Depending  on the graphical login program, on
+#    > the window  manager or desktop environment  you run afterwards, and  on how your
+#    > distribution configured these programs, your ~/.profile may or may not be read.
+#
+# Source: https://superuser.com/a/183980
+#
+# On a fresh Debian netinstall with XFCE, `.profile` is not read when you log in
+# graphically via lightdm:
+#
+#   > Whether  shell's startup files (/etc/profile and ~/.profile  and so on) have
+#   > an effect  during graphical  logins depends  on the  DisplayManager. For example
+#   > SDDM  loads them  by  default while  they  ignored  by LightDM  out  of the  box
+#   > configuration in Debian. A user may choose  to create a ~/.xsessionrc file which
+#   > reads these files.
+#
+# Source: https://wiki.debian.org/EnvironmentVariables#Using_graphical_display_manager
+#
+# There might be more global solutions (to affect all users):
+# https://github.com/canonical/lightdm/issues/96#issuecomment-1004865400
+#
+# Not sure whether `~/.xsessionrc` will still be  read if we switch from Xorg to
+# Wayland, but XFCE does not support Wayland  for now, and it's unlikely that it
+# will before a few years (not before Debian 14).
+#}}}
+. ~/.profile

@@ -1,0 +1,32 @@
+open new private window                 «C-S-p»
+
+cycle between matches after search      «Enter»
+                                        «S-Enter»
+# a search starts after pressing `C-f` and typing a text pattern
+
+troubleshooting information             about:support
+
+reduce Cookies and Site Data            about:preferences#privacy
+# Then: {{{
+#
+#    - `Manage Data...`
+#    - `Last Used` (to sort oldest sites at top)
+#    - select websites whose last visit is more than 1 year old
+#
+#    - `Remove Selected` (can be used multiple times
+#      consecutively  to  build  a plan  which  will  remove
+#      non-consecutive ranges)
+#
+#    - `Save Changes`
+#    - `Remove`
+# }}}
+
+manage cache                            about:cache
+manage profiles                         about:profiles
+
+process manager                         about:processes
+# Displays memory/CPU usage of processes.
+# Also accessible by pressing `Shift`+`Esc`.
+
+task manager                            about:performance
+# displays energy impact and memory usage of tabs and add-ons

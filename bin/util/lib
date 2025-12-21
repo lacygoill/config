@@ -1,0 +1,47 @@
+#!/bin/bash -
+
+function _Did_Wait_Enough { #{{{1
+# Adapted from the `check_stamp()` function in this script:
+#
+#     /usr/lib/apt/apt.systemd.daily
+
+  local timestamp_file
+  timestamp_file="$(_Get_Timestamp_File)"
+  # If the timestamp file doesn't exist yet,  create one, and assume we did wait
+  # enough.
+  if ! [[ -f "$timestamp_file" ]]; then
+    _Update_Timestamp_File
+    return 0
+  fi
+
+  # compute  how much  time  has elapsed  since last  time  we `touch(1)`ed  the
+  # timestamp file
+  local -i now last elapsed
+  now="$(date --date="$(date +'%Y-%m-%d')" +'%s')"
+  if [[ -f "$timestamp_file" ]]; then
+    last="$(date --date="$(date --reference="$timestamp_file" +'%Y-%m-%d')" +'%s')"
+  fi
+  (( elapsed = now - last ))
+
+  # compute how much time we should wait
+  local -i min_days="$1"
+  local -i waiting_time="$(( min_days * 24 * 60 * 60 ))"
+
+  # we didn't wait enough
+  if (( elapsed < waiting_time )); then
+    return 1
+  fi
+
+  # we did wait enough
+  return 0
+}
+
+function _Update_Timestamp_File { #{{{1
+  touch -- "$(_Get_Timestamp_File)"
+}
+
+function _Get_Timestamp_File { #{{{1
+  local calling_script="${BASH_SOURCE[2]##*/}"
+  local timestamp_file="$HOME/.cache/timestamps/$calling_script"
+  echo "$timestamp_file"
+}

@@ -1,0 +1,4 @@
+Explanation: Don't let snap packages be installed no matter what.
+Package: snapd
+Pin: release a=*
+Pin-Priority: -1
