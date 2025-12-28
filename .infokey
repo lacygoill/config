@@ -1,0 +1,72 @@
+# This file customizes the default key bindings in `info(1)`.
+# https://www.gnu.org/software/texinfo/manual/info-stnd/html_node/Custom-Key-Bindings.html#Custom-Key-Bindings
+# Don't try to change its location.{{{
+#
+# You could, using `--init-file`:
+#
+#     $ info --init-file="$HOME/.config/infokey"
+#
+# But we  write and  use `info(1)`  commands too frequently  for us  to remember
+# that.  The  alternative would  be a function,  but I don't  want to  shadow an
+# essential command.
+#}}}
+
+# Where can I find the name of the commands which can be used in the RHS of the key bindings?{{{
+#
+# Run `info(1)`, and invoke `get-help-window` (currently bound to `C-h`).
+# Scroll down until you find either of these lines:
+#
+#     Commands available in Info windows:
+#     Commands available in the echo area:
+#}}}
+
+#info
+_ beginning-of-line
+
+g beginning-of-node
+G end-of-node
+j next-line
+k prev-line
+l forward-char
+h backward-char
+
+\kd down-line
+^e down-line
+\ku up-line
+^y up-line
+
+^d scroll-half-screen-down
+^u scroll-half-screen-up
+^t history-node
+
+^n next-node
+^p prev-node
+u up-node
+t top-node
+]h move-to-next-xref
+[h move-to-prev-xref
+
+zj split-window
+Zo keep-one-window
+^w^w next-window
+Z= tile-windows
+
+n search-next
+N search-previous
+
+^m select-reference-this-line
+
+^c abort-key
+
+^h get-help-window
+
+# repeat the last search started by `i`
+; next-index-match
+
+H global-prev-node
+L global-next-node
+
+# Pipe contents of current node to our editor (like in `less(1)`).
+# Warning: After you quit  your editor, and/or `info(1)`, the  screen might need
+# to be redrawn.  Just press `C-l`.
+E print-node
