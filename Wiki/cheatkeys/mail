@@ -1,0 +1,118 @@
+Commands {{{1
+
+list available commands                 hel[p] or ?
+list messages in mailbox                h[eaders]
+# Before   each  subject,   2  numbers   separated  by   a  slash   are  printed
+# (e.g. `12/34`).   The numbers  represent  resp.  the number  of  lines in  the
+# message and its size.
+
+move to next message                    n[ext]
+move to previous message                prev[ious]
+
+read message 123                        123
+# When reading  a message, `less(1)`  is invoked, so you  can use its  usual key
+# bindings such as  `?` and `/` to  search for a specific string  in the message
+# headers and body.
+
+delete the current message              d[elete]
+undelete the current message            u[ndelete]
+delete all mails                        d*
+delete last mail                        d$
+delete mails 12 and 34                  d 12 34
+delete mails from 12 to 34              d 12-34
+
+exit modifying the mailbox              q[uit] or «C-d»
+save current message to file            s[ave]
+exit without modifying mailbox          x[it] or ex[it]
+
+decode attachment                       E
+                                        > select encoded attachment
+                                        > !base64 --decode
+# `E` is  meant to be  typed from `less(1)`, which  itself should be  invoked by
+# `mail(1)` when reading  a message.  The selection and decoding  should be done
+# in Vim.
+
+Specifier {{{1
+
+current message                         .
+all messages                            *
+first non-deleted message               ^
+last non-deleted message                $
+message 123                             123
+message 12 up to 34                     12-34
+deleted messages                        :d
+new messages                            :n
+
+old messages                            :o
+# any message not in state 'read' or 'new'
+
+read messages                           :r
+unread messages                         :u
+tagged messages                         :t
+untagged messages                       :T
+
+msg whose subject contains STRING       /STRING
+msg whose body contains STRING          :/STRING
+
+Annex {{{1
+Syntax {{{2
+
+# Commands have the following syntax:
+#
+#      COMMAND [MSGLIST] [ARGUMENT ...]
+
+# MSGLIST  determines the  list  of messages  to operate  upon;  it defaults  to
+# current  message.   It's  a  comma or  whitespace-separated  list  of  message
+# specifiers.
+
+Message State {{{2
+
+# Each message  in the mailbox has  a state that  affects how it is  retained or
+# deleted upon termination of the program.  The state is reflected in the header
+# listing and can be changed during the session.
+
+new {{{3
+
+# The message is present in the system mailbox and has not been read by the user
+# or moved to  any other state.  When 'mail' terminates,  messages in this state
+# are retained  in the system  mailbox.  If 'mail'  was exited using  the 'quit'
+# command, such messages are moved to the 'unread' state.  If 'exit' command was
+# used, their state is not changed.
+
+unread {{{3
+
+# The  message  has  been present  in  the  system  mailbox  for more  than  one
+# invocation of 'mail' and  has not been read by the user or  moved to any other
+# state.  When  'mail' terminates, messages  in this  state are retained  in the
+# system mailbox.
+
+read {{{3
+
+# The message  has been read by  the user, i.e.  processed by a command  such as
+# 'next' or 'prev'.
+#
+# When 'mail'  terminates, messages in this  state are handled depending  on the
+# mailbox they  are in.  Read  messages in the system  mailbox are saved  in the
+# 'mbox', unless the  internal variable 'hold' is set.  Read  messages in 'mbox'
+# or in any other  mailbox, excepting the system one, will  be retained in their
+# current location.
+
+deleted {{{3
+
+# The message  has been processed  by one  of the following  commands: 'delete',
+# 'dp', 'dt'.   Messages in  this state  are ignored  by any  command, excepting
+# 'undelete',  which changes  their state  back  to 'read'.   Upon quitting  the
+# program, deleted messages are permanently removed from the mailbox.
+
+preserved {{{3
+
+# The  message has  been processed  by  the 'preserve'  ('hold') command.   When
+# 'mail' quits, such messages are retained in the mailbox.
+
+saved {{{3
+
+# The  message has  been processed  by one  of the  following commands:  'save',
+# 'write'.  When 'mail' quits, saved messages  will be removed from the mailbox,
+# unless the 'keepsave' variable is set.   When operating on the system mailbox,
+# messages in this state are deleted, when  the 'quit' or 'file' command is used
+# to exit the current mailbox.

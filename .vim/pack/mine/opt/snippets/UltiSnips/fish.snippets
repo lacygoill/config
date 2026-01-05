@@ -1,0 +1,277 @@
+# control flow {{{1
+# selection statements {{{2
+
+snippet t01 "if block" Am
+if test ${1:-n "$var"}
+	$2
+end
+$0
+endsnippet
+
+snippet t02 "switch/case block" Am
+switch $${1:variable}
+	case ${2:value1}
+		${3:echo 'do something'}
+	case ${4:value2}
+		${5:echo 'do something else'}
+	case '*'
+		${6:echo 'default handling if no case matches'}
+end
+$0
+endsnippet
+# }}}1
+# data types {{{1
+# string {{{2
+
+snippet t03 "string written on multiple lines, but without including newlines in its value" Am
+# Surround it with double quotes, and escape the literal newlines:
+"a \
+b"
+# From \`man fish-language /QUOTES\`:
+#    > The only meaningful  escapes in double quotes are [...]  \ followed by a
+#    > newline, which deletes the backslash and the newline, [...]
+endsnippet
+
+snippet t04 "extract substrings from given string and assign them to given variables" Am
+# Example:
+#
+#     string match --regex --quiet '^(?<LHS>\S+)\s+(?<RHS>.*)' -- $abbrev
+#
+# This assigns  the first  word out  of the string  \`$abbrev\` to  the variable
+# \`LHS\`, and the rest to \`RHS\`.
+#
+# For more info, see: \`man string-match /named\`
+string match --regex --quiet '...(?<${1:var}>${2:pat})...' -- ${3:string}
+$0
+endsnippet
+
+# array {{{2
+
+snippet t05 "work around missing associative array" Am
+# See: https://stackoverflow.com/a/40019138
+set keys a b c
+set values 1 2 3
+for key in $keys
+	# \`set\` doesn't modify \`$status\`, so the test succeeds if, and only if,
+	# \`contains\` succeeds
+	if set index $(contains --index -- $key $keys)
+		printf '(key, value): (%s, %s)\n' $key $values[$index]
+	end
+end
+$0
+endsnippet
+# }}}1
+# test {{{1
+
+snippet t06 "test variable/list is empty" Am
+# assert that you can't access its first element
+if ! set --query ${1:var/list}[1]
+	$0
+end
+endsnippet
+
+snippet t07 "test list has at least N elements" Am
+# try to access its N-th element
+if set --query ${1:list}[${2:123}]
+	$0
+end
+endsnippet
+
+snippet t08 "test number of arguments received by function" Am
+if test "$(count $argv)" ${1:-gt} 1
+	$2
+end
+$0
+endsnippet
+
+snippet t09 "test current user is root" Am
+# See \`man fish_is_root_user\`.
+fish_is_root_user
+endsnippet
+
+snippet t10 "test cursor is at end of command-line" Am
+if test "$(commandline --current-buffer)" = "$(commandline --cut-at-cursor)"
+	$1
+end
+$0
+endsnippet
+
+snippet t11 "test current shell is interactive or login" Am
+status --is-${1:interactive|login}
+endsnippet
+
+# function {{{1
+
+snippet t12 "define function" Am
+function ${1:func}
+	$2
+end
+$0
+endsnippet
+
+snippet t13 "edit function" Am
+# Changes  will only  affect the  current  session.  To  write them  permanently
+# in   the  correct   file   under  \`$__fish_config_dir/functions/\`,   execute
+# \`funcsave  $1\` afterward.  Or, if you're  sure your changes will be correct,
+# pass \`--save\` to \`funced\`.
+funced ${1:func}
+$0
+endsnippet
+
+snippet t14 "name function's arguments in its header" Am
+function func --argument-names=foo bar baz
+end
+# Naming them in the body is more verbose and less readable:
+#
+#     function func
+#         set -f foo $argv[1]
+#         set -f bar $argv[2]
+#         set -f baz $argv[3]
+#     end
+#
+# See: \`man function /--argument-names\`.
+endsnippet
+
+snippet t15 "let called function access caller's arguments" Am
+function A
+	set -f x $argv[1]
+	B
+end
+function B --no-scope-shadowing
+	echo $x
+end
+
+# This is more readable than:
+#
+#     function A
+#         set -f x $argv[1]
+#         funcB $x
+#     end
+#     function B
+#         set -f x $argv[1]
+#         echo $x
+#     end
+#
+# See: \`man function /--no-scope-shadowing\`.
+endsnippet
+
+snippet t16 "install callback function when CWD changes" Am
+function ${1:func} --on-variable=PWD
+# https://github.com/fish-shell/fish-shell/issues/583#issuecomment-13758325
+	status --is-command-substitution && return
+	# do stuff
+	$2
+end
+$0
+endsnippet
+
+snippet t17 "current script or function, like $0 in bash" Am
+$(status current-command)
+endsnippet
+
+snippet t18 "get stack trace of all function calls on call stack" Am
+# See: \`man status /DESCRIPTION/;/stack-trace\`
+status stack-trace
+endsnippet
+
+# miscellaneous {{{1
+
+snippet t19 "list all variables" Am
+set
+endsnippet
+
+snippet t20 "list global (or universal) variables" Am
+set --${1:global|universal}
+endsnippet
+
+snippet t21 "delete/erase variable" Am
+set --erase ${1:var}
+endsnippet
+
+snippet t22 "specify that completions for command A should be copied from B" Am
+complete --command ${1:A} --wraps=${2:B}
+endsnippet
+
+snippet t23 "print path to given command" Am
+# Prefer \`type\` over \`which\` because – as a builtin – it's faster.
+type --path ${1:cmd}
+endsnippet
+
+snippet t24 "last interactive shell command in history" Am
+$history[1]
+# Alternative:
+#
+#     $ history search --max=1
+#
+# See:
+#
+#    - \`man fish-language /SHELL VARIABLES/;/Special variables/;/^\s*history\`
+#    - \`man history\`
+endsnippet
+
+snippet t25 "emit ad-hoc event" Am
+# \`$2\` is optional.  It's sent as  arguments to any event handler listening to
+# \`$1\`.
+#
+# Example:
+#
+#     function my_handler --on-event=my_event
+#         printf '%s\n' $argv
+#     end
+#     emit my_event foo bar baz
+#
+# Outputs:
+#
+#     foo
+#     bar
+#     baz
+emit ${1:event} ${2:args}
+$0
+endsnippet
+
+snippet t26 "get character under cursor" Am
+# \`string-collect(1)\` is  important.  Without, \`string-sub(1)\` would  try to
+# extract the \`idx\`th character from  *each* line of the command-line.  That's
+# not what we  want; we want to  extract the \`idx\`th character  from the whole
+# command-line.
+#
+# MRE:
+#
+#     bind \cx\cx func
+#     function func
+#     	commandline --replace 'a
+#     bc
+#     def'
+#     	commandline --cursor 3
+#     	set -f cmdline $(commandline --current-buffer)
+#     	set -f curpos $(commandline --cursor)
+#     	set -f idx $(math "$curpos + 1")
+#     	set -f char_under_cursor $(string sub --start=$idx --end=$idx $cmdline)
+#     	set --show char_under_cursor >/tmp/debug
+#     end
+#
+# Press \`\cx\cx\`.
+# Expected: \`/tmp/debug\` contains this:
+#
+#     $char_under_cursor: set in local scope, unexported, with 1 elements
+#     $char_under_cursor[1]: |c|
+#
+# Actual: \`/tmp/debug\` contains this:
+#
+#     $char_under_cursor: set in local scope, unexported, with 3 elements
+#     $char_under_cursor[1]: ||
+#     $char_under_cursor[2]: ||
+#     $char_under_cursor[3]: ||
+#
+# Notice that \`string-sub(1)\` tried to extract the 4th character on each line.
+# But all of them are shorter.  So, we get 1 empty element per line.
+#
+# ---
+#
+# Alternatively, you could surround \`$cmdline\` with double quotes.
+set -f cmdline $(commandline --current-buffer | string collect)
+set -f curpos $(commandline --cursor)
+set -f idx $(math "$curpos + 1")
+set -f char_under_cursor $(string sub --start=$idx --end=$idx $cmdline)
+$0
+endsnippet
