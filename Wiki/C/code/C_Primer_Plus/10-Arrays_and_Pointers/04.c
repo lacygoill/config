@@ -18,3 +18,13 @@ main(void)
 
     return 0;
 }
+//     Month  1 has 31 days.
+//     Month  2 has 28 days.
+//     Month  3 has 31 days.
+//     Month  4 has 30 days.
+//     Month  5 has 31 days.
+//     Month  6 has 30 days.
+//     Month  7 has 31 days.
+//     Month  8 has 31 days.
+//     Month  9 has 30 days.
+//     Month 10 has 31 days.

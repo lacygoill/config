@@ -27,8 +27,9 @@ main(void)
     //
     // In the first column, notice how the addresses increase by 2 bytes.
     // And in the second one, they increase by 8.
-    // That's because C adds  one "storage unit" which is 2 for  a `short` and 8
-    // for a `double`.
+    // That's because C adds one "storage unit"  (which is 2 for a `short` and 8
+    // for a `double`)  so that the address  is increased to the  address of the
+    // next element, not just the next byte.
 
     return 0;
 }

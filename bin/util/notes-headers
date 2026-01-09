@@ -4,7 +4,7 @@
 # (`omni-TUI`) when we want  to jump to some header written in  one of our notes
 # files.
 
-readonly -a NOT_SPECIFIC_ENOUGH=('Annex' 'Glossary' 'Pitfalls' 'Todo')
+readonly -a NOT_SPECIFIC_ENOUGH=('Annex' 'Glossary' 'Issues' 'Pitfalls' 'Syntax' 'Todo')
 
 readonly SCRIPT="${0##*/}"
 readonly FORMATTING="${0%/*}/notes-headers-formatting"

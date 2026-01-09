@@ -46,37 +46,9 @@ endsnippet
 # data types {{{1
 # number {{{2
 
-snippet t07 "rule: comparison between numbers and strings (with/out strnum attribute)" Am
-# If 2  operands are  compared, and at  least one  of them is  a string,  then a
-# string comparison is performed.  Otherwise, a numeric comparison is performed.
-$0
-endsnippet
-
 # string {{{2
 
-snippet t08 "rule: regex constant vs dynamic regex" Am
-# Often (always?),  where a regex  constant is expected (\`/regex/\`),  a string
-# constant is  also accepted; or any  expression which evaluates to  a string or
-# can be  coerced into  one.  The  contents of the  string is  then used  as the
-# regex.  Since the expression can be evaluated at runtime, such a regex is said
-# to be dynamic.
-#
-# ---
-#
-# Prefer a regex constant:
-#
-#    - A string constant is complicated to write and more difficult to read,
-#      because it's parsed twice (once at the lexical level when awk builds an
-#      internal copy of the program, and a second time at the runtime level)
-#      which forces you to escape backslashes used in escape sequences.
-#      Forgetting to do so is a common source of error.
-#
-#    - A regex constant is more efficient.
-#
-#    - A regex constant better shows your intent; i.e. matching a regex.
-endsnippet
-
-snippet t09 "get length of given string or array" Am
+snippet t07 "get length of given string or array" Am
 # The argument is optional.  If omitted, it defaults to \`\$0\`.
 #
 # ---
@@ -92,7 +64,7 @@ snippet t09 "get length of given string or array" Am
 length("${1:str | arr}")
 endsnippet
 
-snippet t10 "get formatted string" Am
+snippet t08 "get formatted string" Am
 # Example:
 #
 #     $ awk '{ print sprintf("%s + %s - %s", \$1, \$2, \$3) }' <<<'1 2 3'
@@ -105,12 +77,12 @@ snippet t10 "get formatted string" Am
 sprintf(${1:fmt},${2:expr-list})
 endsnippet
 
-snippet t11 "get index of first character of given substring in given string" Am
+snippet t09 "get index of first character of given substring in given string" Am
 # returns 0 if \`$2\` is not included in \`$1\`
 index(${1:str}, ${2:substr})
 endsnippet
 
-snippet t12 "extract substring matching given regex out of given string" Am
+snippet t10 "extract substring matching given regex out of given string" Am
 # \`match()\` returns the index of the first character of the substring; or 0 if
 # there is no match.
 #
@@ -135,12 +107,12 @@ snippet t12 "extract substring matching given regex out of given string" Am
 match(${1:str}, /${2:regex}/, ${3:arr}); print $3[0]
 endsnippet
 
-snippet t13 "extract substring starting from given index and with given length" Am
+snippet t11 "extract substring starting from given index and with given length" Am
 # \`$3\` is optional; if omitted, the substring terminates at the end of \`$1\`.
 substr(${1:str}, ${2:start}, ${3:length})
 endsnippet
 
-snippet t14 "replace – in-place – text matching given regex in given target" Am
+snippet t12 "replace – in-place – text matching given regex in given target" Am
 # In \`$2\`, \`&\` can be used to stand for the text matched by the whole regex.
 #
 # ---
@@ -168,7 +140,7 @@ snippet t14 "replace – in-place – text matching given regex in given target"
 sub(${1:regex}, ${2:rep}, ${3:target})
 endsnippet
 
-snippet t15 "split given string on FS or on given separator" Am
+snippet t13 "split given string on FS or on given separator" Am
 # \`$2\` is set with the split pieces.
 #
 # ---
@@ -209,7 +181,7 @@ endsnippet
 
 # array {{{2
 
-snippet t16 "get last element of given array" Am
+snippet t14 "get last element of given array" Am
 # This assumes that \`$1\` is indexed with  1, 2, 3, ... (that's not necessarily
 # the case, but – as an example – it is, for an array set with \`split()\`).
 ${1:arr}[length($1)]
@@ -218,7 +190,7 @@ endsnippet
 # fields/records {{{1
 # splitting {{{2
 
-snippet t17 "iterate over NULL-separated records" Am
+snippet t15 "iterate over NULL-separated records" Am
 # On the command-line, you can use \`-v RS='\0'\` instead:
 #
 #     $ find ~/.config/etc -type f -print0 | awk -v RS='\0' '{ print \$0 }'
@@ -229,16 +201,16 @@ endsnippet
 
 # selection {{{2
 
-snippet t18 "select records whose first character comes after given letter" Am
+snippet t16 "select records whose first character comes after given letter" Am
 \$0 > "${1:char}"
 endsnippet
 
-snippet t19 "select records matching given pattern and not other given pattern" Am
+snippet t17 "select records matching given pattern and not other given pattern" Am
 # This shows that you can combine regexes with logical operators.
 /${1:pat1}/ && !/${2:pat2}/
 endsnippet
 
-snippet t20 "select last but one field" Am
+snippet t18 "select last but one field" Am
 # \`NF - 1\`  is an  expression evaluated  into the  index of  the last  but one
 # field,  and  \`$\` is  an  operator  converting a  field  index  into a  field
 # contents.
@@ -251,12 +223,12 @@ endsnippet
 
 # processing {{{2
 
-snippet t21 "append field to record" Am
+snippet t19 "append field to record" Am
 $(NF + 1) = "${1:text}"
 $0
 endsnippet
 
-snippet t22 "print input records, reversing the order of their fields" Am
+snippet t20 "print input records, reversing the order of their fields" Am
 for (i = NF; i >= 1; i--)
 	printf("%s ", $i)
 
@@ -275,7 +247,7 @@ print "\n"
 $0
 endsnippet
 
-snippet t23 "process multiline records" Am
+snippet t21 "process multiline records" Am
 # Fields will be actually lines (because of \`FS = "n"\`).
 # Records will be paragraphs (sequences of non-empty lines).
 #
@@ -287,7 +259,7 @@ BEGIN { RS = ""; FS = "\n" }
 $0
 endsnippet
 
-snippet t24 "print records with missing field" Am
+snippet t22 "print records with missing field" Am
 # A  field  is  considered  to  be  missing  when  \`FS\`  can  be  found  twice
 # consecutively.
 #
@@ -323,11 +295,11 @@ endsnippet
 # }}}1
 # test {{{1
 
-snippet t25 "test array contains element at given index" Am
+snippet t23 "test array contains element at given index" Am
 ${1:idx} in ${2:arr}
 endsnippet
 
-snippet t26 "test string expression contains a number" Am
+snippet t24 "test string expression contains a number" Am
 isnum(${1:expr})
 
 function isnum(n) {
@@ -367,7 +339,7 @@ endsnippet
 
 # user-defined functions {{{1
 
-snippet t27 "user-defined function" Am
+snippet t25 "user-defined function" Am
 function ${1:myfunc}(${2:mandatory parameters},    ${3:local variables}) {
 	# By default, a variable created inside  a function is global.  That is,
 	# once you call the function,  the variable remains visible outside.  If
@@ -381,7 +353,7 @@ endsnippet
 
 # redirections {{{1
 
-snippet t28 "write data to file" Am
+snippet t26 "write data to file" Am
 # Because the expression that  you use to close a file  or pipeline must exactly
 # match the  expression used to  open the  file or run  the command, it  is good
 # practice to use a variable to store the filename or command.
@@ -391,12 +363,12 @@ close(fpath)
 $0
 endsnippet
 
-snippet t29 "append data to file" Am
+snippet t27 "append data to file" Am
 print "${1:data}" >>"${2:/path/to/file}"
 $0
 endsnippet
 
-snippet t30 "save output of shell command in variable" Am
+snippet t28 "save output of shell command in variable" Am
 cmd = "${1:cmd}"
 cmd | getline ${2:var}
 close(cmd)
@@ -405,52 +377,7 @@ endsnippet
 
 # miscellaneous {{{1
 
-snippet t31 "rule: operators precedence" Am
-# In descending order:
-#
-#     ┌─────────────────────────┬──────────────────────────────────────────────┐
-#     │ ()                      │ grouping                                     │
-#     │ $ Field                 │ reference                                    │
-#     │ ++ --                   │ increment, decrement                         │
-#     │ ^                       │ exponentiation                               │
-#     │ !+-                     │ logical “not”, unary plus, unary minus       │
-#     │ */%                     │ multiplication, division, modulo (remainder) │
-#     │ +-                      │ addition, subtraction                        │
-#     │                         │ concatenation                                │
-#     │ < <= == != > >= >> | |& │ relational and redirection                   │
-#     │ ~ !~                    │ regex (non)matching                          │
-#     │ in                      │ array membership                             │
-#     │ &&                      │ logical “and”                                │
-#     │ ||                      │ logical “or”                                 │
-#     │ ?:                      │ ternary conditional                          │
-#     │ = += -= *= /= %= ^=     │ assignment                                   │
-#     └─────────────────────────┴──────────────────────────────────────────────┘
-$0
-endsnippet
-
-snippet t32 "rule: regex operators precedence" Am
-# In descending order:
-#
-#     ┌────────┬─────────────────────────────────┐
-#     │ ()     │ grouping + capture              │
-#     │ ?      │ question mark                   │
-#     │ +      │ plus                            │
-#     │ *      │ star                            │
-#     │        │ concatenation                   │
-#     │ |      │ alternation                     │
-#     │ [^abc] │ complemented bracket expression │
-#     │ [abc]  │ bracket Expression              │
-#     │ .      │ any character                   │
-#     │ $      │ end of string                   │
-#     │ ^      │ beginning of string             │
-#     │ \c     │ escape sequence                 │
-#     └────────┴─────────────────────────────────┘
-#
-# The order was found in  the book \`The AWK Programming Language\`, appendix A,
-# page 191 of the book.
-endsnippet
-
-snippet t33 "supported escape sequences" Am
+snippet t29 "supported escape sequences" Am
 # A string can contain the following escape sequences:
 #
 #    - \`\b\`: backspace
@@ -464,7 +391,7 @@ snippet t33 "supported escape sequences" Am
 #    - \`\"\`: literal double quote
 endsnippet
 
-snippet t34 "supported types of constants" Am
+snippet t30 "supported types of constants" Am
 #    - string
 #    - number
 #    - regex (\`/pat/\`)

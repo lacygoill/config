@@ -839,6 +839,35 @@ There are 2 reasons for which you also need to declare its type:
 
 In both cases, C needs to know the size of the pointed-to object.
 
+---
+
+You can use pointer notation with arrays:
+
+    *(array + N) = array[N + 1];
+
+The reverse is also true; you can  use array notation with pointers.  This turns
+out to be important when you have a function with an array as an argument:
+```c
+#include <stdio.h>
+void func(int *);
+
+    int
+main(void)
+{
+    int array[3] = {1, 2, 3};
+    func(array);
+    return 0;
+}
+    void
+func(int * array)
+{
+    printf("%d\n", array[0]);
+//                 ^------^
+//                 array is a pointer, but we can still use array notation with it
+}
+```
+    1
+
 ## preprocessor
 
 The preprocessor obeys the directives found in a source code file.

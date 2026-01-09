@@ -8,10 +8,9 @@
 main(void)
 {
     int some_data[SIZE] = {1492, 1066};
-    int i;
 
     printf("%2s%14s\n", "i", "some_data[i]");
-    for (i = 0; i < SIZE; i++)
+    for (int i = 0; i < SIZE; i++)
         printf("%2d%14d\n", i, some_data[i]);
     //     i  some_data[i]
     //     0          1492

@@ -23,10 +23,9 @@ main(void)
     int
 sum(int ar[], int n)    // how big an array?
 {
-    int i;
     int total = 0;
 
-    for (i = 0; i < n; i++)
+    for (int i = 0; i < n; i++)
         total += ar[i];
     printf("The size of ar is %zd bytes.\n", sizeof(ar));
 

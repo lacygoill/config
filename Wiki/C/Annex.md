@@ -646,7 +646,7 @@ constant, use the expression `UINT_LEAST64_C(1000)`.
     │ for ...                                          │                                                    │
     │     array[i] = ...;                              │                                                    │
     ├──────────────────────────────────────────────────┼────────────────────────────────────────────────────┤
-    │ sizeof(array) / sizeof(first element)            │ get number of elements in array                    │
+    │ sizeof(array) / sizeof(array[0])                 │ get number of elements in array                    │
     ├──────────────────────────────────────────────────┼────────────────────────────────────────────────────┤
     │ int array[12] = {[3] = 4};                       │ initialize given element of array                  │
     │ int array[] = {[3] = 4};                         │ (aka designated initializer)                       │
@@ -719,5 +719,8 @@ constant, use the expression `UINT_LEAST64_C(1000)`.
 This table  assumes that the arrays  contain `int`s.  Obviously, in  the general
 case, they could contain any other type (e.g. `char`, `double`, ...).
 
-Also,  array expressions  are equivalent  to expressions  where you  replace the
-array with a pointer to the array.
+Also, you can  represent individual elements by using array  notation or pointer
+notation with either an array name or a pointer:
+
+    array[m][n] == *(*(array + m) + n)
+    ptr[m][n] == *(*(ptr + m) + n)

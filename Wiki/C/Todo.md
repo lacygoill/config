@@ -72,4 +72,19 @@ Notice that:
 
 <http://viewsourcecode.org/snaptoken/kilo/>
 
+# build Your Own Terminal Emulator
+
+<https://www.uninformativ.de/git/eduterm/files.html>
+
+# build Your Own shell
+
+<https://blog.ehoneahobed.com/building-a-simple-shell-in-c-part-1>
+<https://blog.ehoneahobed.com/building-a-simple-shell-in-c-part-2>
+<https://blog.ehoneahobed.com/building-a-simple-shell-in-c-part-3>
+
+Not sure this is the best resource.  Google "let's build a simple shell" to find
+other sources.
+
+See also: <https://brennan.io/2015/01/16/write-a-shell-in-c/>
+
 # study snippets of C code in "Demystifying Cryptography with OpenSSL 3.0"

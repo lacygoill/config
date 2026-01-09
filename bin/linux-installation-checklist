@@ -688,6 +688,7 @@ function Install_Debian_Packages { # {{{2
     ffmpeg \
     file \
     gawk \
+    gawk-doc \
     gdb \
     gdb-doc \
     gnupg \
@@ -695,6 +696,7 @@ function Install_Debian_Packages { # {{{2
     groff \
     htop \
     info \
+    inxi \
     jq \
     keepassx \
     lftp \
@@ -1017,6 +1019,18 @@ function Install_Debian_Packages { # {{{2
 
 function Install_Flatpak { # {{{2
   # https://flatpak.org/setup/Debian
+  # TODO: When you run stremio, if you get error messages in your systemd journal:{{{
+  #
+  #     gnome-software[...]: Failed to reload changed app filter: App filtering is globally disabled
+  #
+  # Try installing `gnome-software-plugin-flatpak`.
+  #
+  # Not sure  it helps  but it's  worth a  try (it's  suggested in  the previous
+  # link;  but only  for GNOME,  so not  sure  it works  for XFCE).   If you  do
+  # install it,  note all the pulled  dependencies.  Last time we  installed it,
+  # there  were  a  lot  of  them,  and they  weren't  removed  when  we  purged
+  # `gnome-software-plugin-flatpak`.
+  #}}}
   sudo apt-get --assume-yes install flatpak
   flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
@@ -1557,7 +1571,7 @@ function Set_DNS_Servers { # {{{2
     ipv4.method 'auto' \
     ipv4.ignore-auto-dns yes \
     ipv4.dns '185.222.222.222,45.11.45.11'
-    #         ^---------^
+    #         ^-------------^
     # dns.sb:
     #
     #    > Aucun filtrage.

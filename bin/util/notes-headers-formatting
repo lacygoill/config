@@ -91,7 +91,7 @@ BEGIN {
 
   # TODO: Get 1 optional extra tag for a possible parent section?{{{
   #
-  #     $ config jump grep '^#+ (glossary|issues|pitfalls|todo)$'
+  #     $ config jump grep '^#+ (annex|glossary|issues|pitfalls|syntax|todo)$'
   #
   # Make sure it's not already in `tags`.
   #

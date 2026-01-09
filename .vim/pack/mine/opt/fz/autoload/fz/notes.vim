@@ -15,7 +15,7 @@ const CORRECTIONS: dict<string> = {
     sh: 'bash',
 }
 
-const NO_USUAL_TAG: string = ['annex', 'glossary', 'pitfalls', 'todo']
+const NO_USUAL_TAG: string = ['annex', 'glossary', 'issues', 'pitfalls', 'syntax', 'todo']
     ->map((_, tag: string) => $'!{tag}')
     ->join() .. ' '
 

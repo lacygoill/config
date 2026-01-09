@@ -66,6 +66,10 @@ delete UNcommented lines                dv#                                    N
 comment bottom half of block            gcb                                    N
 comment top half of block               gct                                    N
 
+join line without adding spaces         gJ                                     N
+break line on current character         g«SPC»                                 N
+remove duplicate spaces                 gqs                                    N
+
 clear undo history                      Uc                                     N
 undo all changes during current session US                                     N
 
@@ -151,7 +155,8 @@ open just enough folds to view line     zv                                     N
 
 Get Info {{{1
 
-print character bytes                   -8                                     N
+print character bytes in hex            -8                                     N
+print character bytes in octal and hex  g8                                     N
 print indent settings                   -i                                     N
 
 print math stats about text-object      -m                                     N
@@ -368,6 +373,8 @@ clear exchange                          cxc                                    N
 replace text-object without yank        dr                                     N
 replace line without yank               drr                                    N
 
+toggle comment on line                  gcc                                    N
+
 reverse text-object                     gr                                     N
 reverse lines                           grr                                    N
 reverse selection                       gr                                     V
@@ -477,6 +484,14 @@ inside function                         if                                     T
 around fenced code block                aF                                     T
 inside fenced code block                iF                                     T
 
+inside number                           in                                     T
+around number                           an                                     T
+
+inside column (iw)                      io                                     T
+inside column (iW)                      iO                                     T
+around column (aw)                      ao                                     T
+around column (aW)                      aO                                     T
+
 View {{{1
 Scrolling {{{2
 
@@ -532,10 +547,6 @@ x  a%            <Plug>(MatchitVisualTextObject)
 x  as            <Plug>(textobj-sandwich-query-a)
 o  as            <Plug>(textobj-sandwich-query-a)
 x  ab            <Plug>(textobj-sandwich-auto-a)
-o  aO          * :columnObject.Main('aW')
-o  ao          * :columnObject.Main('aw')
-x  aO          * <C-\><C-N>:columnObject.Main('aW')
-x  ao          * <C-\><C-N>:columnObject.Main('aw')
 x  ac            <Plug>(comment-text-object-outer)
 o  ac            <Plug>(comment-text-object-outer)
 x  aS          * as
@@ -544,8 +555,6 @@ o  ab          * ab
 o  al          * _
 x  al          * V
 o  aC          * :normal VaC
-o  aN          * :normal vaN
-x  aN          * :TextobjNumber(true)
 o  a-          * :normal Va-
 x  a-          * :myfuncs.TextObjHorizontalRule('around')
 n  coq           <Plug>(coq)
@@ -559,17 +568,14 @@ x  g%            <Plug>(MatchitVisualBackward)
 n  g%            <Plug>(MatchitNormalBackward)
 n  gC            <Plug>(comment-toggle-end)
 n  gcu           vic<Plug>(uncomment-selection)
-n  gcc           <Plug>(comment-toggle-line)
 x  gc            <Plug>(comment-toggle)
 n  gc            <Plug>(comment-toggle)
 x  ga            <Plug>(EasyAlign)
 n  ga            <Plug>(EasyAlign)
-n  gqs         * par.RemoveDuplicateSpaces() .. '_'
 n  gD            search.WrapGd(false)
 n  gd            search.WrapGd(true)
 x  gV            :Gv(false)
 x  gv            :Gv()
-n  gJ          * $'m''{v:count1}gJ``'
 n  g|          * |
 n  gT            :MoveTabpage(false)
 n  gt            :MoveTabpage()
@@ -578,16 +584,9 @@ os gk            <Plug>(vertical-jump-bwd)
 os gj            <Plug>(vertical-jump-fwd)
 n  gV          * '[V']
 n  g<C-V>      * `[v`]
-n  g8          * :G8()
-n  g<Space>    * BreakLine()
-x  h           * mode() == '<C-V>' && virtcol('.') == 1 ? '' : 'h'
 x  is            <Plug>(textobj-sandwich-query-i)
 o  is            <Plug>(textobj-sandwich-query-i)
 x  ib            <Plug>(textobj-sandwich-auto-i)
-o  iO          * :columnObject.Main('iW')
-o  io          * :columnObject.Main('iw')
-x  iO          * <C-\><C-N>:columnObject.Main('iW')
-x  io          * <C-\><C-N>:columnObject.Main('iw')
 x  ic            <Plug>(comment-text-object-inner)
 o  ic            <Plug>(comment-text-object-inner)
 x  iS          * is
@@ -596,8 +595,6 @@ o  ib          * ib
 o  il          * :normal vil
 x  il          * _og_
 o  iC          * :normal ViC
-o  iN          * :normal viN
-x  iN          * :TextobjNumber(false)
 o  iE          * :normal ViE
 x  iE          * G$ogg0
 o  i-          * :normal Vi-

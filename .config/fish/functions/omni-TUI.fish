@@ -1,6 +1,6 @@
-# TODO: Extract any "Glossary", "Issues", "Pitfalls", "Todo" section from a `README.md` file.
+# TODO: Extract any "Annex", "Glossary", "Issues", "Pitfalls", "Syntax", "Todo" section from a `README.md` file.
 #
-#     $ config jump grep '^#+ (glossary|issues|pitfalls|todo)$'
+#     $ config jump grep '^#+ (annex|glossary|issues|pitfalls|syntax|todo)$'
 #
 # Issue: Sometimes, it's not  possible to extract a given  section because there
 # are several  files in  the same  directory all with  the same  section.  Also,

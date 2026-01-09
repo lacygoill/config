@@ -485,16 +485,15 @@ $0
 //
 // ---
 //
-// You can extend the technique to two-dimensional arrays, and beyond. Here, for
-// example,  is how  to create  a two-dimensional  array of  ints and  store the
-// address:
+// You  can extend  the technique  to two-dimensional  arrays, and  beyond.  For
+// example, here is how to create  a two-dimensional array of \`int\`s and store
+// the address:
 //
 //     int (*ptr)[4];     // declare a pointer to an array of 4-int arrays
 //     ptr = (int [2][4]) {{1, 2, 3, -9}, {4, 5, 6, -8}};
 endsnippet
 
 # strings {{{2
-
 snippet t27 "get length of string" Am
 #include <string.h>
 // the trailing NULL is not counted
@@ -514,9 +513,24 @@ putchar(${1:ch});
 $0
 endsnippet
 
+snippet t30 "print string" Am
+puts(${1:"string"});
+$0
+// \`puts()\` accepts:
+//
+//    - a string literal constant (e.g. \`"I am a string"\`)
+//    - a string symbolic constant (e.g. \`#define MSG "I am a string"\`)
+//    - a string in an array (e.g. \`char words[15] = "I am a string."\`)
+//    - a pointer to a string (e.g. \`const char * ptr = "I am a string."\`)
+//
+// ---
+//
+// No need to append a trailing newline, \`puts()\` does it automatically for you.
+endsnippet
+
 # booleans {{{2
 
-snippet t30 "work around the absence of the Boolean type in C89" Am
+snippet t31 "work around the absence of the Boolean type in C89" Am
 // define the \`Bool\` enumerated type, whose enumerated constants are TRUE and FALSE
 typedef enum {TRUE = 1, FALSE = 0} Bool;
 Bool flag = TRUE;
@@ -530,7 +544,7 @@ if (!flag)
 $0
 endsnippet
 
-snippet t31 "use booleans in C99" Am
+snippet t32 "use booleans in C99" Am
 // supplies macros for the \`bool\` type (to replace the default \`_Bool\`),
 // and for the \`true\` and \`false\` values
 #include <stdbool.h>
@@ -542,12 +556,12 @@ endsnippet
 
 # integers {{{2
 
-snippet t32 "express number as hexadecimal or octal" Am
+snippet t33 "express number as hexadecimal or octal" Am
 // 0x123 is 291 in decimal, and 0123 is 83.
 ${1:0x123} or ${2:0123}
 endsnippet
 
-snippet t33 "printf()'s syntax" Am
+snippet t34 "printf()'s syntax" Am
 // For \`flags\`, \`modifier\` and \`specifier\`, see the annex.
 //
 // ---
@@ -579,27 +593,27 @@ snippet t33 "printf()'s syntax" Am
 printf("... %[flags][width][.precision][modifier]specifier ...", ...)
 endsnippet
 
-snippet t34 "assign octal/hexadecimal value to char variable" Am
+snippet t35 "assign octal/hexadecimal value to char variable" Am
 // octal (you can only use 2 digits; also, you can omit the leading 0(s); the max is \`\077\`)
 char ${1:var} = '\0${2:12}'
 // hexadecimal (you can only use 3 digits; the max is \`\x07f\`)
 char $1 = '\x${3:013}'
 endsnippet
 
-snippet t35 "cast float expression as an integer" Am
+snippet t36 "cast float expression as an integer" Am
 (int)(${1:expr})
 endsnippet
 
 # floats {{{2
 
-snippet t36 "express float in hexadecimal" Am
+snippet t37 "express float in hexadecimal" Am
 0xa.1fp10 = (10 + 1/16 + 15/256) * 2^10 = 10364
 //           ^^   ^--^   ^----^    ^
 //           a     1       f       [pP] (!= [eE])
 endsnippet
 
 # complex numbers {{{2
-snippet t37 "assign and print a complex number" Am
+snippet t38 "assign and print a complex number" Am
 #include <stdio.h>
 #include <complex.h>
 	int
@@ -621,7 +635,7 @@ endsnippet
 
 # misc {{{2
 
-snippet t38 "declare several pointers in a single line" Am
+snippet t39 "declare several pointers in a single line" Am
 int * pt1, * pt2, * pt3;
 $0
 // It's as if \`*\` was part of the variable name.
@@ -633,7 +647,7 @@ $0
 //     int x, * pt;
 endsnippet
 
-snippet t39 "print size of given type or variable" Am
+snippet t40 "print size of given type or variable" Am
 printf("Type ${1:type | var} has a size of %zd bytes.", sizeof($1));
 // NOTE: The size of  \`char\` is necessarily 1 byte because  C defines the size
 // of 1 byte in terms of \`char\`.  So, on a system with a 16-bit char (as given
@@ -641,27 +655,27 @@ printf("Type ${1:type | var} has a size of %zd bytes.", sizeof($1));
 // report \`double\` as having a size of 4 bytes (not 8).
 endsnippet
 
-snippet t40 "assign size of given type or variable" Am
+snippet t41 "assign size of given type or variable" Am
 size_t ${1:var1} = sizeof(${2:type | expr}) | strlen(${3:string});
 $0
 endsnippet
 
-snippet t41 "create a symbolic constant" Am
+snippet t42 "create a symbolic constant" Am
 const ${1:type} ${2:VAR} = ${3:value};
 // This make \`$2\` into a read-only value.
 endsnippet
 
-snippet t42 "cast operator" Am
+snippet t43 "cast operator" Am
 (${1:type})${2:expr}
 endsnippet
 # }}}1
 # test {{{1
 
-snippet t43 "test if `scanf()` succeeded into reading items" Am
+snippet t44 "test if `scanf()` succeeded into reading items" Am
 scanf(...) == ${1:n}
 endsnippet
 
-snippet t44 "test if 2 floats are equal" Am
+snippet t45 "test if 2 floats are equal" Am
 // You should  limit yourself to  using only  \`<\` and \`>\`  in floating-point
 // comparisons.  The  reason is  that round-off errors  can prevent  two numbers
 // from being  equal, even though  logically they  should be.  For  example, the
@@ -672,7 +686,7 @@ fabs(${1:float1} - ${2:float2}) < ${3:0.0001}
 $0
 endsnippet
 
-snippet t45 "test if a character is a lowercase letter" Am
+snippet t46 "test if a character is a lowercase letter" Am
 #include <ctype.h>
 // \`islower()\` is more portable than \`'a' <= ch && ch <= 'z'\`.
 // The latter only works for character codes such as ASCII, but not for EBCDIC.
@@ -680,7 +694,7 @@ if (islower(${1:ch}))
 $0
 endsnippet
 
-snippet t46 "test if a character is a non-whitespace" Am
+snippet t47 "test if a character is a non-whitespace" Am
 #include <ctype.h>
 if (!isspace(${1:ch}))
 $0
@@ -688,7 +702,7 @@ endsnippet
 
 # function {{{1
 
-snippet t47 "function definition" Am
+snippet t48 "function definition" Am
 	${1:return type}
 ${2:main}(${3:parameters})
 {
@@ -697,14 +711,14 @@ ${2:main}(${3:parameters})
 }
 endsnippet
 
-snippet t48 "function prototype" Am
+snippet t49 "function prototype" Am
 // \`$1\` and \`$3\` can be \`void\`.
 // Also, in \`$3\`, the names of the parameters can be omitted.
 ${1:return type} ${1:function name}(${3:parameters; e.g. int a, char b})
 $0
 endsnippet
 
-snippet t49 "mutate variables of outer function from inner function call" Am
+snippet t50 "mutate variables of outer function from inner function call" Am
 // pass the variables via their pointers
 
 #include <stdio.h>
@@ -731,7 +745,7 @@ exchange(int * i, int * j)
 $0
 endsnippet
 
-snippet t50 "print decimal number into binary form using recursive function" Am
+snippet t51 "print decimal number into binary form using recursive function" Am
 // In general, if \`n\` is a number,  the final digit is \`n % 2\`, so the first
 // digit you find  is the last digit  you want to print.  This  suggests using a
 // recursive function in which \`n % 2\` is calculated before the recursive call
@@ -757,7 +771,7 @@ endsnippet
 
 # miscellaneous {{{1
 
-snippet t51 "include given library" Am
+snippet t52 "include given library" Am
 // \`$1\` can be:
 //
 //    - \`assert\` (for \`assert()\`)
@@ -774,14 +788,14 @@ snippet t51 "include given library" Am
 $0
 endsnippet
 
-snippet t52 "macro definition" Am
+snippet t53 "macro definition" Am
 // If \`$2\` is a mere constant/literal you can drop the parentheses.
 // If it contains an operator, keep them (omitting them is a common pitfall).
 #define ${1:identifier} (${2:replacement-list})
 $0
 endsnippet
 
-snippet t53 "ask for user input with scanf()" Am
+snippet t54 "ask for user input with scanf()" Am
 scanf("%${1:d|f|lf|Lf}...", &${2:var}, ...)
 $0
 // \`%d\`, \`%f\`, \`%lf\`, \`%Lf\` tell \`scanf()\` to read resp. an integer, a
@@ -803,7 +817,7 @@ $0
 // But if \`$2\` is an element of an array, you still need \`&\` (\`&array[idx]\`).
 endsnippet
 
-snippet t54 "iterate over input lines" Am
+snippet t55 "iterate over input lines" Am
 #include <stdio.h>
 #define ${1:MAXLINE} ${2:1000}
 
@@ -838,7 +852,7 @@ get_line(char $3[])
 $0
 endsnippet
 
-snippet t55 "copy string into another variable" Am
+snippet t56 "copy string into another variable" Am
 void copy(char ${2:from}[], char ${3:to}[]);
 
 	void
@@ -851,7 +865,7 @@ copy(char $1[], char $2[])
 $0
 endsnippet
 
-snippet t56 "skip over input to the first character that isn't whitespace or digit" Am
+snippet t57 "skip over input to the first character that isn't whitespace or digit" Am
 while (scanf("%d", &${1:var}) == 1)
 	// \`continue\` is optional (the \`;\` null statement would be enough), but
 	// it makes the code more readable
@@ -859,7 +873,7 @@ while (scanf("%d", &${1:var}) == 1)
 $0
 endsnippet
 
-snippet t57 "skip over input until newline, included (aka flush stdin)" Am
+snippet t58 "skip over input until newline, included (aka flush stdin)" Am
 // This can be useful after a \`scanf()\` (or a \`getchar()\`).
 // When you press Enter, a newline is added to the input.
 // That newline can interfere with a subsequent \`getchar()\`.
@@ -868,7 +882,7 @@ while (getchar() != '\n')
 $0
 endsnippet
 
-snippet t58 "skip over non-whitespace" Am
+snippet t59 "skip over non-whitespace" Am
 // useful after  something like  \`if (scanf("%d", &num) != 1)\` to  discard bad
 // input
 scanf("%*s")

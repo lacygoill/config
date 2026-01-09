@@ -7,7 +7,7 @@ set -f chosen $(
             --expect=ctrl-q \
             --multi \
             --print-query \
-            --query='!annex !glossary !issues !pitfalls !todo ' \
+            --query='!annex !glossary !issues !pitfalls !syntax !todo ' \
             --with-nth=1..2
 )
 commandline --function repaint
