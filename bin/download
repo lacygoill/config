@@ -1,0 +1,286 @@
+#!/bin/bash -
+
+readonly SCRIPT="${0##*/}"
+
+if (( $# < 2 )); then
+  tee >&2 <<EOF
+Usage:
+  # download audio from URL as mp3 file
+  download audio <URL>
+
+  # download audio from 11:22 to 33:44
+  download audio 11:22-33:44 <URL>
+
+  # download comments from video URL as JSON file
+  download comments <URL>
+
+  # download torrent or magnet link
+  download P2P {/path/to/torrent | magnet-link}
+
+  # download playlist from URL
+  download playlist <URL>
+
+  # download subtitle for local video file
+  download subtitle [de|en|es|fr|ja|zh] /path/to/file
+
+  # download subtitle from video URL
+  download subtitle-URL <URL>
+
+  # download any kind of file from URI
+  download <URI>
+
+  # download video from URL
+  download video <URL>
+EOF
+  exit 1
+fi
+
+readonly SUBCMD="$1"
+shift
+
+case $SUBCMD in
+audio)
+  if (( $# == 2 )); then
+    declare -a optional_arg=(--download-sections "*$1")
+    shift
+  fi
+
+  # Do *not* remove `--restrict-filenames`!{{{
+  #
+  # If  the  filename  contains  spaces,  we  want  them  to  be  replaced  with
+  # underscores  automatically.   Otherwise, when  you  read  a file  containing
+  # spaces with `mpv(1)`, it's  not logged by frec (unless you  quote it, but we
+  # always forget to quote such a file).
+  #}}}
+  if ! yt-dlp \
+      --restrict-filenames \
+      --extract-audio \
+      --audio-format=mp3 \
+      --output='%(title)s.%(ext)s' \
+      "${optional_arg[@]}" \
+      "$@"; then
+
+    # For some  reason, ATM, the previous  command fails for some  RMC podcasts.
+    # Replacing `--audio-format` with `--format` fixes the issue.
+    tee >&2 <<'EOF'
+
+`--audio-format=mp3` failed.
+`--format=mp3` might work...
+
+EOF
+    yt-dlp \
+      --restrict-filenames \
+      --extract-audio \
+      --format=mp3 \
+      --output='%(title)s.%(ext)s' \
+      "${optional_arg[@]}" \
+      "$@"
+  fi
+;;
+
+comments)
+  tmp_file="$(mktemp)"
+  yt-dlp --write-comments --skip-download --output="$tmp_file" "$@"
+  # By  default,  all  the comments  are  listed  on  a  single line,  which  is
+  # unreadable.  Hence why an ad-hoc prettifier is necessary.
+  yt-dlp-comments-prettifier --input-file="${tmp_file}.info.json" --output-file="${tmp_file}.json"
+
+  editor "${tmp_file}.json"
+  rm -- "${tmp_file}" "${tmp_file}.json" "${tmp_file}.info.json"
+;;
+
+playlist)
+  # `%(autonumber)02d - %(title)s.%(ext)s`:{{{
+  #
+  # The `%(autonumber)0Nd` item  will be replaced with a  number.  `N` specifies
+  # that  each number  should have  `N` digits.   If you  think you're  going to
+  # download between  10 and 99  videos, `N` should be  2.  Between 100  and 999
+  # videos, it should be 3...
+  #
+  # The `%(title)s` item will be replaced with the title of the video.
+  # The `%(ext)s` item will be replaced with the file extension.
+  #
+  # Example:
+  #
+  #        42 - My Wonderful Video.mp4
+  #        │    │                  │
+  #        │    │                  └ %(ext)s
+  #        │    └ %(title)s
+  #        └ %(autonumber)02d
+  #}}}
+  yt-dlp \
+    --restrict-filenames \
+    --write-subs \
+    --sub-langs=en \
+    --write-auto-sub \
+    --output='%(autonumber)02d - %(title)s.%(ext)s' \
+    "$@"
+  # To download all videos in playlist between 2 given indexes:{{{
+  #
+  #     yt-dlp --playlist-items=<index1>-<index2> <URL>
+  #
+  # You can also mix single indexes with ranges:
+  #
+  #     $ yt-dlp --playlist-items 1-3,7,10-13
+  #}}}
+;;
+
+subtitle)
+  # if we don't specify any language; fall back on english
+  if (( $# == 1 )); then
+    lang='en'
+  else
+    lang="$1"
+    shift
+  fi
+
+  # `--en` → `en`
+  lang="${lang##*-}"
+  case $lang in
+  de|en|es|fr|ja|zh)
+    subliminal download --language="$lang" "$@"
+  ;;
+
+  *)
+    tee >&2 <<EOF
+$SCRIPT: does not support language tag "$lang"
+Use: de, en, es, fr, ja, zh
+See: https://en.wikipedia.org/wiki/IETF_language_tag#List_of_major_primary_language_subtags
+EOF
+  ;;
+  esac
+;;
+
+subtitle-URL)
+  # you could also match `en,en-US` with `en.*`
+  yt-dlp \
+    --sub-langs='en,en-US' \
+    --write-subs \
+    --skip-download \
+    "$@"
+  # To list all languages for which subtitles are available for a given URL:
+  #
+  #     $ yt-dlp --list-subs <URL>
+;;
+
+video)
+  # We let `yt-dlp(1)` select the best format.
+  # But you could select it manually:{{{
+  #
+  # To  list  all   the  formats  in  which  a  video   is  available,  use  the
+  # `--list-formats` argument.
+  #
+  # To select the stream of a given ID, use the `--format=<ID>` argument.
+  #
+  # To   select   and   merge   two   streams  of   given   indexes,   use   the
+  # `--format=<ID1>+<ID2>` argument.
+  #
+  # For more info, see `man yt-dlp /^FORMAT SELECTION`.
+  #}}}
+  if ! yt-dlp \
+    --restrict-filenames \
+    --write-subs \
+    --sub-langs='en,en-US' \
+    --write-auto-sub \
+    --output='%(title)s.%(ext)s' \
+    "$@"; then
+  tee >&2 <<'EOF'
+
+The video might be disallowed in your country.
+For example, ATM, https://www.youtube.com/watch?v=1ldfpUW0cEk is disallowed in France.
+To check this, paste your URL in a YouTube region restriction checker.
+For example, here: https://polsy.org.uk/stuff/ytrestrict.cgi
+
+If it is, as a workaround, use `torsocks(1)`:
+
+  $ torsocks download video <URL>
+
+If it works, at some point during the download, you might get a 403 HTTP error:
+
+  [download] Got error: HTTP Error 403: Forbidden. Retrying fragment ...
+  [download] fragment not found; Skipping fragment ...
+
+If you do, interrupt the download, and restart the Tor service:
+
+  $ sudo systemctl restart tor.service
+
+Then, download the rest of the video:
+
+  $ torsocks download video <URL>
+EOF
+  fi
+;;
+
+P2P)
+  transmission-remote --add -- "$@"
+;;
+
+URI)
+  # `aria2c(1)` is useful because it can resume an interrupted download from where it stopped.{{{
+  #
+  # You just  need to  be in  the same directory  as where  the partial  file is
+  # located (i.e. directory where you ran `aria2c(1)` the last time).
+  #}}}
+
+  # It also support torrent files and magnet links.
+  # But if your magnet link contains tracker URLs, don't remove them.{{{
+  #
+  # Tracker URLs are specified after `&` delimiters:
+  #
+  #                             magnet link
+  #     v----------------------------------------------------------v
+  #     magnet:?xt=urn:btih:2f51ccf71555c1d89462faf80bdb992585cc8bb4
+  #     &dn=%5BEMBER%5D%20Tengoku%20Daimakyou%20S01E07%20%5B1080p%5D%20%5BHEVC%20WEBRip%5D%20%28Heavenly%20Delusion%29
+  #     &tr=http%3A%2F%2Fnyaa.tracker.wf%3A7777%2Fannounce
+  #     &tr=udp%3A%2F%2Fopen.stealth.si%3A80%2Fannounce
+  #     &tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337%2Fannounce
+  #     &tr=udp%3A%2F%2Fexodus.desync.com%3A6969%2Fannounce
+  #     &tr=udp%3A%2F%2Ftracker.torrent.eu.org%3A451%2Fannounce
+  #     ^-----------------------------------------------------^
+  #                           tracker URL
+  #
+  # It might work without, but not necessarily with good performance.
+  # For a magnet link to work as  expected without those tracker URLs, you could
+  # pass these options to `aria2c(1)`:
+  #
+  #    - `--bt-enable-lpd=true`
+  #    - `--enable-dht6=true`
+  #    - `--enable-dht=true`
+  #    - `--enable-peer-exchange=true`
+  #
+  # But last time I tried, it didn't help.
+  #}}}
+
+  # To increase the download speed, you can make it use multiple connections:{{{
+  #
+  #     $ aria2c --max-connection-per-server=<NUM> <URI>
+  #
+  # The number of connections used at any given time is printed here:
+  #
+  #     06/18 16:57:03 [NOTICE] Downloading 1 item(s)
+  #     [#c741d0 18MiB/1.7GiB(1%) CN:1 DL:1.9MiB ETA:15m1s]
+  #                               ^--^
+  #}}}
+  #   And/Or multiple servers:{{{
+  #
+  #     $ aria2c <URI1> <URI2> ...
+  #}}}
+  # To limit the download/upload speed, use one of these options:{{{
+  #
+  #    for download
+  #    - `--max-concurrent-downloads=<NUMBER>`
+  #    - `--max-download-limit=<SPEED>`
+  #    - `--max-overall-download-limit=<SPEED>`
+  #
+  #    for upload
+  #    - `--max-overall-upload-limit=<SPEED>`
+  #    - `--max-upload-limit=<SPEED>`
+  #}}}
+  aria2c "$@"
+;;
+
+*)
+  printf '%s: %s is not a valid subcommand\n' "$SCRIPT" "$SUBCMD" >&2
+  exit 1
+;;
+esac
