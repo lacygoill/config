@@ -30,7 +30,7 @@ main(void)
 //
 // In the first example, both names fell within the allowed size limits.  In the
 // second  example, only  the first  10 characters  of `Applebottham`  were read
-// because we used a t%10st format.  In the third example, the last four letters
+// because we used a `%10s` format.  In the third example, the last four letters
 // of `Portensia` went into `name2` because the second call to `scanf()` resumed
 // reading input where the first ended; in  this case, that was still inside the
 // word `Portensia`.

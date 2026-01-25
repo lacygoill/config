@@ -76,6 +76,11 @@ remove duplicate spaces                 gqs                                    N
 select last changed text linewise       gV                                     N
 select last changed text characterwise  g«C-V»                                 N
 
+duplicate selection up                  mdk                                    V
+duplicate selection down                mdj                                    V
+duplicate block to the right            mdl                                    V
+duplicate block to the left             mdh                                    V
+
 delete empty lines                      mg«SPC»                                V
 delete lines matching @/                mg/                                    V
 delete lines NOT matching @/            mv/                                    V
@@ -88,7 +93,7 @@ undo all changes during current session US                                     N
 Debug {{{1
 
 capture local variable into global one  !c                                     N
-ditto but as a list                     !C                                     N
+capture local variable as a list        !C                                     N
 # useful to see all values taken by the variable,
 # not just the last one
 
@@ -215,6 +220,8 @@ send current file to Vim server         [«C-s»                                
 run compiler                            |c                                     N
 dump output of commented shell command  |s                                     N
 
+execute current file                    ||                                     NV
+
 open file browser in CWD                -t                                     N
 open file browser in current's file dir -T                                     N
 
@@ -261,7 +268,7 @@ go to previous unmatched '('            [(                                     N
 go to next unmatched '('                ](                                     N
 go to specified tag                     :tag …                                 N
 go to tag definition                    «C-]»                                 *N
-ditto, but show choices                 g]                                    *N
+show tag choices                        g]                                    *N
 jump or show choices                    g«C-]»                                *N
 jump to first character on line         g«Bar»                                 N
 go to local declaration                 gd                                    *N
@@ -349,6 +356,11 @@ jump to previous change                 g,                                     N
 Operators {{{1
 
 repeat last edit on last changed text   «SPC».                                 N
+
+move selection one line up              «M-k»                                  V
+move selection one line down            «M-j»                                  V
+move selection one column left          «M-h»                                  V
+move selection one column right         «M-l»                                  V
 
 highlight current line                  «M-m»«M-m»                             N
 highlight text-object                   «M-m»                                  N
@@ -513,11 +525,13 @@ inside < and >                          i<                                     T
 around < and >                          a<                                     T
 inside backticks                        i`                                     T
 around backticks                        a`                                     T
-inside comment                          ic                                     VO
-around comment                          ic                                     VO
+inside --- rule                         i-                                     T
+around --- rule                         a-                                     T
+inside comment                          ic                                     T
+around comment                          ac                                     T
 inside class                            iC                                     T
 around class                            aC                                     T
-entire buffer                           iE                                     VO
+entire buffer                           iE                                     T
 inside function                         if                                     T
 around function                         af                                     T
 inside fenced code block                iF                                     T
@@ -542,14 +556,51 @@ Line/word/char count                    g«C-g»                                
 
 Window {{{1
 
+focus top window                        «C-k»                                  N
+focus bottom window                     «C-j»                                  N
+focus left window                       «C-h»                                  N
+focus right window                      «C-l»                                  N
+
+toggle popup terminal                   «C-g»«C-j»                             N
+
 New horizontal split                    :new                                   N
-Ditto                                   «C-w» «C-n»                            N
+New horizontal split                    «C-w» «C-n»                            N
 Edit top window                         «C-w» «C-t»                            N
 Edit bottom window                      «C-w» «C-b»                            N
 
 toggle window's fullscreen mode         «SPC»z                                 N
 undo window's closure                   «SPC»U                                 N
 close window                            «SPC»q                                 N
+
+split to the top                        zk                                     N
+split to the bottom                     zj                                     N
+split to the left                       zh                                     N
+split to the right                      zl                                     N
+
+resize to the top                       z«C-k»                                 N
+resize to the bottom                    z«C-j»                                 N
+resize to the left                      z«C-h»                                 N
+resize to the right                     z«C-l»                                 N
+
+scroll last tmux pane to the top        «M-g»                                  N
+scroll last tmux pane to the bottom     «M-S-g»                                N
+scroll last tmux pane half page up      «M-u»                                  N
+scroll last tmux pane half page down    «M-d»                                  N
+scroll last tmux pane one line up       «M-k»                                  N
+scroll last tmux pane one line down     «M-j»                                  N
+scroll last tmux pane to the left       «M-h»                                  N
+scroll last tmux pane to the right      «M-l»                                  N
+
+close all windows except current one    Zo                                     N
+
+open preview window                     z{                                     N
+close preview window                    z}                                     N
+open location list window               z[                                     N
+close location list window              z]                                     N
+open quickfix window                    z(                                     N
+close quickfix window                   z)                                     N
+open terminal window                    z<                                     N
+close terminal window                   z>                                     N
 
 TODO {{{1
 
@@ -582,8 +633,6 @@ x  aS          * as
 o  aS          * as
 o  al          * _
 x  al          * V
-o  a-          * :normal Va-
-x  a-          * :myfuncs.TextObjHorizontalRule('around')
 n  coq           <Plug>(coq)
 n  coM         * :completion.ToggleAuto()
 n  co<M-m>     * :quickhl.LockToggle()
@@ -605,15 +654,9 @@ x  iS          * is
 o  iS          * is
 o  il          * :normal vil
 x  il          * _og_
-o  i-          * :normal Vi-
-x  i-          * :myfuncs.TextObjHorizontalRule('inside')
 n  m|          * :draw.Stop()
 n  m<Space>    * :draw.ChangeState(true)
 n  m_          * :draw.ChangeState(false)
-x  mdl         * :movesel.Duplicate('right')
-x  mdh         * :movesel.Duplicate('left')
-x  mdj         * :movesel.Duplicate('down')
-x  mdk         * :movesel.Duplicate('up')
 x  m<M-m>      * <C-\><C-N>:quickhl.ClearThis("v")
 n  srb           <Plug>(sandwich-replace-auto)
 x  sr            <Plug>(sandwich-replace)
@@ -628,30 +671,12 @@ os s<C-X>        <Plug>(prev-switchable-token)
 os s<C-A>        <Plug>(next-switchable-token)
 n  za          * :adhoc.Main()
 n  zfic        * comment.Main()
-n  zk          * :aboveleft split
-n  zj          * :belowright split
-n  zl          * :setlocal nowrap | rightbelow vsplit | setlocal nowrap
-n  zh          * :setlocal nowrap | leftabove  vsplit | setlocal nowrap
-n  z<C-L>        :window.Resize('l')
-n  z<C-K>        :window.Resize('k')
-n  z<C-J>        :window.Resize('j')
-n  z<C-H>        :window.Resize('h')
 n  z"          * :popup.CloseAll()
-n  z}          * <C-W>z:doautocmd <nomodeline> WinEnter
-n  z{          * :window.PreviewOpen()
-n  z]          * :lclose | doautocmd <nomodeline> WinEnter
-n  z[          * :LgWindow.QfOpenOrFocus('loc')
-n  z)          * :cclose | doautocmd <nomodeline> WinEnter
-n  z(          * :LgWindow.QfOpenOrFocus('qf')
-n  z>          * :window.TerminalClose() | doautocmd <nomodeline> WinEnter
-n  z<          * :window.TerminalOpen()
 n  zE          * Zd('zE')
 n  zD          * Zd('zD')
 n  zd          * Zd('zd')
 n  z=          * ZEqual()
 n  z.          * zszH
-x  ||          * :run.Command()
-n  ||          * :run.Command()
 n  <M-M>k        :quickhl.Prev('s')
 n  <M-M>j        :quickhl.Next('s')
 s  <C-Tab>     * <Esc>:call UltiSnips#ListSnippets()
@@ -673,14 +698,7 @@ n  <C-G>ee     * :cmdline#cycle#generic#SetSeq('ee')<CR>:tabe $MYVIMRC<C-R>=!!se
 n  <C-G>d      * :cmdline#cycle#generic#SetSeq('d')<CR>:Verb nno <C-R>=!!setcmdpos(10) ? "" : ""
 n  <C-G>a      * :cmdline#cycle#generic#SetSeq('a')<CR>:sp | args `=glob('./**/*', 0, 1)->filter({_, v -> filereadable(v)})`<C-R>=!!setcmdpos(19) ? "" : ""
 x  <C-G>s      * :s///g<Left><Left><Left>
-s  <S-Tab>     * <C-\><C-N>:UltiSnips#JumpBackwards()
 n  <C-G><C-L>  * :links.Fz()
-x  <M-l>       * :movesel.Move("right")
-x  <M-h>       * :movesel.Move("left")
-x  <M-j>       * :movesel.Move("down")
-x  <M-k>       * :movesel.Move("up")
-n  <C-S>       * :SaveBuffer()
-n  <C-G><C-J>  * :togglePopup.Main()
 n  <M-p>       * :tmux.PutPreviousPane()
 n  <C-W>gl       :TradewindsMove l
 n  <C-W>gk       :TradewindsMove k
@@ -690,18 +708,6 @@ n  <C-W>L      * :window.DisableWrapWhenMovingToVertSplit('L')
 n  <C-W>H      * :window.DisableWrapWhenMovingToVertSplit('H')
 n  <C-W>K      * :wincmd K | do <nomodeline> WinEnter
 n  <C-W>J      * :wincmd J | do <nomodeline> WinEnter
-n  <M-S-g>     * :popup.Scroll("G")
-n  <M-g>       * :popup.Scroll("gg")
-n  <M-u>       * popup.Scroll("C-u")
-n  <M-d>       * :popup.Scroll("C-d")
-n  <M-l>       * :popup.Scroll("l")
-n  <M-k>       * :popup.Scroll("k")
-n  <M-j>       * :popup.Scroll("j")
-n  <M-h>       * :popup.Scroll("h")
-n  <C-L>       * :window.Navigate('l')
-n  <C-K>       * :window.Navigate('k')
-n  <C-J>       * :window.Navigate('j')
-n  <C-H>       * :window.Navigate('h')
 n  <C-G>t      * Ltag()
 x  <C-G>g      * <C-\><C-N>:* g/\%V/#<Left><Left>
 n  <C-W>s      * :myfuncs.SendToTabPage(v:count)

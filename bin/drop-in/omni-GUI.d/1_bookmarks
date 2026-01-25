@@ -64,7 +64,7 @@ readonly -A BOOKMARKS=(
   ['Dynamic Linking  #programming']='https://blog.stephenmarz.com/2020/06/22/dynamic-linking/'
   ['easy vegan recipes  #cooking']='https://www.budgetbytes.com/easy-vegan-recipes/'
   ['EatCheapAndHealthy  #cooking']='https://old.reddit.com/r/EatCheapAndHealthy/top/?sort=top&t=all'
-  ['ebooks']='https://annas-archive.org https://libgen.rs'
+  ['ebooks']='https://en.wikipedia.org/wiki/Anna%27s_Archive https://en.wikipedia.org/wiki/Library_Genesis'
   ['État de ma déGAFAMisation']='https://sebsauvage.net/wiki/doku.php?id=degafamisation'
   ['Everything I know about SSDs  #hardware']='https://kcall.co.uk/ssd/index.html'
   ['Explain a Command  #programming #service']='https://explainshell.com/ https://www.mankier.com/explain'

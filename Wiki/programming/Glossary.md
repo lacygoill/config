@@ -152,6 +152,12 @@ As an  example, `?` is a  unary regex operator,  and the regex `r?`  matches the
 text `r` or an empty text.
 
 ##
+# r
+## REPL
+
+read-evaluate-print-loop
+
+##
 # s
 ## SCM
 

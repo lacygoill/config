@@ -19,7 +19,8 @@ main(void)
 put1(const char * string)
 {
     // Short for `*string != '\0'`.  When `string` points to the null character,
-    // `*string` has the value 0, which terminates the loop.
+    // `*string` has the  value 0 (which is the same  as `\0`), which terminates
+    // the loop.
     while (*string)
         putchar(*string++);
 }

@@ -1696,12 +1696,12 @@
 /alias add _scroll_left eval ${if: \
     ${buffer.name} == fset \
     ?/fset -left 10 \
-    :/window scroll_horiz -1}
+    :/mute /window scroll_horiz -1}
 
 /alias add _scroll_right eval ${if: \
     ${buffer.name} == fset \
     ?/fset -right 10 \
-    :/window scroll_horiz +1}
+    :/mute /window scroll_horiz +1}
 
 # M-i          capitalize word {{{2
 

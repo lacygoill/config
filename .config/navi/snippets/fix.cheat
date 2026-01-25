@@ -183,3 +183,6 @@ xfdesktop --quit && xfdesktop & disown
     #     > Settings Editor
     #     > xsettings
     #     > reset "CursorThemeSize" to a bigger integer
+
+# mpv video lags
+    # add `profile=fast` to mpv's config

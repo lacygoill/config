@@ -644,20 +644,7 @@ put1(const char * string)
 $0
 endsnippet
 
-snippet t37 "copy string into another variable" Am
-void copy(char ${2:from}[], char ${3:to}[]);
-
-	void
-copy(char $1[], char $2[])
-{
-	int i = 0;
-	while (($2[i] = $1[i]) != '\0')
-		++i;
-}
-$0
-endsnippet
-
-snippet t38 "skip over input to the first character that isn't whitespace or digit" Am
+snippet t37 "skip over input to the first character that isn't whitespace or digit" Am
 while (scanf("%d", &${1:var}) == 1)
 	// \`continue\` is optional (the \`;\` null statement would be enough), but
 	// it makes the code more readable
@@ -665,7 +652,7 @@ while (scanf("%d", &${1:var}) == 1)
 $0
 endsnippet
 
-snippet t39 "skip over input until newline, included (aka flush stdin)" Am
+snippet t38 "skip over input until newline, included (aka flush stdin)" Am
 // This can be useful after a \`scanf()\` (or a \`getchar()\`).
 // When you press Enter, a newline is added to the input.
 // That newline can interfere with a subsequent \`getchar()\`.
@@ -674,14 +661,14 @@ while (getchar() != '\n')
 $0
 endsnippet
 
-snippet t40 "skip over non-whitespace" Am
+snippet t39 "skip over non-whitespace" Am
 // useful after  something like  \`if (scanf("%d", &num) != 1)\` to  discard bad
 // input
 scanf("%*s")
 $0
 endsnippet
 
-snippet t41 "concatenate 2 strings" Am
+snippet t40 "concatenate 2 strings" Am
 // With \`strcat()\` you have to make  sure that you allocated enough memory for
 // \`string1\`;  otherwise,  you'll  run  into  problems  as  excess  characters
 // overflow into adjacent memory locations.
@@ -709,7 +696,7 @@ strncat(string1, string2, ${2:max number of characters to add});
 //    - the first character of \`string2\` is copied over the null character of \`string1\`
 endsnippet
 
-snippet t42 "compare if 2 strings are the same" Am
+snippet t41 "compare if 2 strings are the same" Am
 if (strcmp(string1, string2) == 0)
 	$0
 // \`strcmp()\`  returns   a  negative   number  if  \`string1\`   comes  before
@@ -726,14 +713,14 @@ if (strcmp(string1, string2) == 0)
 // \`strcmp("Z", "a")\` is negative.
 endsnippet
 
-snippet t43 "compare strings until they differ or until a given number of characters" Am
+snippet t42 "compare strings until they differ or until a given number of characters" Am
 if (strncmp(string1, string2, ${1:N}) == 0)
 	printf("%s and %s start with the same %d characters",
 		string1, string2, $1);
 $0
 endsnippet
 
-snippet t44 "copy a source string to a target string" Am
+snippet t43 "copy a source string to a target string" Am
 strcpy(destination, source);
 $0
 // \`strcpy()\` takes  two string  pointers as  arguments.  The  second pointer,
@@ -753,14 +740,16 @@ $0
 // \`destination\`.
 endsnippet
 
-snippet t45 "replace part of string, from N-th character till the end" Am
+snippet t44 "replace part of string, from N-th character till the end" Am
 strcpy(destination + N - 1, replacement);
 $0
-// The reason why  \`replacement\` goes till the end is  because its terminating
-// null is also copied, terminating \`destination\` early.
+// The  reason   why  \`replacement\`   goes  till  the   end  is   because  its
+// terminating null is also  copied, terminating \`destination\` early (assuming
+// \`replacement\`  is shorter  than what  remains after  the N-th  character of
+// \`destination\`).
 endsnippet
 
-snippet t46 "copy up to N characters (or a null) from source to destination" Am
+snippet t45 "copy up to N characters (or a null) from source to destination" Am
 char destination[N];
 strncpy(destination, source, N - 1);
 destination[N - 1] = '\0';
@@ -773,9 +762,9 @@ $0
 //
 // For this reason,  we set \`N\` to  one less than the size  of the destination
 // array and  then set  the final element  in the array  to the  null character:
-// This ensures that  you've stored a string.  If \`source\`  actually fits, the
+// This ensures  that we've stored a  string.  If \`source\` actually  fits, the
 // null  character  copied  with it  marks  the  true  end  of the  string.   If
-// \`source\` string doesn't fit, this final null character marks the end of the
+// \`source\`  doesn't fit,  this  final null  character marks  the  end of  the
 // string.
 //
 // ---
@@ -783,11 +772,11 @@ $0
 // \`strncpy()\`'s return value is \`destination\`.
 endsnippet
 
-snippet t47 "printf()-like function writing to a string rather than display" Am
+snippet t46 "printf()-like function writing to a string variable rather than display" Am
 sprintf(${1:var}, "${2:format}", ${3:expressions});
 endsnippet
 
-snippet t48 "get pointer to first location in string holding given character" Am
+snippet t47 "get pointer to first location in string holding given character" Am
 strchr(string, N);
 $0
 // \`N\`  is  the   integer  value  of  the  searched  character   as  given  by
@@ -798,9 +787,27 @@ $0
 // The function returns the null pointer if the character is not found.
 endsnippet
 
+snippet t48 "get pointer to first location in string1 that holds any character in string2" Am
+strpbrk(string1, string2);
+$0
+// The function returns the null pointer if no character is found.
+endsnippet
+
+snippet t49 "get pointer to last location of given character in given string" Am
+strrchr(string, c);
+$0
+// The function returns the null pointer if no character is found.
+endsnippet
+
+snippet t50 "get pointer to first occurrence of string2 in string1" Am
+strstr(string1, string2);
+$0
+// The function returns the null pointer if the string is not found.
+endsnippet
+
 # booleans {{{2
 
-snippet t49 "work around the absence of the Boolean type in C89" Am
+snippet t51 "work around the absence of the Boolean type in C89" Am
 // define the \`Bool\` enumerated type, whose enumerated constants are TRUE and FALSE
 typedef enum {TRUE = 1, FALSE = 0} Bool;
 Bool flag = TRUE;
@@ -814,7 +821,7 @@ if (!flag)
 $0
 endsnippet
 
-snippet t50 "use booleans in C99" Am
+snippet t52 "use booleans in C99" Am
 // supplies macros for the \`bool\` type (to replace the default \`_Bool\`),
 // and for the \`true\` and \`false\` values
 #include <stdbool.h>
@@ -826,12 +833,12 @@ endsnippet
 
 # integers {{{2
 
-snippet t51 "express number as hexadecimal or octal" Am
+snippet t53 "express number as hexadecimal or octal" Am
 // 0x123 is 291 in decimal, and 0123 is 83.
 ${1:0x123} or ${2:0123}
 endsnippet
 
-snippet t52 "printf()'s syntax" Am
+snippet t54 "printf()'s syntax" Am
 // For \`flags\`, \`modifier\` and \`specifier\`, see the annex.
 //
 // ---
@@ -864,27 +871,27 @@ printf("... %[flags][width][.precision][modifier]specifier ...", ...)
 $0
 endsnippet
 
-snippet t53 "assign octal/hexadecimal value to char variable" Am
+snippet t55 "assign octal/hexadecimal value to char variable" Am
 // octal (you can only use 2 digits; also, you can omit the leading 0(s); the max is \`\077\`)
 char ${1:var} = '\0${2:12}'
 // hexadecimal (you can only use 3 digits; the max is \`\x07f\`)
 char $1 = '\x${3:013}'
 endsnippet
 
-snippet t54 "cast float expression as an integer" Am
+snippet t56 "cast float expression as an integer" Am
 (int)(${1:expr})
 endsnippet
 
 # floats {{{2
 
-snippet t55 "express float in hexadecimal" Am
+snippet t57 "express float in hexadecimal" Am
 0xa.1fp10 = (10 + 1/16 + 15/256) * 2^10 = 10364
 //           ^^   ^--^   ^----^    ^
 //           a     1       f       [pP] (!= [eE])
 endsnippet
 
 # complex numbers {{{2
-snippet t56 "assign and print a complex number" Am
+snippet t58 "assign and print a complex number" Am
 #include <stdio.h>
 #include <complex.h>
 	int
@@ -906,7 +913,7 @@ endsnippet
 
 # misc {{{2
 
-snippet t57 "declare several pointers in a single line" Am
+snippet t59 "declare several pointers in a single line" Am
 int * pt1, * pt2, * pt3;
 $0
 // It's as if \`*\` was part of the variable name.
@@ -918,7 +925,7 @@ $0
 //     int x, * pt;
 endsnippet
 
-snippet t58 "print size of given type or variable" Am
+snippet t60 "print size of given type or variable" Am
 printf("Type ${1:type | var} has a size of %zd bytes.", sizeof($1));
 // NOTE: The size of  \`char\` is necessarily 1 byte because  C defines the size
 // of 1 byte in terms of \`char\`.  So, on a system with a 16-bit char (as given
@@ -926,27 +933,27 @@ printf("Type ${1:type | var} has a size of %zd bytes.", sizeof($1));
 // report \`double\` as having a size of 4 bytes (not 8).
 endsnippet
 
-snippet t59 "assign size of given type or variable" Am
+snippet t61 "assign size of given type or variable" Am
 size_t ${1:var1} = sizeof(${2:type | expr}) | strlen(${3:string});
 $0
 endsnippet
 
-snippet t60 "create a symbolic constant" Am
+snippet t62 "create a symbolic constant" Am
 const ${1:type} ${2:VAR} = ${3:value};
 // This make \`$2\` into a read-only value.
 endsnippet
 
-snippet t61 "cast operator" Am
+snippet t63 "cast operator" Am
 (${1:type})${2:expr}
 endsnippet
 # }}}1
 # test {{{1
 
-snippet t62 "test if `scanf()` succeeded into reading items" Am
+snippet t64 "test if `scanf()` succeeded into reading items" Am
 scanf(...) == ${1:n}
 endsnippet
 
-snippet t63 "test if 2 floats are equal" Am
+snippet t65 "test if 2 floats are equal" Am
 // You should  limit yourself to  using only  \`<\` and \`>\`  in floating-point
 // comparisons.  The  reason is  that round-off errors  can prevent  two numbers
 // from being  equal, even though  logically they  should be.  For  example, the
@@ -957,7 +964,7 @@ fabs(${1:float1} - ${2:float2}) < ${3:0.0001}
 $0
 endsnippet
 
-snippet t64 "test if a character is a lowercase letter" Am
+snippet t66 "test if a character is a lowercase letter" Am
 #include <ctype.h>
 // \`islower()\` is more portable than \`'a' <= ch && ch <= 'z'\`.
 // The latter only works for character codes such as ASCII, but not for EBCDIC.
@@ -965,7 +972,7 @@ if (islower(${1:ch}))
 $0
 endsnippet
 
-snippet t65 "test if a character is a non-whitespace" Am
+snippet t67 "test if a character is a non-whitespace" Am
 #include <ctype.h>
 if (!isspace(${1:ch}))
 $0
@@ -973,7 +980,7 @@ endsnippet
 
 # function {{{1
 
-snippet t66 "function definition" Am
+snippet t68 "function definition" Am
 	${1:return type}
 ${2:main}(${3:parameters})
 {
@@ -982,14 +989,14 @@ ${2:main}(${3:parameters})
 }
 endsnippet
 
-snippet t67 "function prototype" Am
+snippet t69 "function prototype" Am
 // \`$1\` and \`$3\` can be \`void\`.
 // Also, in \`$3\`, the names of the parameters can be omitted.
 ${1:return type} ${1:function name}(${3:parameters; e.g. int a, char b})
 $0
 endsnippet
 
-snippet t68 "mutate variables of outer function from inner function call" Am
+snippet t70 "mutate variables of outer function from inner function call" Am
 // pass the variables via their pointers
 
 #include <stdio.h>
@@ -1016,7 +1023,7 @@ exchange(int * i, int * j)
 $0
 endsnippet
 
-snippet t69 "print decimal number into binary form using recursive function" Am
+snippet t71 "print decimal number into binary form using recursive function" Am
 // In general, if \`n\` is a number,  the final digit is \`n % 2\`, so the first
 // digit you find  is the last digit  you want to print.  This  suggests using a
 // recursive function in which \`n % 2\` is calculated before the recursive call
@@ -1042,7 +1049,7 @@ endsnippet
 
 # miscellaneous {{{1
 
-snippet t70 "include given library" Am
+snippet t72 "include given library" Am
 // \`$1\` can be:
 //
 //    - \`assert\` (for \`assert()\`)
@@ -1059,14 +1066,14 @@ snippet t70 "include given library" Am
 $0
 endsnippet
 
-snippet t71 "macro definition" Am
+snippet t73 "macro definition" Am
 // If \`$2\` is a mere constant/literal you can drop the parentheses.
 // If it contains an operator, keep them (omitting them is a common pitfall).
 #define ${1:identifier} (${2:replacement-list})
 $0
 endsnippet
 
-snippet t72 "ask for user input with scanf()" Am
+snippet t74 "ask for user input with scanf()" Am
 scanf("%${1:d|f|lf|Lf}...", &${2:var}, ...)
 $0
 // \`%d\`, \`%f\`, \`%lf\`, \`%Lf\` tell \`scanf()\` to read resp. an integer, a
@@ -1088,7 +1095,7 @@ $0
 // But if \`$2\` is an element of an array, you still need \`&\` (\`&array[idx]\`).
 endsnippet
 
-snippet t73 "iterate over input lines" Am
+snippet t75 "iterate over input lines" Am
 #include <stdio.h>
 // Here, \`MAXLINE\` is only used to  initialize \`line\` and to provide a value
 // to the  second argument  of \`fgets()\`.   But it  won't truncate  lines over
@@ -1108,7 +1115,7 @@ main(void)
 $0
 endsnippet
 
-snippet t74 "iterate over input lines; truncate after a given number of characters" Am
+snippet t76 "iterate over input lines; truncate after a given number of characters" Am
 #include <stdio.h>
 #define ${1:MAXLINE} ${2:123}
 

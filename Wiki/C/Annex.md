@@ -762,7 +762,10 @@ notation with either an array name or a pointer:
     │ scanf("%Ns", array);                     │                                                  │
     ├──────────────────────────────────────────┼──────────────────────────────────────────────────┤
     │ char array[N];                           │ read input up to N-1 characters or the newline,  │
-    │ fgets(array, N, stdin);                  │ whichever comes first, into array (-1 for null)  │
+    │ fgets(array, N, stdin);                  │ whichever comes first, into array (-1 for null); │
+    │                                          │ when passed as an argument, array decays into a  │
+    │                                          │ pointer to its first element (here `char *`);    │
+    │                                          │ the return type is `char *`                      │
     ├──────────────────────────────────────────┼──────────────────────────────────────────────────┤
     │ char array[N] = "...";                   │ display contents of string in array              │
     │ fputs(array, stdout);                    │                                                  │
@@ -780,22 +783,33 @@ notation with either an array name or a pointer:
     │ strncmp(string1, string2, N);            │ compare strings until they differ or until       │
     │                                          │ a given number of characters                     │
     ├──────────────────────────────────────────┼──────────────────────────────────────────────────┤
-    │ strcpy(destination, source);             │ copy a source string to a destination string     │
+    │ strcpy(destination, source);             │ copy a source string to a destination string;    │
+    │                                          │ make sure: strlen(destination) >= strlen(source) │
     ├──────────────────────────────────────────┼──────────────────────────────────────────────────┤
     │ strcpy(destination + N-1, replacement);  │ replace part of string, from N-th character till │
-    │                                          │ the end                                          │
+    │                                          │ the end; make sure: N <= strlen(destination)     │
+    │                                          │ && strlen(destination) - N >= strlen(replacement)│
     ├──────────────────────────────────────────┼──────────────────────────────────────────────────┤
     │ char destination[N];                     │ copy a source string to a destination string,    │
     │ strncpy(destination, source, N - 1);     │ up to N characters or the null character,        │
     │ destination[N - 1] = '\0';               │ whichever comes first                            │
     ├──────────────────────────────────────────┼──────────────────────────────────────────────────┤
     │ sprintf(var, "format", expressions);     │ printf()-like function writing to a string       │
-    │                                          │ rather than display                              │
+    │                                          │ variable rather than display                     │
     ├──────────────────────────────────────────┼──────────────────────────────────────────────────┤
     │ strchr(string, N);                       │ get pointer to first location in string holding  │
-    │                                          │ given character; N is the integer value of the   │
+    │ strchr(string, 'character');             │ given character; N is the integer value of the   │
     │                                          │ searched character as given by:                  │
     │                                          │ `printf("%d", 'character');`                     │
+    ├──────────────────────────────────────────┼──────────────────────────────────────────────────┤
+    │ strpbrk(string1, string2);               │ get pointer to first location in string1 that    │
+    │                                          │ holds any character in string2                   │
+    ├──────────────────────────────────────────┼──────────────────────────────────────────────────┤
+    │ strrchr(string, N);                      │ get pointer to last location of given character  │
+    │ strrchr(string, 'character');            │ in given string                                  │
+    ├──────────────────────────────────────────┼──────────────────────────────────────────────────┤
+    │ strstr(string1, string2);                │ get pointer to first occurrence of string2 in    │
+    │                                          │ string1                                          │
     └──────────────────────────────────────────┴──────────────────────────────────────────────────┘
 
 In these syntaxes,  you can replace `char array[N]` with  `char * ptr`, but only

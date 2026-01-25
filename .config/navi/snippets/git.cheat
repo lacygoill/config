@@ -141,6 +141,9 @@ git init --bare "$HOME/.cfg" \
     # For `git-push(1)` to succeed, I think we need to add at least a file, and commit.
     # Hence why we add the vimrc file.
 
+# restore deleted directory
+git archive --remote=./.cfg main <path_to_dir> | tar -x
+
 % git, log
 @ git
 

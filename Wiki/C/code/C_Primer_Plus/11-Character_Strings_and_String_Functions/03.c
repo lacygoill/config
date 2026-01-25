@@ -10,15 +10,15 @@ main(void)
     char ar[] = MSG;
     const char *pt = MSG;
     printf("address of \"I'm special\": %p \n", "I'm special");
-    printf("              address ar: %p\n", ar);
-    printf("              address pt: %p\n", pt);
+    printf("           address of ar: %p\n", ar);
+    printf("           address of pt: %p\n", pt);
     printf("          address of MSG: %p\n", MSG);
     printf("address of \"I'm special\": %p \n", "I'm special");
     return 0;
 }
 //     address of "I'm special": 0x56406726b004
-//                   address ar: 0x7ffd745374d3
-//                   address pt: 0x56406726b02e
+//                address of ar: 0x7ffd745374d3
+//                address of pt: 0x56406726b02e
 //               address of MSG: 0x56406726b02e
 //     address of "I'm special": 0x56406726b004
 //

@@ -1,1491 +1,105 @@
 # control flow {{{1
 # selection statements {{{2
 
-snippet t01 "if block" Am
-if ${1:expr}:
-	$2
-elif ${3:expr}:
-	${4:do A}
-else:
-	${5:do B}
-$0
-endsnippet
-
-snippet t02 "match block (switch in C)" Am
-match ${1:expr}:
-	case ${2:value}:
-		$3
-	...
-	# for when all other cases have failed (this one matches no matter what)
-	case _:
-		${4:default fallback}
-$0
-endsnippet
-
 # loop statements {{{2
-
-snippet t03 "for loop" Am
-for ${1:item} in ${2:iter}:
-	$3
-$0
-endsnippet
-
-snippet t04 "while loop" Am
-while ${1:condition}:
-	$2
-$0
-endsnippet
-
-snippet t05 "loop as long as iterable not empty" Am
-# An iterable  can be used  as a logical expression,  which is \`True\`  if, and
-# only if, it's not empty.
-while ${1:iter}:
-	$2
-$0
-endsnippet
-
-snippet t06 "loop through indexes and items of iterable" Am
-for ${1:index}, ${2:item} in enumerate(${3:iter}):
-	$4
-$0
-endsnippet
-
-snippet t07 "loop through keys and values of dictionary" Am
-for ${1:key}, ${2:value} in ${3:dict}.items():
-	$0
-endsnippet
-
-snippet t08 "loop through keys of dictionary" Am
-# The \`keys()\` method is implicit here.
-for ${1:key} in ${2:dict}:
-	$0
-endsnippet
-
-snippet t09 "break out of nested loops" Am
-# Purpose: find a solution to the linear equation:
-#
-#     20 * x + 40 * y + z = 5000
-
-# Ugly solution:
-#
-#     n = 100
-#     found = False
-#
-#     for x in range(n):
-#       if found: break
-#       for y in range(n):
-#           if found: break
-#           for z in range(n):
-#               if 20 * x + 40 * y + z == 5000:
-#                   print(x, y, z)
-#                   found = True
-#                   break
-#
-# It's ugly because the breakout logic interferes with the rest of the code, and
-# repeats \`break\` for each loop.
-
-# Elegant solution:
-n = 100
-
-class ExitNestedLoops(Exception):
-	pass
-
-try:
-	for x in range(n):
-		for y in range(n):
-			for z in range(n):
-				if 20 * x + 40 * y + z == 5000:
-					raise ExitNestedLoops(x, y, z)
-except ExitNestedLoops:
-	print(x, y, z)
-
-# This also  illustrates that the \`try\`  statement is not limited  to handling
-# errors.  It can be leveraged for other purposes.
-$0
-endsnippet
 
 # exceptions {{{2
 
-snippet t10 "try statement" Am
-# All  clauses  are  optional, but  \`try\`  must  be  followed  by at  least  1
-# \`except\` or 1 \`finally\`.
-try:
-	$0
-# If you need to  catch several exceptions, but still handle all  of them in the
-# same way, wrap them inside a tuple:
-#
-#     except (SomeException, AnotherException) as e:
-#            ^-------------------------------^
-#
-# If you need to handle them in different ways, use several \`except\` clauses.
-#
-# ---
-#
-# In the \`except\` clause, if you don't need to refer to the exception, you can
-# drop \`as $2\`.
-#
-# ---
-#
-# A useful convention is  to name \`$2\` using the first  character of each word
-# in the exception type (e.g.  \`zde\` for \`ZeroDivisionError\`); or just \`e\`
-# if you catch several.
-except ${1:exception type; e.g. ValueError} as ${2:e}:
-	# If you raise another exception, use \`from $2\` (for exception chaining):
-	#
-	#     raise SomeException('some message') from $2
-	#                                         ^--^
-	#
-	# In the traceback, it will change this message:
-	#
-	#     During handling of the above exception, another exception occurred:
-	#
-	# Into this one:
-	#
-	#     The above exception was the direct cause of the following exception:
-	#
-	# Making  it  clear  that  your  exception is  not  caused  by  yet  another
-	# unexpected error, but by the caught exception.
-	#
-	# ---
-	#
-	# If you want to completely suppress the original exception, use \`from None\`.
-	${3:statements}
-# executed if, and only if, the \`try\` clause is exited without any exception raised
-else:
-	${4:statements}
-# executed unconditionally (typically to clean up resources)
-finally:
-	${5:statements}
-endsnippet
-
-snippet t11 "define custom exception type" Am
-# This makes \`$1\` inherit attributes and methods from the \`Exception\` class,
-# which is said to be its base class.
-class ${1:MyError}(Exception):
-	pass
-
-# ...
-
-raise $1('${2:my error message}')
-$0
-endsnippet
-
-snippet t12 "pass given arguments to custom exception" Am
-class ${1:MyError}(Exception):
-	pass
-
-try:
-	# ...
-	raise $1(${2:args})
-except $1 as ${3:e}:
-	print($3.args)
-$0
-endsnippet
 # }}}1
 # data types {{{1
 # boolean {{{2
 
-snippet t13 "get truth value of expression" Am
-bool('${1:expr}')
-endsnippet
-
 # string {{{2
-# format {{{3
 
-snippet t14 "formatted string: .format()" Am
-# the placeholders are replaced according to their position
-'foo {} bar {}'.format(${1:expr for 1st placeholder}, ${2:expr for 2nd placeholder})
-# according to the index they contain
-'foo {0} bar {1} baz {0}'.format(${3:expr for placeholder of index 0}, ${4:expr for placeholder of index 1})
-# according to the keyword they contain
-'foo {kwd1} bar {kwd2}'.format(kwd2=${5:expr}, kwd1=${6:expr})
-endsnippet
-
-snippet t15 "formatted string: f-string" Am
-f'foo {${1:expr}} bar'
-endsnippet
-
-snippet t16 "right align expression in field of given width" Am
-# \`>$2\`: right align result in field of \`$2\` characters
-# \`.$2\`: truncate result if necessary so that it fits in field
-#
-# For more info: https://docs.python.org/3/reference/lexical_analysis.html#f-strings
-f'{${1:expr}:>${2:123 | {120+3}}.$2s}'
-endsnippet
-
-snippet t17 "pad numeric expression with leading 0s in field of given width" Am
-# If, and  only if,  \`$1\` uses fewer  digits than \`$2\`,  leading 0s  will be
-# added to fill a field of width \`$2\`.
-f'{${1:expr}:0${2:123 | {120+3} }}'
-endsnippet
-
-snippet t18 "formatted string: consolidate many placeholder keywords into one dictionary" Am
-d = {'a': 1, 'b': 2, 'c': 3}
-'{a} {b} {c}'.format(**d)
-# Alternative using many variables:
-#
-#     a, b, c = 1, 2, 3
-#     f'{a} {b} {c}'
-endsnippet
-
-# remove {{{3
-
-snippet t19 "remove leading and trailing whitespace from string" Am
-${1:str}.strip()
-# \`lstrip()\` for only leading whitespace
-# \`rstrip()\` for only trailing whitespace
-endsnippet
-
-snippet t20 "remove prefix or suffix from string" Am
-${1:string variable}.removeprefix('${2:some text}')
-$1.removesuffix('$2')
-endsnippet
-
-# miscellaneous {{{3
-
-snippet t21 "multiline string" Am
-'''${1:some
-multline
-string}'''
-# you can use single quotes or double quotes
-endsnippet
-
-snippet t22 "concatenate strings inside parens on several lines" Am
-(
-	'${1:str1}'
-	'${2:str2}'
-)
-# the parens can come from a function call (like \`print(...)\`)
-endsnippet
-
-snippet t23 "title case string" Am
-${1:str}.title()
-# foo bar baz → Foo Bar Baz
-endsnippet
-
-snippet t24 "make all alphabetical characters lowercase or uppercase in given string" Am
-# TODO: What's the difference between \`.lower()\` and \`.casefold()\`?
-${1:str}.lower()
-$1.upper()
-endsnippet
-
-snippet t25 "replace every occurrence of literal substring with new text in given string" Am
-${1:str}.replace('${2:old}', '${3:new}')
-endsnippet
-
-snippet t26 "reverse characters in given string" Am
-${1:str}[::-1]
-endsnippet
-
-snippet t27 "match pattern against string" Am
-import re
-re.${1:match|search}(r'${2:pat}', ${3:str})
-# If there is  a match, \`re.match()\` returns a  \`re.Match\` object; otherwise
-# \`None\`.  You can annotate the former with the type \`Optional[Match[str]]\`,
-# which requires this import:
-#
-#     from typing import Match, Optional
-#
-# \`Optional\` because there might be no match.
-endsnippet
-
-snippet t28 "extract substring matching pattern" Am
-import re
-re.${1:match|search}(r'${2:pat}', ${3:str}).group(0)
-# If \`pat\` is meant to match at the start, use \`.match()\`.
-# Otherwise, use \`.search()\`.
-# For \`.group()\`, see \`re.Match.group\`.
-endsnippet
-
-snippet t29 "split string on given literal substring" Am
-# \`$2\` can be omitted, in which case it defaults to whitespace.
-${1:str}.split(${2:substr})
-endsnippet
-
-snippet t30 "split string on given pattern" Am
-import re
-re.split(r'${1:pat}', ${2:str})
-endsnippet
-
-snippet t31 "split string on first N occurrences of given pattern/substring" Am
-# splitting on pattern
-import re
-re.split(r'${1:pat}', ${2:str}, ${3:123})
-
-# splitting on literal substring
-$2.split('$1', $3)
-endsnippet
-
-snippet t32 "join items from iterable into string" Am
-${1:string delimiter}.join(${2:iter})
-endsnippet
-
-snippet t33 "repeat string" Am
-# VimL equivalent: ['$1']->repeat($2)->join()
-' '.join([${1:str} for _ in range(${2:123})])
+snippet t01 "f-string: interpolate expressions" Am
+f'some {${1:expr1}} text {${2:expr2}}}'
 endsnippet
 # }}}2
 # bytes object {{{2
 
-snippet t34 "bytes object" Am
-b'${1:a bytes object}'
-endsnippet
-
-snippet t35 "encode a string into a bytes object" Am
-${1:string variable}.encode('utf-8')
-# Characters beyond the ASCII table are encoded into escape sequences containing
-# hex codes matching their actual bytes:
-#     $ python -c 'print("é".encode("utf-8"))'
-#     b'\xc3\xa9'
-#         ^^  ^^
-endsnippet
-
-snippet t36 "decode a bytes object into a UTF-8 string" Am
-${1:string variable}.decode('utf-8')
-endsnippet
-
 # byte array {{{2
 
-snippet t37 "create empty byte array" Am
-bytearray()
-endsnippet
-
-snippet t38 "create byte array with given amount of null bytes" Am
-bytearray(${1:123})
-endsnippet
-
-snippet t39 "create byte array from iterable" Am
-bytearray(${1:iter})
-# The iterable must yield valid byte integers (i.e. <= 256).
-endsnippet
-
-snippet t40 "create byte array from bytes object" Am
-bytearray(b'${2:bytes}')
-endsnippet
-
 # JSON object {{{2
-
-snippet t41 "serialize Python object into JSON formatted string" Am
-# \`indent\` and \`sort_keys\` are optional.
-#
-# \`indent=2\` makes the output more readable (otherwise, the whole string would
-# fit on a single line).
-#
-# \`sort_keys\` sort the dictionaries keys alphabetically.
-#
-# ---
-#
-# Since JSON supports fewer data types, there might be a loss of information.
-# For example, a tuple is serialized into a list.
-#
-# For  the same  reason,  not all  Python objects  are  JSON serializable.   For
-# example, \`datetime\` objects are not.  If your data is not JSON serializable,
-# try to simplify it.
-json.dumps(${1:obj}, indent=2, sort_keys=True)
-endsnippet
-
-snippet t42 "deserialize string/bytes/byte array containing JSON document into Python object" Am
-json.loads(${1:str})
-endsnippet
 
 # list {{{2
 # add items {{{3
 
-snippet t43 "add item at end of list" Am
-${1:list}.append()
-endsnippet
-
-snippet t44 "add item at any index in list" Am
-${1:list}.insert(${2:index}, ${3:item})
-endsnippet
-
-snippet t45 "extend list with an iterable" Am
-${1:list}.extend(${2:iter})
-# \`list\` is changed in-place; not \`iter\`.
-# \`iter\` can be a dictionary, in which case its keys are added (the values are
-# ignored).
-endsnippet
-
 # remove items {{{3
-
-snippet t46 "remove item from list, specified by index" Am
-del ${1:list}[${2:index}]
-$0
-endsnippet
-
-snippet t47 "remove item from list at given index, and return its value" Am
-${1:list}.pop(${2:idx})
-endsnippet
-
-snippet t48 "remove item from list, specified by value" Am
-${1:list}.remove(${2:value})
-endsnippet
-
-snippet t49 "remove all instances of values from list" Am
-while '${1:value}' in ${2:list}:
-	$2.remove('$1')
-	$0
-endsnippet
 
 # sort items {{{3
 
-snippet t50 "sort list in-place" Am
-${1:list}.sort()
-# The \`sort()\` method accepts the same keyword arguments as the \`sort()\` function.
-endsnippet
-
-snippet t51 "reverse order of list" Am
-${1:list}.reverse()
-endsnippet
-
 # miscellaneous {{{3
 
-snippet t52 "get index of given item in list, specified by value" Am
-${1:list}.index(${2:value})
-endsnippet
-
-snippet t53 "create list out of iterable" Am
-list(${1:iter})
-endsnippet
-
-snippet t54 "list comprehension" Am
-[${1:expression} for ${2:variable} in ${3:iter} if ${4:condition} == True]
-endsnippet
-
-snippet t55 "list slice" Am
-${1:list}[${2:start}:${3:end_exclusive}:${4:skip}]
-endsnippet
-
-snippet t56 "copy list" Am
-${1:list}[:]
-endsnippet
 # }}}2
 # tuple {{{2
 
-snippet t57 "tuple expression" Am
-(${1:item1}, ...)
-# Special cases:
-#
-#     () = empty tuple
-#     (item,) = tuple with only 1 item
-#          ^
-#          mandatory
-endsnippet
-
 # namedtuple {{{2
 
-snippet t58 "create a namedtuple" Am
-from collections import namedtuple
-
-# Let's create a class of namedtuples, with a given type, and with given field names.
-# \`$1\` is the name used to instantiate our namedtuples (it's a subclass of \`tuple\`)
-# \`$2\` is the typename of our namedtuples objects.
-${1:Vision} = namedtuple('${2:Vision}', [${3:list of fields; e.g. 'left', 'right'}])
-# Let's instantiate a namedtuple out of our class.
-${4:john_vision} = $1(${5:list of attributes; e.g. 9.5, 8.8})
-$0
-endsnippet
-
 # set {{{2
-
-snippet t59 "set expression" Am
-{${1:item1}, ...}
-endsnippet
-
-snippet t60 "create empty set" Am
-set()  # can't use \`{}\`; that's an empty dict
-endsnippet
-
-snippet t61 "add/remove/pop value from set" Am
-${1:set}.add(${2:value})
-$1.remove($2)
-$1.pop()
-endsnippet
-
-snippet t62 "create (frozen) set out of iterable" Am
-set(${1:iter})
-frozenset($1)
-# A frozen set can't mutate.
-# Methods like \`add()\` or \`remove()\` don't work on them.
-# Operators like \`|\`, \`&\`, \`-\` *do* work on them, because they don't make them mutate.
-endsnippet
-
-snippet t63 "set union/intersection/difference/symmetric difference" Am
-${1:set1} | ${2:set2}
-$1 & $2
-$1 - $2
-$1 ^ $2
-# The symmetric difference  of two sets is  the set of all members  which are in
-# either set, but  not in in both.   IOW, it's the difference  between the union
-# and the intersection.
-endsnippet
 
 # dictionary {{{2
 # get {{{3
 
-snippet t64 "get value for key of dictionary" Am
-${1:dict}['${2:key}']
-endsnippet
-
-snippet t65 "get value for key of dictionary (no error if key is absent)" Am
-${1:dict}.get('${2:key}', ${3:default})
-$1.setdefault('$2', $3)
-# If the  key is does not  exist, \`setdefault()\` also adds  the key/value pair
-# inside the dictionary.
-# The \`default\` argument is optional; it defaults to \`None\`.
-endsnippet
-
-snippet t66 "get keys of dictionary as iterable, list, tuple, or set" Am
-${1:dict}.keys()
-list($1)
-tuple($1)
-set($1)
-endsnippet
-
-snippet t67 "get values or items of dictionary as iterable" Am
-${1:dict}.values()
-$1.items()
-endsnippet
-
-snippet t68 "get sorted keys of dictionary" Am
-sorted(${1:dict})
-# The \`keys()\` method is implicit here.
-endsnippet
-
-snippet t69 "get reversed keys of dictionary" Am
-list(reversed(${1:dict}))
-# Require Python 3.8
-endsnippet
-
 # add {{{3
-
-snippet t70 "add key/value pairs into dictionary" Am
-${1:dict}.update({'key1': value1, ...}, key2=value2, ...)
-#           ^-------------------^
-#                 optional
-endsnippet
 
 # remove {{{3
 
-snippet t71 "remove key from dictionary" Am
-del ${1:dict}[${2:key}]
-endsnippet
-
-snippet t72 "remove key from dictionary, and return its value" Am
-# The default value is optional, but it's useful to avoid an error
-# in case the key is not in the dictionary.
-${1:dict}.pop('${2:key}', ${3:default-value})
-endsnippet
-
-snippet t73 "remove last key/value pair added to dictionary, and return it as a 2-tuple" Am
-# pairs are returned in LIFO order (last-in, first-out)
-${1:dict}.popitem()
-endsnippet
-
 # miscellaneous {{{3
 
-snippet t74 "union of dictionaries" Am
-{**${1:dict1}, **${2:dict2}}
-$1 | $2
-# \`**dict\` always unpacks a dictionary.
-# But the way it's unpacked depends on the context:
-#
-#    - inside curly brackets, you get a sequence of key/value pairs
-#    - inside parens, you get a sequence of keyword arguments
-#
-# ---
-#
-# Whatever syntax you use, the union operation is not commutative.
-# If the dictionaries have a key in  common but with different values, the value
-# in the last operand overrides the other.
-#
-# ---
-#
-# The \`|\` operator requires Python 3.9
-endsnippet
-
-snippet t75 "augmented assignment for union of dictionaries" Am
-${1:dict1} |= ${2:dict2}
-endsnippet
 # }}}2
 # date {{{2
 
-snippet t76 "formatted current date" Am
-from datetime import date
-today = date.today()  # == \`datetime.now().date()\`  (require \`from datetime import datetime\`)
-
-# The C format standard is easier to read for humans.
-today.ctime()
-# The ISO 8601 format standard is better for machines, and for sorting.
-today.isoformat()
-
-# Alternative for the current date *and time*.
-from datetime import datetime
-now = datetime.${1:now|utcnow}()
-now.ctime()
-now.isoformat()
-endsnippet
-
-snippet t77 "numerical values about current date" Am
-from datetime import date
-today = date.today()  # == \`datetime.now().date()\`  (require \`from datetime import datetime\`)
-
-# as a \`time.struct_time\` object
-today.timetuple()
-# as a tuple
-today.timetuple()[:]
-
-# Alternative for the current date *and time*.
-from datetime import datetime
-now = datetime.${1:now|utcnow}()
-now.timetuple()
-now.timetuple()[:]
-endsnippet
-
-snippet t78 "current day of week" Am
-# numeric value
-from datetime import date
-weekday = date.today().weekday()
-# alternative
-from datetime import datetime
-weekday = datetime.${1:utcnow|now}().weekday()
-
-# human-readable
-import calendar
-calendar.day_name[weekday]
-endsnippet
-
-snippet t79 "current day, month, year" Am
-from datetime import date
-today = date.today()  # == \`datetime.now().date()\`  (require \`from datetime import datetime\`)
-(today.day, today.month, today.year)
-
-# alternative
-from datetime import datetime
-now = datetime.${1:utcnow|now}()
-(now.day, now.month, now.year)
-endsnippet
-
 # time {{{2
-
-snippet t80 "current local date and time" Am
-# according to C format standard
-import time
-time.ctime()
-# as a \`time.struct_time\` object
-time.localtime()
-# as a tuple
-time.localtime()[:]
-
-# alternative
-from datetime import datetime
-datetime.${1:utcnow|now}().${2:ctime|time}()
-endsnippet
-
-snippet t81 "seconds from the epoch" Am
-import time
-time.time()
-endsnippet
-
-snippet t82 "hour, minute, second, microsecond" Am
-from datetime import datetime
-now = datetime.${1:now|utcnow}()
-(now.hour, now.minute, now.second, now.microsecond)
-endsnippet
-
-snippet t83 "convert given epoch time in UTC" Am
-import time
-# The argument can be  omitted; if it is, the current date and  time is used (in
-# seconds from the epoch).
-time.gmtime(${1:seconds from the epoch})
-endsnippet
-
-snippet t84 "convert current time from a time zone to another" Am
-# Require the \`arrow\` library.
-#     $ python3 -m pip install --upgrade arrow
-import arrow
-local = arrow.now('${1:Europe/Paris | Europe/Rome | Europe/Moscow | Asia/Tokyo}')
-
-# to UTC
-local.to('utc')
-
-# to Asia/Tokyo
-local.to('Europe/Moscow')
-endsnippet
 
 # datetime {{{2
 
-snippet t85 "express time zone-aware datetime object" Am
-from datetime import datetime
-from zoneinfo import ZoneInfo
-datetime(
-	${1:year},  # all arguments expressed as numbers (except \`tzinfo\`)
-	${2:month},
-	${3:day},
-	${4:hours},  # from here, all arguments are optional
-	${5:minutes},
-	${6:seconds},
-	# require Python 3.9; on older versions, use \`tzinfo=timezone(timedelta(hours=2))\`
-	tzinfo=ZoneInfo('${7:Europe/Paris | Europe/Rome | Europe/Moscow | Asia/Tokyo}')
-)
-endsnippet
-
-snippet t86 "parse string to create datetime object" Am
-from datetime import datetime
-import time
-
-# from ISO-formatted string
-datetime.fromisoformat('1977-11-24T19:30:13+01:00')
-# from timestamp (seconds from the epoch)
-datetime.fromtimestamp(time.time())
-endsnippet
-
 # duration {{{2
 
-snippet t87 "express duration" Am
-from datetime import timedelta
-timedelta(${1:weeks|days|hours|...}=${2:123})
-endsnippet
-
-snippet t88 "add duration to date or datetime" Am
-from datetime import date, datetime, timedelta
-today = date.today()
-now = datetime.now()
-today + timedelta(${1:days=49})
-now + timedelta($1)
-endsnippet
-
-snippet t89 "compute duration between 2 datetimes" Am
-from datetime import datetime
-
-date1 = datetime(...)
-date2 = datetime(...)
-diff = date2 - date1
-
-# duration between the 2 dates as a number of days
-diff.days
-
-# as a number of seconds
-diff.total_seconds()
-endsnippet
 # }}}1
 # objects {{{1
 # iterable {{{2
 
-snippet t90 "get length of iterable" Am
-len(${1:iter})
-endsnippet
-
-snippet t91 "create iterable yielding range of numbers" Am
-range(${1:start}, ${2:end_exclusive}, ${3:step})
-endsnippet
-
-snippet t92 "get sorted copy of iterable" Am
-sorted(${1:iter})
-endsnippet
-
-snippet t93 "get sorted copy of iterable, the order being reversed" Am
-sorted(${1:iter}, reverse=True)
-endsnippet
-
-snippet t94 "get sorted copy of iterable, sorting in arbitrary way" Am
-# During sorting, each  item in \`$1\` is temporarily  replaced by \`$2(item)\`.
-# The resulting list is sorted as usual, then the original items are restored.
-sorted(${1:iter}, key=${2:func})
-endsnippet
-
-snippet t95 "get sorted copy of iterable, sorting on nested items at arbitrary indexes" Am
-from operator import itemgetter
-sorted(${1:iter}, key=itemgetter(${2:idx}, ...))
-#                                          ^^^
-# \`itemgetter()\` accepts several  arguments; the 2nd one (and  beyond) is used
-# as a tie-breaker.
-endsnippet
-
-snippet t96 "get all combinations of items from given iterables" Am
-from itertools import product as cartesian_product
-cartesian_product(${1:iters})
-# Usage example:
-#
-#     >>> tuple(cartesian_product(('a'), ('b', 'c'), ('d', 'e', 'f')))
-#     (('a', 'b', 'd'), ('a', 'b', 'e'), ('a', 'b', 'f'), ('a', 'c', 'd'), ('a', 'c', 'e'), ('a', 'c', 'f'))
-$0
-endsnippet
-
 # container {{{2
-
-snippet t97 "remove all items from container" Am
-${1:container}.clear()
-endsnippet
 
 # sequence {{{2
 
 # Examples of sequence types: `list`, `str`, `tuple`, `bytes`.
 # Sets and dictionaries are not sequences.
 
-snippet t98 "concatenate sequences" Am
-${1:seq1} + ${1:seq2}
-endsnippet
-
-snippet t99 "repeat a sequence given times" Am
-${1:seq} * ${2:123}
-endsnippet
-
-snippet t100 "get number of instances of given value in sequence" Am
-${1:seq}.count(${2:value})
-endsnippet
 # }}}1
 # coercion {{{1
 
-snippet t101 "coerce string '123' into number 123" Am
-int(${1:str})
-
-# If \`$1\` is  written in binary or  hexadecimal (i.e. with a  \`0b\` or \`0x\`
-# prefix), pass the optional argument \`base\`:
-#
-#     int($1, base=0)
-#
-# It accepts values  between 2 and 36.   0 is special; it  makes \`int()\` infer
-# the base from the string argument itself.
-endsnippet
-
-snippet t102 "coerce non-string expression into string" Am
-str(${1:expr})
-endsnippet
-
-snippet t103 "coerce iterable into list/tuple/dict/set/frozenset/bytearray" Am
-list(${1:iter})
-tuple($1)
-dict($1)
-set($1)
-frozenset($1)
-bytearray($1)
-endsnippet
-
 # test {{{1
 
-snippet t104 "test multiple equalities" Am
-x == y == z
-$0
-endsnippet
-
-snippet t105 "test string ends with given substring" Am
-${1:str}.endswith(${2:substr})
-endsnippet
-
-snippet t106 "test given set is subset/superset of another" Am
-# strict subset
-${1:set1} < ${2:set2}
-# subset or equal
-$1 <= $2
-# strict superset
-$1 > $2
-# superset or equal
-$1 >= $2
-endsnippet
-
-snippet t107 "test container is empty" Am
-if not ${1:container}:
-	$0
-endsnippet
-
-snippet t108 "test value is/is not in container" Am
-${1:value} in ${2:container}
-$1 not in $2
-endsnippet
-
-snippet t109 "test filepath exists" Am
-from os.path import exists
-exists('${1:file}')
-endsnippet
-
-snippet t110 "test environment variable exists" Am
-from os import environ
-'${1:var}' in environ
-endsnippet
-
-snippet t111 "test daylight saving time is in effect" Am
-import time
-if time.daylight:
-	$0
-endsnippet
-
-snippet t112 "test object is of given type" Am
-# \`type\` can be \`str\`, \`list\`, \`dict\`, ...
-#
-# ---
-#
-# The benefit of \`isinstance()\` over \`type()\` is that it can handle the case
-# where  the object  is  not an  instance  of the  given type  class,  but of  a
-# *sub*class thereof.
-#
-# Also, it supports a syntax where the type is a tuple:
-#
-#     isinstance(obj, (str, list))
-#                     ^---------^
-#
-# This is equivalent to:
-#
-#     isinstance(obj, str) or isinstance(obj, list)
-isinstance(${1:obj}, ${2:type})
-endsnippet
-
 # math {{{1
-# statistics {{{2
 
-snippet t113 "get minimum number out of iterable" Am
-min(${1:iter})
-endsnippet
-
-snippet t114 "get maximum number out of iterable" Am
-max(${1:iter})
-endsnippet
-
-snippet t115 "compute sum of all numbers in iterable" Am
-sum(${1:iter})
-endsnippet
-
-snippet t116 "compute product of all numbers in iterable" Am
-from math import prod
-prod(${1:iter})
-endsnippet
-
-# integers {{{2
-
-snippet t117 "integer division" Am
-${1:12} // ${2:34}
-# \`/\` returns the *algebraic* quotient of its operands
-# \`//\` returns the *floored* quotient of its operands
-endsnippet
-
-snippet t118 "discard fractional part of real number" Am
-int(${1:12.34})
-endsnippet
-
-snippet t119 "convert number expressed in arbitrary base into decimal number" Am
-int('${1:num}', base=${2:base})
-endsnippet
-
-snippet t120 "factorial" Am
-from math import factorial
-factorial(${1:integer})
-endsnippet
-
-snippet t121 "write big number in more readable way" Am
-123_456_789
-endsnippet
-
-snippet t122 "get number of digits in given numeric expression" Am
-from math import log10
-int(log10(${1:num})) + 1
-endsnippet
-
-# floats {{{2
-
-snippet t123 "print info about how floating point numbers behave on current system" Am
-import sys
-print(sys.float_info)
-$0
-endsnippet
-
-# exponentiation {{{2
-
-snippet t124 "exponentiation operator" Am
-${1:12} ** ${2:34}
-endsnippet
-
-snippet t125 "exponentiation function" Am
-pow(${1:base}, ${2:exponent})
-endsnippet
-
-snippet t126 "modular exponentiation" Am
-pow(${1:base}, ${2:exponent}, ${3:modulus})
-# Warning: the base must be relatively prime to the modulus.
-# That is, their GCD must be 1.  Otherwise, you'll get an error:
-#     ValueError: base is not invertible for the given modulus
-endsnippet
-
-snippet t127 "modular multiplicative inverse" Am
-pow(${1:base}, -1, ${3:modulus})
-endsnippet
-
-# fractions {{{2
-
-snippet t128 "fraction" Am
-from fractions import Fraction
-Fraction(${1:Rational}, ${2:Rational})
-# \`Rational\` can be an integer or a fraction (in math, the numerator/denominator
-# can also be a fraction).
-endsnippet
-
-snippet t129 "fraction numerator or denominator" Am
-from fractions import Fraction
-Fraction(${1:Rational}, ${2:Rational}).numerator
-Fraction($1, $2).denominator
-endsnippet
-
-snippet t130 "get irreducible fraction equivalent to given decimal number (" Am
-from decimal import Decimal as D
-D('1.4').as_integer_ratio()
-# The result is expressed as a tuple.
-endsnippet
-
-# decimal numbers {{{2
-
-snippet t131 "decimal number" Am
-from decimal import Decimal as D
-D('${1:1.23}')
-# Useful  when  you  need  more  accurate results  than  with  floats  (e.g.  in
-# scientific and financial calculations):
-#
-#     >>> print(0.1 * 3 - 0.3)
-#     5.551115123125783e-17
-#     >>> print(D('0.1') * D(3) - D('0.3'))
-#     0.0
-endsnippet
-
-snippet t132 "reset precision of decimal numbers" Am
-import decimal
-c = decimal.getcontext()
-c.prec = ${1:new precision}
-decimal.setcontext(c)
-$0
-endsnippet
-
-# complex numbers {{{2
-
-snippet t133 "complex number" Am
-${1:real part} + ${2:imaginary part}j
-# alternative: \`complex(real_part, imaginary part)\`
-endsnippet
-
-snippet t134 "real and imaginary parts of complex number" Am
-${1:complex variable or number}.real
-$1.imag
-# Warning: if  you write a  number, you need to  surround it with  parens before
-# asking for its \`imag\` attribute.  To be consistent, and readable, always use
-# parens even for the \`real\` attribute (or for the \`conjugate()\` method).
-endsnippet
-
-snippet t135 "conjugate of complex number" Am
-${1:complex variable or number}.conjugate()
-endsnippet
-# }}}1
 # function {{{1
 # header {{{2
 
-snippet t136 "define function accepting variable number of arguments" Am
-def ${1:name}(*${2:args}):
-# \`*\`: collect optional arguments in $2 tuple
-
-	for ${3:arg} in $2:
-		print($3)
-	$0
-
-$1(1, 2, 3)
-endsnippet
-
-snippet t137 "define function accepting variable number of keyword arguments" Am
-def ${1:name}(**${2:kwargs}):
-# \`**\`: collect optional keyword arguments in $2 dictionary
-
-	for key, value in $2.items():
-		print(f'{key}: {value}')
-	$0
-
-$1(a=1, b=2, c=3)
-endsnippet
-
-snippet t138 "define function with positional-only and keyword-only parameters" Am
-def ${1:name}(${2:pos-only, ...}, /, ${3:pos-or-kwd, ...}, *, ${4:kwd-only, ...}):
-	$0
-endsnippet
-
-snippet t139 "assign mutable object (e.g. list or dict) to optional parameter" Am
-# Can't assign it  directly because it would mutate across  function calls which
-# is probably not what you want.
-def ${1:func}(${2:opt}=None):
-	if $2 is None:
-		$2 = ${3:mutable object; e.g. [] or {}}
-endsnippet
-
 # scopes {{{2
-
-snippet t140 "nonlocal (override default shadowing)" Am
-# See snippet about \`global\` keyword for more info.
-def outer():
-	name = 'last assigned in outer()'
-
-	def inner():
-		#------v
-		nonlocal name
-		name = 'last assigned in inner()'
-	inner()
-
-	print(name)
-	#     last assigned in inner()
-	#
-	# Without \`nonlocal\`, the output would be \`last assigned in outer()\`.
-
-outer()
-$0
-endsnippet
-
-snippet t141 "global (override default shadowing)" Am
-# From a function,  you can read a  variable defined in the  current module; but
-# not assign to it.  If you try, a new shadowing variable will be created in the
-# function.  If that's an issue, use the \`global\` keyword.
-
-name = 'last assigned in module'
-
-def func():
-	#----v
-	global name
-	name = 'last assigned in func()'
-func()
-
-print(name)
-#     last assigned in func()
-#
-# Without \`global\`, the output would be \`last assigned in module\`.
-$0
-endsnippet
 
 # call {{{2
 
-snippet t142 "use keyword argument in function call" Am
-${1:func}(${2:name}=${3:value}, ...)
-$0
-endsnippet
-
-snippet t143 "unpack iterable as sequence of arguments in function call" Am
-# In the case of a dictionary, only the keys are unpacked.
-${1:func}(*${2:iter})
-# Usage example:
-#
-#     >>> args = [3, 6]
-#     #                    v
-#     >>> print(list(range(*args)))
-#     [3, 4, 5]
-endsnippet
-
-snippet t144 "unpack dictionary as sequence of keyword arguments in function call" Am
-${1:func}(**${2:dict})
-# Usage example:
-#
-#     >>> def func(a, b, c):
-#     ...     print(a)
-#     ...     print(b)
-#     ...     print(c)
-#
-#     >>> d = {'a': 1, 'b': 2, 'c': 3}
-#     #        vv
-#     >>> func(**d)
-#     1
-#     2
-#     3
-endsnippet
-
-snippet t145 "parse user command's arguments to call correct user-defined function" Am
-# As an example, \`args\` might be \`foo\` or \`bar baz\`, and \`subcommands\` might be:
-#
-#     {
-#         'foo': foo,
-#         'bar': {
-#             'baz': baz,
-#         }
-#     }
-#
-# \`foo\` and \`baz\` being names of user-defined functions.
-def call(args, subcommands):
-	"""Call a subcommand from a dictionary."""
-
-	split = args.split(' ', 1)
-	if len(split) == 1:
-		# Don't append \`None\`.  It might cause an error:
-		#
-		#     call('foo', {
-		#         'foo': {
-		#             '': foo,
-		#             'bar': bar,
-		#         }
-		#     })
-		#
-		#     AttributeError: 'NoneType' object has no attribute 'split'
-		split.append('')
-	subcommand, args = split
-
-	subcommands = subcommands.get(subcommand)
-
-	if isinstance(subcommands, dict):
-		return call(args, subcommands)
-	if callable(subcommands):
-		return subcommands()
-$0
-endsnippet
-
 # miscellaneous {{{2
 
-snippet t146 "get iterator aggregating items from iterables into tuples (zip)" Am
-z = zip(${1:iter}, ...)
-print(z.__next__())
-print(z.__next__())
-# ...
-# Each call yields a tuple built out of the iterables' items.
-# The i-th tuple contains the i-th items.
-# Works until one of the iterables has been exhausted.
-#
-# Tip to build some intuition:
-#
-# Stack your iterables horizontally on top of each other.
-# Slice them vertically from the left to the right.
-# Each slice gives you a tuple.
-# That's what the iterator given by \`zip()\` does.
-endsnippet
-
-snippet t147 "lambda function" Am
-# Example:
-#
-#     >>> (lambda a, b: a + b)(1, 2)
-#     3
-lambda ${1:args}: ${2:expr}
-endsnippet
-
-snippet t148 "map items from iterable(s)" Am
-# \`map()\`  does  not return  a  transformed  iterable,  but an  iterator  that
-# computes  the lambda,  passing  it as  arguments  a tuple  of  items from  the
-# iterable(s) (obtained in a similar way as with \`zip()\`).
-#
-# To obtain the new items, you need a constructor like \`list()\`:
-#
-#     >>> list(map(lambda a, b: a + b, [1, 2, 3], [4, 5, 6]))
-#     [5, 7, 9]
-#      ^  ^  ^
-#      |  |  3 + 6
-#      |  2 + 5
-#      1 + 4
-#
-# Or a loop:
-#
-#     >>> for n in map(lambda a, b: a + b, [1, 2, 3], [4, 5, 6]):
-#     ...     print(n)
-#     5
-#     7
-#     9
-#
-# ---
-#
-# The first  argument of \`map()\`  is not necessarily a  lambda; it can  be any
-# callable.  That includes  a function and a type (e.g.  \`str\`, \`int\`, ...).
-# Remember that, for each type, there exists a function with the same name:
-#
-#     >>> list(map(str, range(3)))
-#     ['0', '1', '2']
-map(lambda ${1:args}: ${2:expr}, ${3:iter}, ...)
-endsnippet
 # }}}1
 # file {{{1
 
-snippet t149 "write message into file" Am
-try:
-	# \`fh\` for *f*ile *h*andle
-	with open('${1:file}', 'w', encoding='utf-8') as fh:
-		fh.write('${2:message}')
-# From \`$ pydoc open\`
-#
-#    > Open file and return a stream.  **Raise OSError** upon failure.
-#
-# On the web, you might find out  that \`IOError\` is sometimes used instead; it
-# has been merged into \`OSError\`:
-#
-#    > Changed in version 3.3:
-#    >
-#    > EnvironmentError, **IOError**, WindowsError, socket.error, select.error
-#    > and mmap.error have been merged into OSError, [...]
-#
-# Source: https://docs.python.org/3/library/exceptions.html#OSError
-except OSError:
-	print(f'Failed to write: $1')
-	exit()
-$0
-endsnippet
-
-snippet t150 "execute script" Am
-try:
-	with open('${1:/path/to/script}', 'r', encoding='utf-8') as fh:
-		exec(fh.read())
-except OSError:
-	print(f'Failed to open $1')
-	exit()
-$0
-endsnippet
-
 # module {{{1
-
-snippet t151 "import all items from module, in separate namespace" Am
-# The items are imported into a separate namespace.
-# To refer to an imported item, write \`module.item\`.
-# An alias is useful to make a long module name less verbose.
-import ${1:module} ${2:as alias}
-$0
-endsnippet
-
-snippet t152 "import all items from module, in current namespace" Am
-# Don't use this syntax, unless you have a good reason.
-from ${1:module} import *
-$0
-endsnippet
-
-snippet t153 "import items from module" Am
-# The items are imported into the current script directly.
-# No need to prefix their name with \`module.\`.
-# An alias is useful to avoid a collision with an item in the current script.
-from ${1:module} import ${2:item} ${3:as alias}, ...
-$0
-endsnippet
-
-snippet t154 "print built-in modules" Am
-import sys
-print(sys.builtin_module_names)
-$0
-endsnippet
-
-snippet t155 "print list of directories where modules are searched for" Am
-import sys
-print(sys.path)
-$0
-endsnippet
-
-snippet t156 "import arbitrary module from REPL" Am
-import os
-os.chdir('${1:/path/to/dir/}')
-import script
-$0
-endsnippet
-
-snippet t157 "don't run as a script when imported as a module" Am
-# \`__name__\`  holds the  name of  the module  if it's  imported, or  the value
-# \`'__main__'\` if the file is executed as a script.
-if __name__ == '__main__':
-	main()
-$0
-endsnippet
 
 # OOP {{{1
 
-snippet t158 "class" Am
-class ${1:MyClass}:
-	def __init__(self):
-		pass
-
-	def method(self):
-		pass
-$0
-endsnippet
-
-snippet t159 "instantiate object from class" Am
-${1:MyClass}()
-endsnippet
-
 # miscellaneous {{{1
 
-snippet t160 "printf-style debugging" Am
-with open('/tmp/debug', 'a', encoding='utf-8') as fh:
-	fh.write(f'{${1:expr}=}\n')
-# The \`=\`  specifier causes the  evaluation to  be prefixed with  the original
-# expression and an equal sign, inside the output string:
-#
-#                     v
-#     >>> print(f'{1+2=}')
-#     1+2=3
-#     ^--^
-#
-# It can be combined with other format specifiers.
-#
-#                         vv--v
-#     >>> print(f'{math.pi=:.5f}')
-#     math.pi=3.14159
-#
-# See: https://docs.python.org/3/whatsnew/3.8.html#bpo-36817-whatsnew
-#
-# ---
-#
-# \`=\` also  causes the \`repr()\` *or*  the \`str()\` of the  expression to be
-# provided, depending on the format specified:
-#
-#    - no format is specified: \`repr()\`
-#    - a format is specified (without a \`!r\` conversion field) : \`str()\`
-#    - a format is specified (with a \`!r\` conversion field) : \`repr()\`
-#      e.g.: \`f'{expr=!r}'\`
-#
-# The goal  of \`str()\`/\`repr()\` is to  give a resp. readable  or unambiguous
-# representation of  an object.  In theory,  \`eval(repr(obj))\` should evaluate
-# to \`obj\`, but that's not always the case (or even possible).
-endsnippet
-
-snippet t161 "pylint directive (aka pragma control)" Am
-# The scope of a directive is documented here:
-# https://pylint.pycqa.org/en/latest/user_guide/messages/message_control.html#messages-control
-
-# pylint: disable=${1:symbolic-name},...
-$0
-endsnippet
-
-snippet t162 "fix mypy error: Item “None” of “...” has no attribute “group”  [union-attr]" Am
-assert ${1:m} is not None
-# Necessary  to  satisfy   mypy,  which  might  otherwise   be  concerned  about
-# \`$1.group(...)\` raising  an exception  because \`$1\`  might be  \`None\` if
-# it's an object given by \`re.match()\`:
-#
-#     Item "None" of "Optional[Match[str]]" has no attribute "group"  [union-attr]
-#
-# It tells mypy that it can safely assume that \`$1\` will not be \`None\`.
-endsnippet
-
-snippet t163 "assign to multiple variables" Am
-x = y = z = 123
-x, y, z = 1, 2, 3
-# \`x, y, z\` and \`1, 2, 3\` are actually implicit tuples.
-$0
-endsnippet
-
-snippet t164 "ask for user input" Am
-${1:var} = input('${2:prompt} ')
-$0
-endsnippet
-
-snippet t165 "conditional expression (using ternary operator)" Am
-${1:expr1} if ${2:test} else ${3:expr2}
-endsnippet
-
-snippet t166 "print version of current Python interpreter" Am
-import sys
-print(sys.version)
-$0
-endsnippet
-
-snippet t167 "exit script / interactive shell" Am
-exit()
-$0
-endsnippet
-
-snippet t168 "invoke method obtained programmatically" Am
-getattr(${1:obj}, ${2:method})()
-endsnippet
-
-snippet t169 "profile code" Am
-from time import perf_counter
-start = perf_counter()
-$0
-elapsed = perf_counter() - start
-print(f'the code took: {elapsed:.3f}')
+snippet t02 "print message" Am
+print('${1:message}')
 endsnippet
 
 # WeeChat {{{1
 # See: https://weechat.org/files/doc/weechat/stable/weechat_scripting.en.html#common_tasks
 # config {{{2
 
-snippet t170 "weechat: let plugin save one of its options in config file" Am
+snippet t03 "weechat: let plugin save one of its options in config file" Am
 # The absolute path to the config file will be: \`${weechat_config_dir}/$1.conf\`.
 config_file = w.config_new('${1:plugin name}', '', '')
 if not config_file:
@@ -1520,7 +134,7 @@ w.config_new_option(
 )
 endsnippet
 
-snippet t171 "weechat: reset given option's value" Am
+snippet t04 "weechat: reset given option's value" Am
 w.config_option_set(
 	${1:option pointer as given by config_new_option()},
 	# Write 'toggle' to toggle a boolean option.
@@ -1536,14 +150,23 @@ endsnippet
 
 # hdata {{{2
 
-snippet t172 "weechat: retrieve value from hdata" Am
+snippet t05 "weechat: retrieve value from hdata" Am
 # In the output of \`/debug hdata\`, look for the variable holding the value you
 # need.  For example, if you want a message, look for this pattern:
 #
 #     -> message
 #
 # You should  find that the  \`message\` variable  is held by  the \`line_data\`
-# hdata, so you can start writing:
+# hdata:
+#
+#                            v-------v
+#     hdata 0x56185a3ae750: "line_data", 17 vars, 0 lists:
+#       0000 -> buffer (pointer, hdata: buffer)
+#       ...
+#       0096 -> message (string, R/W)
+#            ^--------^
+#
+# So you can start writing:
 #
 #     message = w.hdata_string(w.hdata_get('line_data'), xxx, 'message')
 #                       ^----^
@@ -1636,7 +259,7 @@ snippet t172 "weechat: retrieve value from hdata" Am
 # former; it returns a string *variable* held by a given hdata.
 endsnippet
 
-snippet t173 "weechat: retrieve list value from hdata" Am
+snippet t06 "weechat: retrieve list value from hdata" Am
 #     hdata = w.hdata_get('<name>')
 #     list = w.hdata_get_list(hdata, '<var>')
 #
@@ -1661,7 +284,7 @@ snippet t173 "weechat: retrieve list value from hdata" Am
 #         gui_hotlist = w.hdata_pointer(hotlist, gui_hotlist, 'next_hotlist')
 endsnippet
 
-snippet t174 "weechat: retrieve item out of array in hdata" Am
+snippet t07 "weechat: retrieve item out of array in hdata" Am
 # The key syntax here, is \`N|name\`:
 #
 #    > name: variable name (must be type "integer"); for arrays, the name can be
@@ -1683,7 +306,7 @@ snippet t174 "weechat: retrieve item out of array in hdata" Am
 w.hdata_${1:type: integer, string, ...}(${2:hdata}, ${3:list}, '${4:index}|${5:var}')
 endsnippet
 
-snippet t175 "weechat: iterate over all buffers via hdata" Am
+snippet t08 "weechat: iterate over all buffers via hdata" Am
 buffer = w.hdata_get('buffer')
 gui_buffers = w.hdata_get_list(buffer, 'gui_buffers')
 
@@ -1694,7 +317,7 @@ while gui_buffers:
 	gui_buffers = w.hdata_pointer(buffer, gui_buffers, 'next_buffer')
 endsnippet
 
-snippet t176 "weechat: hdata vs infolist" Am
+snippet t09 "weechat: hdata vs infolist" Am
 # hdata is faster and uses less memory:
 #
 #    > It is faster and uses less memory: direct read of data without duplication.
@@ -1722,7 +345,7 @@ snippet t176 "weechat: hdata vs infolist" Am
 # Source: https://weechat.org/files/doc/weechat/stable/weechat_scripting.en.html#infolists_read
 endsnippet
 
-snippet t177 "weechat: retrieve value from infolist" Am
+snippet t10 "weechat: retrieve value from infolist" Am
 # Here is an example with the hotlist:
 #
 #     hotlist = w.infolist_get(
@@ -1773,7 +396,7 @@ endsnippet
 
 # hook {{{2
 
-snippet t178 "weechat: specify Tab completion of given command" Am
+snippet t11 "weechat: specify Tab completion of given command" Am
 #     > Completion  names are  global (shared  across WeeChat  and plugins). So  it is
 #     > recommended to  choose a  name with  a unique  prefix, like  "plugin_xxx" (where
 #     > "xxx" is your item name).
@@ -1858,7 +481,7 @@ def add_completions(words, completion):
 $0
 endsnippet
 
-snippet t179 "weechat: specify evaluation of given ${info:...}" Am
+snippet t12 "weechat: specify evaluation of given ${info:...}" Am
 # Usage: \`/eval -n ${info:$1,callback arguments}\`
 #
 # \`$1\` is passed to the callback  via the argument \`name\`.  Whatever follows
@@ -1873,7 +496,7 @@ def $4_cb(_, name, args):
 $0
 endsnippet
 
-snippet t180 "weechat: invoke callback when given signal is caught" Am
+snippet t13 "weechat: invoke callback when given signal is caught" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_hook_signal
 #
 # ---
@@ -1888,7 +511,7 @@ def $2_cb(*_):
 	$0
 endsnippet
 
-snippet t181 "weechat: invoke callback after given amount of time" Am
+snippet t14 "weechat: invoke callback after given amount of time" Am
 # The third  argument (here \`1\`) stands  for the number of  times the callback
 # should be invoked.  Use \`0\` if you want the timer to never end.
 w.hook_timer(${1:delay}, 0, 1, '${2:callback}_cb', '')
@@ -1896,31 +519,31 @@ endsnippet
 
 # input {{{2
 
-snippet t182 "weechat: get contents of input line" Am
+snippet t15 "weechat: get contents of input line" Am
 w.buffer_get_string(${1:buf}, 'input')
 endsnippet
 
-snippet t183 "weechat: get cursor position on input line" Am
+snippet t16 "weechat: get cursor position on input line" Am
 w.buffer_get_integer(${1:buf}, 'input_pos')
 endsnippet
 
-snippet t184 "weechat: replace contents of input line" Am
+snippet t17 "weechat: replace contents of input line" Am
 w.buffer_set(${1:buf}, 'input', ${2:new_input})
 endsnippet
 
-snippet t185 "weechat: set cursor position on input line" Am
+snippet t18 "weechat: set cursor position on input line" Am
 # the position is a 0-indexed character count (not a byte count)
 w.buffer_set(${1:buf}, 'input_pos', str(${2:new_pos}))
 endsnippet
 
-snippet t186 "weechat: set buffer number" Am
+snippet t19 "weechat: set buffer number" Am
 # \`$2\` is a 1-indexed number
 w.buffer_set(${1:buf}, 'number', str(${2:num}))
 endsnippet
 
 # print {{{2
 
-snippet t187 "weechat: print message in core buffer" Am
+snippet t20 "weechat: print message in core buffer" Am
 # Notice how  an empty string  has a  different meaning for  \`prnt()\` compared
 # to  other functions.   Usually,  it  refers to  the  current  buffer; but  for
 # \`prnt()\`, it's the *core* buffer.
@@ -1930,20 +553,20 @@ w.prnt('', '${1:message}')
 $0
 endsnippet
 
-snippet t188 "weechat: print message in given buffer" Am
+snippet t21 "weechat: print message in given buffer" Am
 # For the current buffer, replace \`buffer_search(...)\` with \`current_buffer()\`.
 buf = w.buffer_search('${1:plugin; e.g. irc}', '${2:name; e.g. libera.#weechat}')
 w.prnt(buf, '${3:message}')
 $0
 endsnippet
 
-snippet t189 "weechat: print colored message" Am
+snippet t22 "weechat: print colored message" Am
 w.prnt('', w.color('${1:color}') + '${2:message}' + w.color('default'))
 endsnippet
 
 # script {{{2
 
-snippet t190 "weechat: script template" Am
+snippet t23 "weechat: script template" Am
 import weechat as w
 
 # The leading underscore prevents WeeChat  from conflating our local script with
@@ -1993,7 +616,7 @@ def $11(data: str, buf: str, args: str) -> int:
 	return w.WEECHAT_RC_OK
 endsnippet
 
-snippet t191 "weechat: minimal throwaway script to quickly test something" Am
+snippet t24 "weechat: minimal throwaway script to quickly test something" Am
 import weechat as w
 
 w.register('test', '', '', '', '', '', '')
@@ -2006,7 +629,7 @@ endsnippet
 
 # test {{{2
 
-snippet t192 "weechat: test line is displayed" Am
+snippet t25 "weechat: test line is displayed" Am
 # Warning: Do *not* use \`integer\` instead of \`char\` (even though no error is
 # given, no matter which one you choose).
 #
@@ -2020,7 +643,7 @@ endsnippet
 
 # miscellaneous {{{2
 
-snippet t193 "weechat: execute command" Am
+snippet t26 "weechat: execute command" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_scripting.en.html#buffers_send_text
 # https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_command
 w.command(${1:buf}, '${2:command}')
@@ -2029,7 +652,7 @@ w.command(${1:buf}, '${2:command}')
 $0
 endsnippet
 
-snippet t194 "weechat: get option's value from user's config" Am
+snippet t27 "weechat: get option's value from user's config" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_scripting.en.html#config_options_weechat
 #
 # Warning: You can't call \`config_*()\` functions until the script is registered:
@@ -2042,7 +665,7 @@ w.config_string(w.config_get('${1:option name}'))
 #        \`boolean\`, \`color\`, \`enum\`, \`integer\`, \`string\`
 endsnippet
 
-snippet t195 "weechat: get property or local variable of buffer" Am
+snippet t28 "weechat: get property or local variable of buffer" Am
 #    > localvar_xxx: get content of local variable "xxx"
 #    > (replace "xxx" by the name of variable to read)
 #
@@ -2051,13 +674,13 @@ snippet t195 "weechat: get property or local variable of buffer" Am
 w.buffer_get_string(${1:buf}, '${2:property | localvar_xxx}')
 endsnippet
 
-snippet t196 "weechat: get expansion of given path string" Am
+snippet t29 "weechat: get expansion of given path string" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_scripting.en.html#script_api_functions
 # https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_string_eval_path_home
 w.string_eval_path_home(${1:path}, {}, {}, {})
 endsnippet
 
-snippet t197 "weechat: get evaluation of given expression" Am
+snippet t30 "weechat: get evaluation of given expression" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_string_eval_expression
 #
 # ---
@@ -2068,7 +691,7 @@ snippet t197 "weechat: get evaluation of given expression" Am
 w.string_eval_expression(${1:expr}, {}, {}, {})
 endsnippet
 
-snippet t198 "weechat: remove WeeChat colors from string" Am
+snippet t31 "weechat: remove WeeChat colors from string" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_string_remove_color
 w.string_remove_color(${1:str}, '')
 # \`''\`:  replacement: if  not  NULL and  not empty,  WeeChat  color codes  are
