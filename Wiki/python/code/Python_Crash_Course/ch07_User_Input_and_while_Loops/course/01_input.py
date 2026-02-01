@@ -17,9 +17,9 @@ print(message)
 #   The prompt should explain clearly to the user what information your program needs to get. {{{1
 
 # always append a space to the prompt, so that it's well-separated from the input
-#                                     v
-name = input('Pleaser enter your name: ')
-print(f'\nHello, {name}!')
+#                                       v
+name = input('\nPleaser enter your name: ')
+print(f'Hello, {name}!')
 #     Pleaser enter your name: Eric
 #
 #     Hello, Eric!
@@ -37,12 +37,12 @@ print(f'\nHello, {name}!')
 # held by the variable.
 #}}}
 prompt = (
-    'If you tell us who you are, we can personalize the messages you see.'
+    '\nIf you tell us who you are, we can personalize the messages you see.'
     '\nWhat is your first name? '
 )
 
 name = input(prompt)
-print(f'\nHello, {name}!')
+print(f'Hello, {name}!')
 #     If you tell us who you are, we can personalize the messages you see.
 #     What is your first name? Eric
 #
@@ -51,7 +51,7 @@ print(f'\nHello, {name}!')
 
 # `input()` always returns a string.  Even if the user has input a number. {{{1
 
-age = input('How old are you? ')
+age = input('\nHow old are you? ')
 print(type(age))
 #     How old are you? 21
 #     <class 'str'>
@@ -59,7 +59,7 @@ print(type(age))
 
 #   But you might need to do some arithmetic with an input number.  If so, use `int()` to coerce it. {{{1
 
-height = int(input('How tall are you, in inches? '))
+height = int(input('\nHow tall are you, in inches? '))
 #        ^^^
 #
 # Without `int()`, the next arithmetic comparison `>=` would fail:
@@ -76,14 +76,14 @@ else:
 
 #   To test whether an input number is even or odd, use the modulo operator `%`. {{{1
 
-number = int(input("Enter a number, and I'll tell you if it's even or odd: "))
+number = int(input("\nEnter a number, and I'll tell you if it's even or odd: "))
 
 # An integer is even if, and only if, its remainder in a division by 2 is 0.
 #         v
 if number % 2 == 0:
-    print(f'\nThe number {number} is even.')
+    print(f'The number {number} is even.')
 else:
-    print(f'\nThe number {number} is odd.')
+    print(f'The number {number} is odd.')
 #     Enter a number, and I'll tell you if it's even or odd: 42
 #
 #     The number 42 is even.

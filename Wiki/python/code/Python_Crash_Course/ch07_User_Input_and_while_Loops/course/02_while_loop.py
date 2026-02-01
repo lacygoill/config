@@ -56,8 +56,8 @@ while message != 'quit':
 #     Hello everyone!
 #
 #     Tell me something, and I will repeat it back to you:
-#     Enter 'quit' to end the program. Hello  again.
-#     Hello  again.
+#     Enter 'quit' to end the program. Hello again.
+#     Hello again.
 #
 #     Tell me something, and I will repeat it back to you:
 #     Enter 'quit' to end the program. quit
@@ -155,7 +155,7 @@ while current_number < 10:
         # If  `current_number`  is  an  even  number,  then  the  previous  test
         # succeeds,  the   `continue`  statement  is  run,   and  the  execution
         # immediately jumps back to the  `while` statement.  In effect, the next
-        # `print()` is then skipped, which is only odd numbers are printed.
+        # `print()` is then skipped, which is why only odd numbers are printed.
 
     print(current_number)
 #     1

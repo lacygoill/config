@@ -861,7 +861,6 @@ function Install_Debian_Packages { # {{{2
   #     python3-distutils
   #     python3-docutils
   #     python3-markdown
-  #     python3-pip
   #     python3-setuptools
   #     python-dev-is-python3
   #     slop

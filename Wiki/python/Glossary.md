@@ -337,6 +337,10 @@ print(ll)
     [1]
     [1]
 
+## instantiation
+
+Making an object from a class.
+
 ## iterable
 
 An object capable of returning its members one at a time.

@@ -37,6 +37,10 @@ swap out of order logic in order to correctly recommend --include-deps (@joshuar
 
 <https://pypa.github.io/pipx/docs/>
 
+# Python 3 Module of the Week
+
+<https://pymotw.com/3/>
+
 # regular expression syntax
 
 <https://docs.python.org/3/library/re.html#regular-expression-syntax>

@@ -14,8 +14,15 @@ load next argument                      ]a                                     N
 
 Changes {{{1
 
+put contents of previous pane           «M-p»                                  N
+
 toggle token under cursor               «C-a»                                  *
                                         «C-x»
+
+dictionary completion                   «C-x»«C-k»                             I
+tag completion                          «C-x»«C-]»                             I
+keyword completion                      «C-x»«C-n»                             I
+                                        «C-x»«C-p»
 
 put ruler above                         +[-                                    N
 put ruler below                         +]-                                    N
@@ -152,12 +159,19 @@ notes about topic of current file       «SPC»fn                               
 all notes                               «SPC»fN                                N
 
 Vim registers                           " «C-f»                                N
+insert Vim register                     «C-r»«C-f»                             I
+insert snippet                          «C-g»«C-g»                             I
 
 Folds {{{1
 
 close all folds                         H                                      N
 open all folds                          L                                      N
 close all folds except current one      M                                      N
+
+adhoc folding                           za                                     N
+# useful for example, for `ps --forest`, `systemd-cgls` and `journalctl`
+
+fold comment                            zfic                                   N
 
 toggle folds under cursor recursively   zA                                     N
 close one fold under cursor             zc                                     N
@@ -211,9 +225,9 @@ display search matches with context     «C-G»z                                
 insert codespan on command-line         «C-R»`                                *C
 insert current line on command-line     «C-R»«C-L»                            *C
 
-rotate windows                          «C-W»r or «C-W»R                       N
-
 suspend Vim                             «C-z»«C-z»                             N
+
+force abbreviation expansion            «C-]»                                  I
 
 send current file to Vim server         [«C-s»                                 N
 
@@ -245,9 +259,17 @@ count lines in current file             g«C-l»                                
 open link in Firefox                    gx                                     NV
 open link in w3m                        gX                                     NV
 
+count lines of code in file             :Cloc                                  C
 open config of given program            :Cfg PROGRAM                           C
 grep given pattern                      :Grep PATTERN                          C
+grep config files                       :ConfigGrep                            C
 share selection or file                 :Share                                 C
+
+close session                           :SClose                                C
+delete session                          :SDelete! [SESSION]                    C
+load session                            :SLoad SESSION                         C
+rename session                          :SRename SESSION                       C
+track session                           :STrack[!] [SESSION]                   C
 
 Motion {{{1
 
@@ -507,6 +529,9 @@ Tab Page {{{1
 open new tab                            «SPC»t                                 N
 move window to new tab                  «C-w» T                                N
 
+focus next tab                          «C-n»                                  N
+focus previous tab                      «C-p»                                  N
+
 focus last focused tab                  g‹tab›                                 N
 focus first tab                         g^                                     N
 focus last tab                          g$                                     N
@@ -567,6 +592,12 @@ New horizontal split                    :new                                   N
 New horizontal split                    «C-w» «C-n»                            N
 Edit top window                         «C-w» «C-t»                            N
 Edit bottom window                      «C-w» «C-b»                            N
+rotate windows                          «C-W»r or «C-W»R                       N
+
+move window to the right                «C-W»gl                                N
+move window to the left                 «C-W»gh                                N
+move window to the top                  «C-W»gk                                N
+move window to the bottom               «C-W»gj                                N
 
 toggle window's fullscreen mode         «SPC»z                                 N
 undo window's closure                   «SPC»U                                 N
@@ -582,6 +613,8 @@ resize to the bottom                    z«C-j»                                
 resize to the left                      z«C-h»                                 N
 resize to the right                     z«C-l»                                 N
 
+close all popup windows                 z"                                     N
+
 scroll last tmux pane to the top        «M-g»                                  N
 scroll last tmux pane to the bottom     «M-S-g»                                N
 scroll last tmux pane half page up      «M-u»                                  N
@@ -592,6 +625,7 @@ scroll last tmux pane to the left       «M-h»                                 
 scroll last tmux pane to the right      «M-l»                                  N
 
 close all windows except current one    Zo                                     N
+move current window to given tab page   Zs                                     N
 
 open preview window                     z{                                     N
 close preview window                    z}                                     N
@@ -669,9 +703,6 @@ x  sa            <Plug>(sandwich-add)
 n  sa            <Plug>(sandwich-add)
 os s<C-X>        <Plug>(prev-switchable-token)
 os s<C-A>        <Plug>(next-switchable-token)
-n  za          * :adhoc.Main()
-n  zfic        * comment.Main()
-n  z"          * :popup.CloseAll()
 n  zE          * Zd('zE')
 n  zD          * Zd('zD')
 n  zd          * Zd('zd')
@@ -680,7 +711,6 @@ n  z.          * zszH
 n  <M-M>k        :quickhl.Prev('s')
 n  <M-M>j        :quickhl.Next('s')
 s  <C-Tab>     * <Esc>:call UltiSnips#ListSnippets()
-n  <S-F10>un     <Plug>(UnicodeSwapCompleteName)
 v  <F4>          <Plug>(MakeDigraph)
 n  <F4>          <Plug>(MakeDigraph)
 n  <C-G>v      * :cmdline#cycle#generic#SetSeq('v')<CR>:VimGrep //gj ./**/*.<C-R>=expand("%:e")<CR><C-R>=!!setcmdpos(10) ? "" : ""
@@ -699,28 +729,18 @@ n  <C-G>d      * :cmdline#cycle#generic#SetSeq('d')<CR>:Verb nno <C-R>=!!setcmdp
 n  <C-G>a      * :cmdline#cycle#generic#SetSeq('a')<CR>:sp | args `=glob('./**/*', 0, 1)->filter({_, v -> filereadable(v)})`<C-R>=!!setcmdpos(19) ? "" : ""
 x  <C-G>s      * :s///g<Left><Left><Left>
 n  <C-G><C-L>  * :links.Fz()
-n  <M-p>       * :tmux.PutPreviousPane()
-n  <C-W>gl       :TradewindsMove l
-n  <C-W>gk       :TradewindsMove k
-n  <C-W>gj       :TradewindsMove j
-n  <C-W>gh       :TradewindsMove h
 n  <C-W>L      * :window.DisableWrapWhenMovingToVertSplit('L')
 n  <C-W>H      * :window.DisableWrapWhenMovingToVertSplit('H')
 n  <C-W>K      * :wincmd K | do <nomodeline> WinEnter
 n  <C-W>J      * :wincmd J | do <nomodeline> WinEnter
 n  <C-G>t      * Ltag()
 x  <C-G>g      * <C-\><C-N>:* g/\%V/#<Left><Left>
-n  <C-W>s      * :myfuncs.SendToTabPage(v:count)
-n  <C-N>       * :execute $':{v:count > 1 ? v:count : ''}tabnext'
-n  <C-P>       * :tabprevious
 n  <C-G>n      * :% normal!<Space>
 n  <C-]>       * :JumpToDefinition()
 x  <C-S>       * <C-\><C-N>:if &buftype == '' | silent update | endif
 n  <C-W>d      * <C-W>dzMzvzz
 n  <C-W>i      * <C-W>izMzvzz
-i  <C-N>       * pumvisible() ? '<C-N>' : ''
 i  <C-Tab>     * <C-R>=UltiSnips#ListSnippets()
-i  <S-F7>      * <C-R>=UltiSnips#ExpandSnippet()
 i  <C-G><C-F>    <Plug>(UnicodeFuzzy)
 i  <C-X><C-B>    <Plug>(HTMLEntityComplete)
 i  <C-X><C-G>    <Plug>(DigraphComplete)
@@ -734,10 +754,6 @@ i  <C-L>       * pumvisible() ? '<C-L>' : capslock.Toggle('i')
 i  <C-Z>       * :custom.EasyCXCP()<CR><C-X><C-P>
 i  <C-X>s      * :mode()->custom.Signature()
 i  <C-X><C-S>  * spell.Fix()
-i  <C-X><C-K>  * :util.SetupDict()<CR><C-X><C-K>
-i  <C-X><C-]>  * :util.CustomIsk('-' .. (&filetype == 'vim' ? ':<' : ''))<CR><C-X><C-]>
-i  <C-X><C-P>  * :util.CustomIsk('-')<CR><C-X><C-P>
-i  <C-X><C-N>  * :util.CustomIsk('-')<CR><C-X><C-N>
 i  <C-O>         pumvisible() ? completion.Cycle(-1) : '<Plug>(MC_c-o)'
 i  <C-J>         pumvisible() ? completion.Cycle(1) : '<Plug>(MC_cr)'
 i  <C-Q>       * <C-E>:completion.RestoreBase()
@@ -745,15 +761,12 @@ i  <C-G><Tab>    completion.TabComplete(1)
 i  <Plug>(MC_stab_complete)   completion.TabComplete(-1)
 i  <Plug>(MC_tab_complete)   completion.TabComplete(1)
 i  <S-Tab>     * :completion.SnippetOrComplete(-1)
-i  <C-R><C-F>  * :registers.Fz()
-i  <C-G><C-G>  * :snippets.Fz()
-i  <C-]>       * iabbrev.ForceExpansion()
 i  <C-G><C-D>  * <C-K>
 !  <C-X><C-A>  * readline.CxCa()
 i  <C-G><C-U>  * :complete.Fuzzy()
 i  <C-G><S-Tab> * :silent! py3 UltiSnips_Manager._current_snippet_is_done()
-i  <F16>       * :normal! )
-i  <F12>       * :normal! (
+i  <M-E>       * :normal! )
+i  <M-A>       * :normal! (
 i  <C-R><C-R>  * <C-R><C-R>
 i  <C-R><C-O>  * <C-R><C-O>
 i  <C-R><C-P>  * <C-R><C-P>
@@ -767,8 +780,8 @@ c  <C-S>       * transform.Main()
 c  <C-L>       * cL.Main()
 c  <C-X>s      * <C-\>e completion#custom#Signature(mode())
 c  <C-X><C-V>  * <C-\>e dbg#cmdline#EvalVarUnderCursor()
-c  <F27>       * wildmenumode() ? "<Left>" : "<Up>"
-c  <F25>       * wildmenumode() ? "<Right>" : "<Down>"
+c  <M-N>       * wildmenumode() ? "<Left>" : "<Up>"
+c  <M-P>       * wildmenumode() ? "<Right>" : "<Down>"
 c  <C-X><C-E>  * :readline.EditAndExecuteCommand()
 c  <C-O>       * OperateAndGetNext.Main()
 c  <C-E>       * wildmenumode() ? '<C-Y><C-E>' : '<C-E>'
@@ -778,9 +791,7 @@ c  <C-X><C-D>  * <C-A>:setreg('"', [getcmdline()], 'l')<CR><C-C>
 |   CFreeStack        0                        qf.CfreeStack()
 |   CartesianProduct  0    %                   CartesianProduct(<line1>, <line2>)
 |   Chmod             1                        unix.Chmod(<q-args>)
-Cloc              ?    %                   cloc.Main(<line1>, <line2>, <q-args>)
 |   CommentToggle     0    .                   toggle.Main('line', <line1>, <line2>)
-ConfigGrep        1            custom      configgrep.Main(<q-args>)
 !   Cp                1                        unix.Cp(<q-args>, <bang>0)
 |   CtlSeqs           0                        cmd.CtlSeqs()
 |   DebugLocalPlugin  *            custom      {<NL>    localPlugin.Main(<q-args>)<NL>}
@@ -853,11 +864,6 @@ PPmsg             ?    0       expression  scriptease.PPmsg(<q-args>, <count>)
 !   Rename            1            custom      unix.Rename(<q-args>, <bang>0)
 !|  Retab             0    %                   Retab(<line1>, <line2>, <bang>0)
 |   ReverseEveryNLines 1   %                   ReverseEveryNLines(<args>, <line1>, <line2>)
-|   SClose            0                        Close()
-!|  SDelete           ?            custom      Delete(<bang>0, <q-args>)
-SLoad             ?            custom      Load(<q-args>)
-|   SRename           1            custom      Rename(<q-args>)
-!|  STrack            ?            file        HandleSession(<bang>0, <q-args>)
 |   Scriptnames       0                        scriptnames.Main()
 SearchUnicode     1                        call unicode#PrintUnicode(<q-args>, '')
 !   Shdo              *    .       file        dirvish.Shdo(<bang>0 ? argv() : getline(<line1>, <line2>), <q-args>)

@@ -50,7 +50,7 @@ export def CancelExpansion(): string #{{{1
     return ''
 enddef
 
-export def ToggleAutotrigger() #{{{1
+export def ToggleAutoTrigger() #{{{1
     var augroup_name: string = 'UltiSnips_AutoTrigger'
     if exists('#' .. augroup_name)
         execute 'autocmd! ' .. augroup_name

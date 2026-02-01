@@ -70,6 +70,8 @@ unmark options matching filter "xxx"    u:xxx
 # type `Space x Enter`.
 #}}}
 
+toggle /fset buffer                     «M-o»
+
 toggle boolean value                    t «Enter»
 reset value                             r «Enter»
 unset value                             u «Enter»

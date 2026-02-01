@@ -9,11 +9,11 @@
 # Reference: page 142 (paper) / 180 (ebook)
 
 def city_country(city, country):
-    print(f'{city.title()}, {country.title()}')
+    return f'{city.title()}, {country.title()}'
 
-city_country('berlin', 'germany')
-city_country('london', 'england')
-city_country('madrid', 'spain')
+print(city_country('berlin', 'germany'))
+print(city_country('london', 'england'))
+print(city_country('madrid', 'spain'))
 #     Berlin, Germany
 #     London, England
 #     Madrid, Spain

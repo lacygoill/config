@@ -42,7 +42,7 @@ const HOW_TO_FOLD: dict<dict<any>> = {
     },
     #     $ systemd-cgls | vim -
     systemd-cgls: {
-        condition: () => getline(1) =~ '^Control group \|^Unit ' && search('^[├└]', 'cn') > 0,
+        condition: () => getline(1) =~ '^CGroup /:' && search('^[├└]', 'cn') > 0,
         1: '^[├└]',
         # Warning: Don't use the `*` quantifier.
         # We need to match the exact amount of spaces.

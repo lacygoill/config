@@ -3,7 +3,7 @@
 
 # The general syntax is:{{{
 #
-#     [<expression> for <variable> in <iterable> if <condition> == True]
+#     [<expression> for <variable> in <iterable> if <condition>]
 #
 # `<variable>` iterates over the values in `<iterable>`.
 # Each value is used to replace `<variable>` inside `<expression>`.

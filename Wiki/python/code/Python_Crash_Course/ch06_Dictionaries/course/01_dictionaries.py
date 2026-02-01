@@ -77,8 +77,7 @@ print(alien_0)
 #     {'color': 'green'}
 #
 # Notice that you only  need to specify the name of the  dictionary and the key;
-# not  the  value  associated  with  the  key.  Without  a  key,  the  value  is
-# automatically removed too.
+# not the value associated with the key.
 
 # A dictionary can be broken down on several lines. {{{1
 # Typically, one key/value per line.

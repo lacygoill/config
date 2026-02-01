@@ -123,7 +123,7 @@ xnoremap <unique> <Tab> <C-\><C-N><ScriptCmd>:* call UltiSnips#SaveLastVisualSel
 #}}}
 
 # We need a way to enable UltiSnips's autotrigger on-demand.
-nnoremap <unique> cou <ScriptCmd>ToggleAutotrigger()<CR>
+nnoremap <unique> cou <ScriptCmd>ultisnips.ToggleAutoTrigger()<CR>
 
 # Autocmds {{{1
 

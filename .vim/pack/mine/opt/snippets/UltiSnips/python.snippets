@@ -1,18 +1,132 @@
 # control flow {{{1
 # selection statements {{{2
 
+snippet t01 "if block" Am
+if ${1:test}:
+	${2:statements}
+elif:
+	${3:statements}
+...
+else:
+	${4:statements}
+$0
+# And \`else\` clause can be omitted after an \`elif\` one.
+endsnippet
+
 # loop statements {{{2
+
+snippet t02 "for loop" Am
+# \`$2\` can be a list, a slice, a tuple, a \`range()\`, ...
+for ${1:var} in ${2:iter}:
+	${3:statements}
+$0
+endsnippet
+
+snippet t03 "while loop" Am
+whhile ${1:test}:
+	${2:statements}
+$0
+endsnippet
+
+snippet t04 "break out of a loop" Am
+for ${1:var} in ${2:iter}:
+	if ${3:test}:
+		break
+	...
+
+# Or:
+
+while ${4:test}:
+	if ${5:test}:
+		break
+	...
+$0
+endsnippet
+
+snippet t05 "skip rest of loop's iteration" Am
+for ${1:var} in ${2:iter}:
+	if ${3:test}:
+		continue
+	...
+
+# Or:
+
+while ${4:controlling expression}:
+	if ${5:test}:
+		continue
+	...
+$0
+endsnippet
 
 # exceptions {{{2
 
+snippet t06 "try-except block" Am
+try:
+	${1:statement}
+except ${2:exception name}:
+	${3:statement if the try clause fails}
+else:
+	${4:statement if the try clause succeeds}
+endsnippet
 # }}}1
 # data types {{{1
 # boolean {{{2
 
 # string {{{2
 
-snippet t01 "f-string: interpolate expressions" Am
-f'some {${1:expr1}} text {${2:expr2}}}'
+snippet t07 "f-string (interpolate expressions)" Am
+f'some {${1:expr1}} text {${2:expr2}}'
+
+# If  you're using  Python 3.5  or earlier,  you need  to use  the \`.format()\`
+# method instead:
+'some {} text {}'.format($1, $2)
+
+$0
+endsnippet
+
+snippet t08 "title case string" Am
+${1:string}.titlecase()
+endsnippet
+
+snippet t09 "lower case string" Am
+${1:string}.lower()
+endsnippet
+
+snippet t10 "upper case string" Am
+${1:string}.upper()
+endsnippet
+
+snippet t11 "remove leading / trailing whitespace" Am
+${1:string}.lstrip()
+$1.rstrip()
+
+# To remove both leading and trailing whitespace:
+$1.strip()
+
+$0
+endsnippet
+
+snippet t12 "concatenate strings" Am
+${1:string1} + ${2:string2}
+$0
+# Alternative (only works for literal strings):
+#
+#     ($1 $2)
+#
+# Inside  parentheses  (including the  ones  of  a function  call),  consecutive
+# literal strings are implicitly concatenated.
+endsnippet
+
+snippet t13 "append string" Am
+${1:string var} += '${2:string}'
+endsnippet
+
+snippet t14 "docstring" Am
+"""${1:some text}"""
+endsnippet
+
+snippet t15 "replace old substring with new substring" Am
+${1:string}.replace('${2:old}', '${3:new}')
 endsnippet
 # }}}2
 # bytes object {{{2
@@ -22,31 +136,231 @@ endsnippet
 # JSON object {{{2
 
 # list {{{2
-# add items {{{3
 
-# remove items {{{3
+snippet t16 "assign list to variable" Am
+${1:var} = [${2:item}, ...]
+endsnippet
 
-# sort items {{{3
+snippet t17 "get n-th item of list" Am
+${1:list}[${2:n - 1}]
+endsnippet
 
-# miscellaneous {{{3
+snippet t18 "get last item of list" Am
+${1:list}[-1]
+endsnippet
 
-# }}}2
+snippet t19 "change n-th item of list" Am
+${1:list}[${2:n - 1}] = ${3:new_item}
+endsnippet
+
+snippet t20 "add item at end of list" Am
+${1:list}.append(${2:item})
+$0
+# Alternative:
+#
+#     $1 += [$2]
+endsnippet
+
+snippet t21 "add item in n-th position in list" Am
+${1:list}.insert(${2:n - 1}, ${3:item})
+endsnippet
+
+snippet t22 "remove n-th item in list" Am
+del ${1:list}[${2:n - 1}]
+endsnippet
+
+snippet t23 "remove n-th item in list and get its value" Am
+# \`$2\` is optional; it defaults to \`-1\` (last item).
+${1:list}.pop(${2:n - 1})
+$0
+endsnippet
+
+snippet t24 "remove item of given value in list and get its value" Am
+${1:list}.remove(${2:item})
+$0
+# If \`$2\`  is present multiple times  in \`$1\`, only the  first occurrence is
+# removed.  To remove all occurrences, use a \`while\` loop:
+#
+#     while $2 in $1:
+#         $1.remove($2)
+endsnippet
+
+snippet t25 "get sorted list" Am
+sorted(${1:list})
+# To sort in reverse order:
+sorted($1, reverse=True)
+$0
+endsnippet
+
+snippet t26 "sort list in-place" Am
+${1:list}.sort()
+# To sort in reverse order:
+$1.sort(reverse=True)
+$0
+endsnippet
+
+snippet t27 "reverse list in-place" Am
+${1:list}.reverse()
+$0
+# To preserve the original order, first make a copy of \`$1\`.
+# Or call \`.reverse()\` twice to cancel the first reverse.
+endsnippet
+
+snippet t28 "get length of iterable" Am
+len(${1:iter})
+endsnippet
+
+snippet t29 "get a range of integers" Am
+# \`$2\` is exclusive.
+# \`$1\` is optional; it defaults to 0.
+range(${1:start}, ${2:end})
+$0
+# The result is not a list.  To get a list, use \`list()\`:
+#
+#     list(range($1, $2))
+#
+# ---
+#
+# \`range()\` accepts  a third  optional argument: \`step\`.   It's added  to an
+# output integer to get the next one.  It defaults to 1, which is why by default
+# you get a contiguous sequence of integers.
+endsnippet
+
+snippet t30 "list comprehension" Am
+[${1:expr} for ${2:var} in ${3:iter} if ${4:test}]
+$0
+# The \`if\` test is optional.
+#
+# ---
+#
+# Example:
+#
+#     even_squares = [value ** 2 for value in range(1, 11) if value % 2 == 0]
+#     print(even_squares)
+#     # [4, 16, 36, 64, 100]
+endsnippet
+
+snippet t31 "slice out of list" Am
+${1:list}[${2:i}:${3:j}:${4:k}]
+$0
+# This evaluates to the sublist of items  in \`$1\` from the index \`$2\`, up to
+# the index \`$3\`,  skipping \`$4\` items when retrieving  2 consecutive items.
+# The index \`$3\` is exclusive, just like the 2nd argument of \`range()\`.
+#
+# ---
+#
+# All 3 indexes are  optional, as well as the second colon.   The first colon is
+# mandatory.
+#
+# ---
+#
+# If \`$2\` is omitted, it defaults to 0.
+# If \`$3\`  is omitted, the slice goes  up to the very end  (including the last
+# item).
+endsnippet
+
+snippet t32 "get a copy of a list" Am
+${1:list}[:]
+endsnippet
+
 # tuple {{{2
+
+snippet t33 "assign tuple to variable" Am
+${1:var} = (${2:item}, ...)
+$0
+# A tuple must include at least 1 comma, even if it contains only 1 item:
+#
+#     (3,)
+#       ^
+# ---
+#
+# A tuple is immutable; you can't add/remove/change any of its items.
+#
+# ---
+#
+# You can however re-assign \`$1\` to any other expression.
+endsnippet
 
 # namedtuple {{{2
 
 # set {{{2
 
+snippet t34 "assign set to variable" Am
+# In a set duplicate items are automatically removed.
+#
+# ---
+#
+# A set is not ordered contrary to a list or dictionary.
+${1:var} = {${1:item}, ...}
+$0
+endsnippet
+
+snippet t35 "turn list into set" Am
+# \`set()\` can turn  a list (possibly with duplicates) into  a set (whose items
+# are  by definition  unique).  This  is  useful for  \`.values()\` because  the
+# latter can return a list with duplicates.
+set(${1:list})
+$0
+endsnippet
+
 # dictionary {{{2
-# get {{{3
 
-# add {{{3
+snippet t36 "assign dictionary to variable" Am
+${1:dict} = {
+	'${2:key}': ${3:value},
+	...
+}
+$0
+endsnippet
 
-# remove {{{3
+snippet t37 "get value from dictionary via its key" Am
+${1:dict}['${2:key}']
+endsnippet
 
-# miscellaneous {{{3
+snippet t38 "add new key/value pair to dictionary (or change existing one)" Am
+${1:dict}['${2:key}'] = ${3:value}
+endsnippet
 
-# }}}2
+snippet t39 "remove key/value pair from dictionary" Am
+del ${1:dict}['${2:key}']
+endsnippet
+
+snippet t40 "retrieve value from dictionary" Am
+# \`$2\` must evaluate to a string matching a key in the dictionary.
+${1:dict}[${2:expr}]
+$0
+endsnippet
+
+snippet t41 "retrieve value from dictionary which might be absent" Am
+${1:dict}.get(${2:'key'}, ${3:default})
+$0
+# If \`$2\` is absent from \`$1\`, the expression evaluates to \`$3\`.
+#
+# ---
+#
+# \`$3\` is optional.  If omitted, it defaults to \`None\`.
+endsnippet
+
+snippet t42 "iterate over key/value pairs of dictionary" Am
+for ${1:key}, ${2:value} in ${3:dict}.items():
+	...
+$0
+endsnippet
+
+snippet t43 "get keys of dictionary" Am
+${1:dict}.keys()
+endsnippet
+
+snippet t44 "get values of dictionary" Am
+${1:dict}.values()
+endsnippet
+
+snippet t45 "iterate over keys of dictionary" Am
+# Notice how we can omit \`.keys()\`.
+for ${1:key} in ${2:dict}
+$0
+endsnippet
+
 # date {{{2
 
 # time {{{2
@@ -69,37 +383,426 @@ endsnippet
 # }}}1
 # coercion {{{1
 
+snippet t46 "coerce string into integer" Am
+int(${1:string})
+endsnippet
+
+snippet t47 "coerce string into float" Am
+float(${1:expr})
+endsnippet
+
+snippet t48 "coerce expression into string" Am
+str(${1:expr})
+endsnippet
+
 # test {{{1
+
+snippet t49 "test if item is in list" Am
+${1:item} in ${2:list}
+endsnippet
+
+snippet t50 "test if item is NOT in list" Am
+${1:item} not in ${2:list}
+endsnippet
+
+snippet t51 "test if list/tuple/dictionary is NOT empty" Am
+${1:if | while} ${2:list/tuple/dictionary}:
+endsnippet
+
+snippet t52 "test if variable is different than 0 or None" Am
+${1:if | while} ${2:var}:
+endsnippet
+
+snippet t53 "test number is between 2 other numbers using chaining comparison" Am
+${1:100} < ${2:123} < ${3:200}
+endsnippet
+
+snippet t54 "test if variable is integer" Am
+isinstance(${1:var}, int)
+endsnippet
+
+snippet t55 "test short number appears in longer number" Am
+${1:short} in ${2:long}
+endsnippet
 
 # math {{{1
 
+snippet t56 "exponentiation operator" Am
+${1:12} ** ${2:34}
+endsnippet
+
+snippet t57 "use underscores to make big number more readable" Am
+${1:123_456_789}
+endsnippet
+
+snippet t58 "get minimum value out of list" Am
+min(${1:list})
+endsnippet
+
+snippet t59 "get maximum value out of list" Am
+max(${1:list})
+endsnippet
+
+snippet t60 "get sum of all numbers out of list" Am
+sum(${1:list})
+endsnippet
+
+snippet t61 "modulo operator" Am
+${1:i} % ${2:j}
+endsnippet
+
 # function {{{1
-# header {{{2
 
-# scopes {{{2
+snippet t62 "pass positional arguments in function call" Am
+def ${1:func}(${2:param}, ...):
+	$0
+$1(${3:arg}, ...)
+endsnippet
 
-# call {{{2
+snippet t63 "pass keyword arguments in function call" Am
+def ${1:func}(${2:param}, ...):
+	$0
+$1(${3:arg}=${4:value}, ...)
+# In a function  call, contrary to positional arguments, the  order in which you
+# pass  keyword arguments  does  not  matter.  So,  \`$3\`  could be  positioned
+# anywhere in the function's header.
+#
+# ---
+#
+# In a  function call,  you can  mix positional and  keyword arguments,  but the
+# latter must come last:
+#
+#     def func(a, b):
+#     	pass
+#
+#     #        ✔
+#     #       vvv
+#     func(1, b=2)
+#
+#     #     ✘
+#     #    vvv
+#     func(b=2, 1)
+#     #     SyntaxError: positional argument follows keyword argument
+endsnippet
 
-# miscellaneous {{{2
+snippet t64 "make function's argument optional" Am
+def ${1:func}(${2:param}=${3:value}):
+	$0
+# In a function call, you can omit the argument for \`$2\`.
+# It will default to \`$3\`.
+#
+# ---
+#
+# Warning: optional parameters must be declared *after* mandatory ones:
+#
+#     ✔
+#     def func(param1, param2=value):
+#
+#     ✘
+#     def func(param1=value, param2):
+endsnippet
 
-# }}}1
+snippet t65 "pass variable number of arguments to function" Am
+def ${1:func}(*${2:args}):
+	$0
+$1(${3:arg}, ...)
+# The function packs the arguments into a tuple.
+#
+# ---
+#
+# \`*$2\` must come after mandatory parameters.
+#
+# Exception: it  can be declared before  a mandatory parameter on  the condition
+# that the latter is assigned a keyword argument (\`arg = value\`).
+endsnippet
+
+snippet t66 "pass variable number of keyword arguments to function" Am
+def ${1:func}(**${2:kwargs}):
+	$0
+$1(${3:key=val}, ...)
+# The function packs the arguments into  a dictionary, which you can modify like
+# any dictionary.
+endsnippet
+
 # file {{{1
+
+snippet t67 "read contents of file" Am
+from pathlib import Path
+
+# \`$1\` can be  a simple filename if  it's stored in the same  directory as the
+# program.  Or it can be a relative/absolute path otherwise.
+path = Path('${1:file path}')
+contents = path.read_text()
+print(contents)
+$0
+endsnippet
+
+snippet t68 "iterate over lines of file" Am
+from pathlib import Path
+
+path = Path('${1:file path}')
+contents = path.read_text()
+
+lines = contents.splitlines()
+for line in lines:
+	print(line)
+$0
+endsnippet
+
+snippet t69 "concatenate lines of file into single string" Am
+from pathlib import Path
+
+path = Path('${1:file path}')
+contents = path.read_text()
+
+lines = contents.splitlines()
+${2:var} = ''
+for line in lines:
+	$2 += line
+print($2)
+$0
+endsnippet
+
+snippet t70 "write text into file" Am
+from pathlib import Path
+
+path = Path('${1:file path}')
+# \`$2\` can be a multiline string (using \`\n\`).
+path.write_text('${2:string}')
+endsnippet
 
 # module {{{1
 
+snippet t71 "use function from imported module" Am
+import ${1:module}
+$1.${2:func}()
+$0
+
+# Alternative 1:
+from $1 import $2
+$2()
+# Note that you could import more than one item from \`$1\`:
+#
+#     from $1 import $2, ...
+
+# Alternative 2:
+from $1 import $2 as ${3:alias}
+$3()
+# This syntax lets you access an item under a different name.
+# In general,  it's useful  to avoid  a collision  with an  item in  the current
+# script, which we can't or don't want to rename.
+
+# Alternative 3:
+import $1 as ${4:alias}
+# You can give an alias to an imported module.
+# It's useful to make a long module name less verbose.
+$4.$2()
+
+# Alternative 4:
+from $1 import *
+$2()
+# Warning: don't use this syntax; see \`Pitfalls.md\`.
+endsnippet
+
+snippet t72 "use class(es) from imported module" Am
+from ${1:module} import ${2:class} [as ${3:alias}], ...
+${4:var} = $2|$3(${4:args}, ...)
+endsnippet
+
+snippet t73 "import entire module" Am
+import ${1:module} [as ${2:alias}]
+${3:var} = $1|$2.${4:class}(${5:args}, ...)
+
+# Alternative:
+#
+#     from $1 import *
+#
+# Warning: don't use this syntax; see \`Pitfalls.md\`.
+endsnippet
+
 # OOP {{{1
+
+snippet t74 "define a class" Am
+class ${1:MyClass}:
+	# Any function defined in a class is a method.
+	# It's meant to be invoked on an object instantiated from the class.
+	#
+	# ---
+	#
+	# The \`__init__()\`  method is special.
+	# It's  called  automatically  whenever  we   create  a  new  instance  (aka
+	# instantiate) based on the \`$1\` class.
+	#
+	# ---
+	#
+	# The \`self\` parameter is also special.
+	#
+	# Any time  you call a method  on an object,  a reference to that  object is
+	# automatically  passed to  the  method  as a  first  argument.  The  \`self\`
+	# parameter is necessary to be assigned that argument.
+	#
+	# Inside any method, the \`self\` variable  lets you access all attributes
+	# and methods of the object on which the method is being invoked
+	# (e.g. \`self.$3\`).
+	#
+	# ---
+	#
+	# Not all attributes need to be defined by being passed in as parameters.
+	# You  are free  to  define  \`$3\` without  \`$2\`  being  passed as  a
+	# parameter, and by assigning to it an arbitrary expression.
+	def __init__(self, ${2:param}, ...):
+		self.${3:attr} = $2
+		...
+
+	# we define some method
+	def ${4:method}(self):
+		$0
+
+	...
+
+# \`$6, ...\` must supply the arguments corresponding to \`$2, ...\`.
+#
+# ---
+#
+# We're not  calling the \`$1()\`  function; we're instantiating an  object from
+# the \`$1\` class.  Which we assign to the \`$5\` variable.
+#
+# ---
+#
+# Even though \`self\`  must be declared explicitly in the  header of a function
+# defined inside a class, no argument must  be written explicitly for it when we
+# call one of  its methods explicitly, nor when we  instantiate an object (which
+# calls the  \`__init__()\` method implicitly);  the object reference  is passed
+# implicitly.
+#
+# ---
+#
+# \`$5\` is an object with the \`$3\` attribute.
+#
+# ---
+#
+# We can refer to the attribute of an object using the dot notation:  \`$5.$3\`.
+${5:var} = $1(${6:arg}, ...)
+
+# We print the \`$3\` attribute of the \`$5\` object.
+print($5.$3)
+
+# We call the \`$4\` method of the \`$5\` object.
+$5.$4()
+
+# Even if  we used the  same arguments for a  second object, Python  would still
+# create  a separate  instance from  the  \`$1\` class.   You can  make as  many
+# instances from  one class as  you need,  as long as  you give each  instance a
+# unique variable name or it occupies a unique spot in a list or dictionary.
+endsnippet
+
+snippet t75 "modify object's attribute" Am
+${1:object}.${2:attribute} = ${3:value}
+$0
+
+# Alternatively, instead of  accessing the attribute directly, you  pass the new
+# value to a method that handles the updating internally:
+#
+# ...
+#     def ${4:method}(self, $2):
+#         self.$2 = $3
+# ...
+# ${5:object}.$4()
+endsnippet
+
+snippet t76 "define a child class (which inherits from a parent class)" Am
+# The  parent class  definition must  appear  in the  same file  and before  the
+# child's definition.
+# ...
+
+class ${1:Child}(${2:Parent}):
+	# \`$3\` should be the same parameters as for the parent's \`__init__()\`.
+	def __init__(self, ${3:param}, ...):
+		"""Initialize attributes of the parent class."""
+
+		# The \`super()\` function is a special function that allows you
+		# to  call a  method from  the  parent class.   This line  tells
+		# Python to  call the  \`__init__()\` method from  \`$2\`, which
+		# gives a  \`$1\` instance all  the attributes and methods  of a
+		# \`$2\` object.   The name "super"  comes from a  convention of
+		# calling the parent class a  "superclass" and the child class a
+		# "subclass".
+		super().__init__($3, ...)
+
+		# \`$4\` and \`$6\` are specific to \`$1\`; not to \`$2\`.
+		self.${4:attribute} = ${5:value}
+		def ${6:method}(self):
+			...
+
+	# You can override any method from \`$2\` by defining a method with the same
+	# name here.
+$0
+endsnippet
+
+snippet t77 "break a large class into smaller classes that work together (aka composition)" Am
+class ${1:SmallClass}:
+	...
+
+class ${2:LargeClass}:
+	def __init__(self, ${3:param}, ...):
+		self.${4:attr} = $1()
+
+${5:var} = $2(${6:args}, ...)
+$5.$4.${7:SmallClass method() | attribute}
+
+$0
+endsnippet
+
+# standard library
+
+snippet t78 "generate random number" Am
+from random import randint
+randint(${1:lower}, ${2:upper})
+endsnippet
+
+snippet t79 "return random element out of list/tuple" Am
+from random import choice
+${1:var} = choice(${2:list|tuple})
+endsnippet
 
 # miscellaneous {{{1
 
-snippet t02 "print message" Am
+snippet t80 "print empty line" Am
+print()
+endsnippet
+
+snippet t81 "print message" Am
 print('${1:message}')
+endsnippet
+
+snippet t82 "assign values to several variables in a single statement" Am
+${1:x}, ${2:y}, ${3:z} = ${4:1}, ${5:2}, ${6:3}
+endsnippet
+
+snippet t83 "get type of expression" Am
+type(${1:expr})
+endsnippet
+
+snippet t84 "ask for user input" Am
+# \`input()\` always returns a string, even if the user input an integer.
+# If that's an issue, coerce the string to an integer with \`int()\`.
+${1:var} = input('${2:prompt}')
+$0
+endsnippet
+
+snippet t85 "no-op statement" Am
+pass
+endsnippet
+
+snippet t86 "join a list of items with a comma" Am
+', '.join(${1:list})
 endsnippet
 
 # WeeChat {{{1
 # See: https://weechat.org/files/doc/weechat/stable/weechat_scripting.en.html#common_tasks
 # config {{{2
 
-snippet t03 "weechat: let plugin save one of its options in config file" Am
+snippet t87 "weechat: let plugin save one of its options in config file" Am
 # The absolute path to the config file will be: \`${weechat_config_dir}/$1.conf\`.
 config_file = w.config_new('${1:plugin name}', '', '')
 if not config_file:
@@ -134,7 +837,7 @@ w.config_new_option(
 )
 endsnippet
 
-snippet t04 "weechat: reset given option's value" Am
+snippet t88 "weechat: reset given option's value" Am
 w.config_option_set(
 	${1:option pointer as given by config_new_option()},
 	# Write 'toggle' to toggle a boolean option.
@@ -150,7 +853,7 @@ endsnippet
 
 # hdata {{{2
 
-snippet t05 "weechat: retrieve value from hdata" Am
+snippet t89 "weechat: retrieve value from hdata" Am
 # In the output of \`/debug hdata\`, look for the variable holding the value you
 # need.  For example, if you want a message, look for this pattern:
 #
@@ -259,7 +962,7 @@ snippet t05 "weechat: retrieve value from hdata" Am
 # former; it returns a string *variable* held by a given hdata.
 endsnippet
 
-snippet t06 "weechat: retrieve list value from hdata" Am
+snippet t90 "weechat: retrieve list value from hdata" Am
 #     hdata = w.hdata_get('<name>')
 #     list = w.hdata_get_list(hdata, '<var>')
 #
@@ -284,7 +987,7 @@ snippet t06 "weechat: retrieve list value from hdata" Am
 #         gui_hotlist = w.hdata_pointer(hotlist, gui_hotlist, 'next_hotlist')
 endsnippet
 
-snippet t07 "weechat: retrieve item out of array in hdata" Am
+snippet t91 "weechat: retrieve item out of array in hdata" Am
 # The key syntax here, is \`N|name\`:
 #
 #    > name: variable name (must be type "integer"); for arrays, the name can be
@@ -306,7 +1009,7 @@ snippet t07 "weechat: retrieve item out of array in hdata" Am
 w.hdata_${1:type: integer, string, ...}(${2:hdata}, ${3:list}, '${4:index}|${5:var}')
 endsnippet
 
-snippet t08 "weechat: iterate over all buffers via hdata" Am
+snippet t92 "weechat: iterate over all buffers via hdata" Am
 buffer = w.hdata_get('buffer')
 gui_buffers = w.hdata_get_list(buffer, 'gui_buffers')
 
@@ -317,7 +1020,7 @@ while gui_buffers:
 	gui_buffers = w.hdata_pointer(buffer, gui_buffers, 'next_buffer')
 endsnippet
 
-snippet t09 "weechat: hdata vs infolist" Am
+snippet t93 "weechat: hdata vs infolist" Am
 # hdata is faster and uses less memory:
 #
 #    > It is faster and uses less memory: direct read of data without duplication.
@@ -345,7 +1048,7 @@ snippet t09 "weechat: hdata vs infolist" Am
 # Source: https://weechat.org/files/doc/weechat/stable/weechat_scripting.en.html#infolists_read
 endsnippet
 
-snippet t10 "weechat: retrieve value from infolist" Am
+snippet t94 "weechat: retrieve value from infolist" Am
 # Here is an example with the hotlist:
 #
 #     hotlist = w.infolist_get(
@@ -396,7 +1099,7 @@ endsnippet
 
 # hook {{{2
 
-snippet t11 "weechat: specify Tab completion of given command" Am
+snippet t95 "weechat: specify Tab completion of given command" Am
 #     > Completion  names are  global (shared  across WeeChat  and plugins). So  it is
 #     > recommended to  choose a  name with  a unique  prefix, like  "plugin_xxx" (where
 #     > "xxx" is your item name).
@@ -481,7 +1184,7 @@ def add_completions(words, completion):
 $0
 endsnippet
 
-snippet t12 "weechat: specify evaluation of given ${info:...}" Am
+snippet t96 "weechat: specify evaluation of given ${info:...}" Am
 # Usage: \`/eval -n ${info:$1,callback arguments}\`
 #
 # \`$1\` is passed to the callback  via the argument \`name\`.  Whatever follows
@@ -496,7 +1199,7 @@ def $4_cb(_, name, args):
 $0
 endsnippet
 
-snippet t13 "weechat: invoke callback when given signal is caught" Am
+snippet t97 "weechat: invoke callback when given signal is caught" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_hook_signal
 #
 # ---
@@ -511,7 +1214,7 @@ def $2_cb(*_):
 	$0
 endsnippet
 
-snippet t14 "weechat: invoke callback after given amount of time" Am
+snippet t98 "weechat: invoke callback after given amount of time" Am
 # The third  argument (here \`1\`) stands  for the number of  times the callback
 # should be invoked.  Use \`0\` if you want the timer to never end.
 w.hook_timer(${1:delay}, 0, 1, '${2:callback}_cb', '')
@@ -519,31 +1222,31 @@ endsnippet
 
 # input {{{2
 
-snippet t15 "weechat: get contents of input line" Am
+snippet t99 "weechat: get contents of input line" Am
 w.buffer_get_string(${1:buf}, 'input')
 endsnippet
 
-snippet t16 "weechat: get cursor position on input line" Am
+snippet t100 "weechat: get cursor position on input line" Am
 w.buffer_get_integer(${1:buf}, 'input_pos')
 endsnippet
 
-snippet t17 "weechat: replace contents of input line" Am
+snippet t101 "weechat: replace contents of input line" Am
 w.buffer_set(${1:buf}, 'input', ${2:new_input})
 endsnippet
 
-snippet t18 "weechat: set cursor position on input line" Am
+snippet t102 "weechat: set cursor position on input line" Am
 # the position is a 0-indexed character count (not a byte count)
 w.buffer_set(${1:buf}, 'input_pos', str(${2:new_pos}))
 endsnippet
 
-snippet t19 "weechat: set buffer number" Am
+snippet t103 "weechat: set buffer number" Am
 # \`$2\` is a 1-indexed number
 w.buffer_set(${1:buf}, 'number', str(${2:num}))
 endsnippet
 
 # print {{{2
 
-snippet t20 "weechat: print message in core buffer" Am
+snippet t104 "weechat: print message in core buffer" Am
 # Notice how  an empty string  has a  different meaning for  \`prnt()\` compared
 # to  other functions.   Usually,  it  refers to  the  current  buffer; but  for
 # \`prnt()\`, it's the *core* buffer.
@@ -553,20 +1256,20 @@ w.prnt('', '${1:message}')
 $0
 endsnippet
 
-snippet t21 "weechat: print message in given buffer" Am
+snippet t105 "weechat: print message in given buffer" Am
 # For the current buffer, replace \`buffer_search(...)\` with \`current_buffer()\`.
 buf = w.buffer_search('${1:plugin; e.g. irc}', '${2:name; e.g. libera.#weechat}')
 w.prnt(buf, '${3:message}')
 $0
 endsnippet
 
-snippet t22 "weechat: print colored message" Am
+snippet t106 "weechat: print colored message" Am
 w.prnt('', w.color('${1:color}') + '${2:message}' + w.color('default'))
 endsnippet
 
 # script {{{2
 
-snippet t23 "weechat: script template" Am
+snippet t107 "weechat: script template" Am
 import weechat as w
 
 # The leading underscore prevents WeeChat  from conflating our local script with
@@ -616,7 +1319,7 @@ def $11(data: str, buf: str, args: str) -> int:
 	return w.WEECHAT_RC_OK
 endsnippet
 
-snippet t24 "weechat: minimal throwaway script to quickly test something" Am
+snippet t108 "weechat: minimal throwaway script to quickly test something" Am
 import weechat as w
 
 w.register('test', '', '', '', '', '', '')
@@ -629,7 +1332,7 @@ endsnippet
 
 # test {{{2
 
-snippet t25 "weechat: test line is displayed" Am
+snippet t109 "weechat: test line is displayed" Am
 # Warning: Do *not* use \`integer\` instead of \`char\` (even though no error is
 # given, no matter which one you choose).
 #
@@ -643,7 +1346,7 @@ endsnippet
 
 # miscellaneous {{{2
 
-snippet t26 "weechat: execute command" Am
+snippet t110 "weechat: execute command" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_scripting.en.html#buffers_send_text
 # https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_command
 w.command(${1:buf}, '${2:command}')
@@ -652,7 +1355,7 @@ w.command(${1:buf}, '${2:command}')
 $0
 endsnippet
 
-snippet t27 "weechat: get option's value from user's config" Am
+snippet t111 "weechat: get option's value from user's config" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_scripting.en.html#config_options_weechat
 #
 # Warning: You can't call \`config_*()\` functions until the script is registered:
@@ -665,7 +1368,7 @@ w.config_string(w.config_get('${1:option name}'))
 #        \`boolean\`, \`color\`, \`enum\`, \`integer\`, \`string\`
 endsnippet
 
-snippet t28 "weechat: get property or local variable of buffer" Am
+snippet t112 "weechat: get property or local variable of buffer" Am
 #    > localvar_xxx: get content of local variable "xxx"
 #    > (replace "xxx" by the name of variable to read)
 #
@@ -674,13 +1377,13 @@ snippet t28 "weechat: get property or local variable of buffer" Am
 w.buffer_get_string(${1:buf}, '${2:property | localvar_xxx}')
 endsnippet
 
-snippet t29 "weechat: get expansion of given path string" Am
+snippet t113 "weechat: get expansion of given path string" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_scripting.en.html#script_api_functions
 # https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_string_eval_path_home
 w.string_eval_path_home(${1:path}, {}, {}, {})
 endsnippet
 
-snippet t30 "weechat: get evaluation of given expression" Am
+snippet t114 "weechat: get evaluation of given expression" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_string_eval_expression
 #
 # ---
@@ -691,7 +1394,7 @@ snippet t30 "weechat: get evaluation of given expression" Am
 w.string_eval_expression(${1:expr}, {}, {}, {})
 endsnippet
 
-snippet t31 "weechat: remove WeeChat colors from string" Am
+snippet t115 "weechat: remove WeeChat colors from string" Am
 # https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_string_remove_color
 w.string_remove_color(${1:str}, '')
 # \`''\`:  replacement: if  not  NULL and  not empty,  WeeChat  color codes  are

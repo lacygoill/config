@@ -1,22 +1,23 @@
 # programming languages
 
-   - C
    - python
    - lua
-   - rust
+   - awk
 
 # tooling
+
+   - debian + linux
+   - git + tig
+   - make
+   - network
+   - podman
+   - systemd
 
    - ffmpeg
    - fzf
    - `info grep` + `man git-grep`
    - fish
    - tmux
-   - awk
-   - systemd
-   - network
-   - git + tig
-   - debian
    - less
    - wireshark
 
@@ -28,12 +29,10 @@
    - jenkins (Continuous Integration)
    - json + jq
    - LSP
-   - make
    - mpv
    - OpenSSL
    - PAM
    - PGP / GPG
-   - podman
    - sudo
    - treesitter
    - unit test

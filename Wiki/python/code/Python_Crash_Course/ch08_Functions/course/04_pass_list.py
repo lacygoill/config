@@ -86,9 +86,6 @@ make_pizza('mushrooms', 'green peppers', 'extra cheese')
 
 #   You can interact with the arguments like you would with any tuple. {{{1
 
-# There can only  be 1 `**kwargs` in  a function header; it's  the parameter for
-# variadic keyword arguments.
-
 # For example, you can  iterate over its items to print  some message about each
 # passed argument.
 

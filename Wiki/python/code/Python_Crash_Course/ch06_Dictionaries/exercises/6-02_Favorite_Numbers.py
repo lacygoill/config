@@ -18,3 +18,8 @@ print(f"The favorite number of Paul is {favorite_numbers['Paul']}.")
 print(f"The favorite number of George is {favorite_numbers['George']}.")
 print(f"The favorite number of Ringo is {favorite_numbers['Ringo']}.")
 print(f"The favorite number of Vincent is {favorite_numbers['Vincent']}.")
+#     The favorite number of John is 12.
+#     The favorite number of Paul is 34.
+#     The favorite number of George is 56.
+#     The favorite number of Ringo is 78.
+#     The favorite number of Vincent is 90.
