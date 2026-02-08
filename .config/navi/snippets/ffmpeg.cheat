@@ -1,0 +1,555 @@
+; TODO: Document `-disposition`.
+;
+; For example, to make the third audio  stream the default stream and remove the
+; default disposition from the first audio stream:
+;
+;     $ ffmpeg -i in.mkv -map 0 -codec copy -disposition:a:0 0 -disposition:a:2 default out.mkv
+;                                           ^-----------------------------------------^
+;
+; To make the  second subtitle stream the default stream  and remove the default
+; disposition from the first subtitle stream:
+;
+;     $ ffmpeg -i in.mkv -map 0 -codec copy -disposition:s:0 0 -disposition:s:1 default out.mkv
+;                                           ^-----------------------------------------^
+;
+; To add an embedded cover/thumbnail:
+;
+;     $ ffmpeg -i in.mp4 -i IMAGE -map 0 -map 1 -codec copy -codec:v:1 png -disposition:v:1 attached_pic out.mp4
+;                                                                          ^---------------------------^
+;
+; Not all  muxers support embedded thumbnails,  and those who do  only support a
+; few formats, like JPEG or PNG.
+
+; TODO: Review all of the existing snippets.
+;
+; Do they work at all?
+; Do they work reliably?
+; Can they be improved?
+; Can they be better commented?
+
+; TODO: Steal some ffmpeg snippets from tldr.
+;
+;     - Save a video as GIF, scaling the height to 1000px and setting framerate to 15:
+;
+;     `ffmpeg -i {{video.mp4}} -vf 'scale=-1:{{1000}}' -r {{15}} {{output.gif}}`
+;
+;     - Combine numbered images (`frame_1.jpg`, `frame_2.jpg`, etc) into a video or GIF:
+;
+;     `ffmpeg -i {{frame_%d.jpg}} -f image2 {{video.mpg|video.gif}}`
+;
+;     - Quickly extract a single frame from a video at time mm:ss and save it as a 128x128 resolution image:
+;
+;     `ffmpeg -ss {{mm:ss}} -i {{video.mp4}} -frames 1 -s {{128x128}} -f image2 {{image.png}}`
+;
+;     - Convert AVI video to MP4. AAC Audio @ 128kbit, h264 Video @ CRF 23:
+;
+;     `ffmpeg -i {{input_video}}.avi -codec:a aac -b:a 128k -codec:v libx264 -crf 23 {{output_video}}.mp4`
+;
+;     - Convert MP4 video to VP9 codec. For the best quality, use a CRF value (recommended range 15-35) and -b:v MUST be 0:
+;
+;     `ffmpeg -i {{input_video}}.mp4 -codec:v libvpx-vp9 -crf {{30}} -b:v 0 -codec:a libopus -vbr on -threads {{number_of_threads}} {{output_video}}.webm`
+;
+; Source: `~/.cache/tldr/pages/common/ffmpeg.md`
+
+; TODO: Write some shell snippets for `mkvmerge(1)`.
+; Steal them from tldr.
+;
+;     $ sudo apt install mkvtoolnix
+;
+; It *seems* to better handle MKV muxing:
+; https://github.com/yt-dlp/yt-dlp/issues/1879#issuecomment-986040994
+;
+; The "EXAMPLES" section is particularly interesting.
+
+; TODO: Read `man ffmpeg-all /^\%(   \)\=examples`
+;
+; More  generally,  read  the  text  around  all  occurrences  of  `example`  at
+; `man ffmpeg-all`.
+
+; TODO: Finish reading the FFmpeg PDF.  We stopped at the start of the 4th chapter.
+% ffmpeg, self
+
+$ codec: ffmpeg -hide_banner -codecs | awk '/^ ..[AVS]/ && $2 != "=" { print $2 }'
+
+$ input: find . -maxdepth 1 \
+    \( -name '*.ass' \
+    -o -name '*.avi' \
+    -o -name '*.flv' \
+    -o -name '*.gif' \
+    -o -name '*.mkv' \
+    -o -name '*.mov' \
+    -o -name '*.mp3' \
+    -o -name '*.mp4' \
+    -o -name '*.ogg' \
+    -o -name '*.srt' \
+    -o -name '*.wav' \
+    -o -name '*.webm' \
+    \) -printf '%P\n' 2>/dev/null
+
+$ input_audio: find . -maxdepth 1 \
+    \( -name '*.mp3' \
+    -o -name '*.ogg' \
+    -o -name '*.wav' \
+    -o -name '*.webm' \
+    \) -printf '%P\n' 2>/dev/null
+
+$ input_video: find . -maxdepth 1 \
+    \( -name '*.avi' \
+    -o -name '*.flv' \
+    -o -name '*.gif' \
+    -o -name '*.mkv' \
+    -o -name '*.mov' \
+    -o -name '*.mp4' \
+    -o -name '*.webm' \
+    \) -printf '%P\n' 2>/dev/null
+
+$ input_ass: find . -maxdepth 1 -name '*.ass' -printf '%P\n' 2>/dev/null
+$ input_mp4: find . -maxdepth 1 -name '*.mp4' -printf '%P\n' 2>/dev/null
+$ input_srt_eng: find . -maxdepth 1 -name '*.en.srt' -printf '%P\n' 2>/dev/null
+$ input_srt_fre: find . -maxdepth 1 -name '*.fr.srt' -printf '%P\n' 2>/dev/null
+
+$ type: printf '%s\n' encoder decoder muxer demuxer filter
+
+# list categories of options
+ffmpeg -hide_banner -h | sed -n '/options.*:$/p'
+    # To include the advanced categories, replace `-h` with `-h long`.
+
+# list global options
+ffmpeg -hide_banner -h | sed -n '/^Global options/,/^$/p'
+
+# list supported formats/encoders/decoders/codecs/filters
+ffmpeg -hide_banner -formats
+    # Replace `-formats` with `-encoders`, `-decoders`, `-codecs`, `-filters` as
+    # appropriate.
+
+# list supported audio/video/subtitle codecs
+ffmpeg -hide_banner -codecs | awk '/^ ..A/'
+    # for video and subtitle codecs, replace "A" with resp. "V" or "S"
+
+# print help for given encoder/decoder/muxer/demuxer/filter
+ffmpeg -hide_banner -h <type>=<name>
+    # Examples:
+    #
+    #     $ ffmpeg -hide_banner -h demuxer=mp3
+    #     $ ffmpeg -hide_banner -h encoder=libmp3lame
+    #     $ ffmpeg -hide_banner -h filter=drawtext
+
+% ffmpeg, probe
+@ ffmpeg, self
+
+# print all info about streams in given file
+ffprobe -loglevel quiet -show_entries stream -- '<input>'
+    # Useful if  you have  trouble finding the  correct section/entry  value for
+    # `-show_entries`.   The latter  lets  you keep  only  the entry/ies  you're
+    # interested in; its syntax is:
+    #
+    #     section=entry[,...][:section=...]
+    #            ^      ^     ^
+    #
+    # Notice how it involves 3 delimiters:
+    #
+    #    - `=` between a section and an entry (e.g. `section=entry`)
+    #    - `,` between 2 entries (e.g. `section=entry1,entry2`)
+    #    - `:` between 2 sections (e.g. `section1:section2`)
+    #
+    # The most useful sections are:
+    #
+    #    - `chapter`
+    #    - `format`
+    #    - `stream`
+    #
+    # Note that `format` pertains to the container.
+    #
+    # The most useful entry in the `format` section is `duration`.
+    # The most useful entries in the `stream` section are:
+    #
+    #    - `avg_frame_rate`
+    #    - `bit_rate`
+    #    - `channels`
+    #    - `codec_name[,codec_type]`
+    #    - `height`
+    #    - `width`
+    #    - `index`
+    #
+    # In a given section, you might find entries following the form:
+    #
+    #     FOO:bar=...
+    #
+    # To retrieve it, use the section name `{section}_foo` (where `{section}` is
+    # meant to be replaced with the actual name of the section):
+    #
+    #     -show_entries {section}_foo=bar
+    #
+    # Exception: If `foo` is actually `tag`, then it must be plural:
+    #
+    #     -show_entries {section}_tags=bar
+    #                                ^
+
+# print codecs used to encode streams from given file (including subtitle format)
+ffprobe -loglevel quiet \
+    -show_entries stream=codec_name,codec_type \
+    -print_format csv=print_section=0 \
+    -- '<input>' \
+    | awk -F',' '/./ { printf("%s: %s\n", $2, $1) }'
+    # `-print_format` sets how the output should be formatted.
+    #
+    # It's assigned the  name of a writer  (`csv`), and an option  passed to the
+    # latter. Here, the  option is  `print_section` which we  reset to  hide the
+    # section header  and footer.   We could pass  several options  separated by
+    # colons.
+    #
+    # Note that – in  general – if the output of  an `ffprobe(1)` command is
+    # hard to  read (i.e. lots  of fields/commas on  a single line),  you should
+    # remove  `-print_format`  to  let  `ffprobe(1)` use  the  `default`  writer
+    # instead of  `csv`.  The  former can  be configured  via the  `nokey=1` and
+    # `noprint_wrappers=1` options to remove noise:
+    #
+    #     -print_format default=nokey=1
+    #     -print_format default=noprint_wrappers=1
+    #     -print_format default=nokey=1:noprint_wrappers=1
+
+# print duration of given audio/video file
+ffprobe -loglevel quiet \
+    -show_entries format=duration \
+    -print_format csv=print_section=0 \
+    -pretty \
+    -- '<input>'
+    # We use `-pretty` to make the duration easy to read.
+
+# print height/width/frame rate of given video file
+ffprobe -loglevel quiet \
+    -show_entries stream=height \
+    -select_streams 'v' \
+    -print_format csv=print_section=0 \
+    -- '<input>'
+    # For   the   width   or    frame   rate,   replace   `stream=height`   with
+    # `stream=width`/`stream=avg_frame_rate`.
+
+# print chapters timestamps for given video
+ffprobe -loglevel quiet \
+    -show_entries chapter \
+    -print_format csv=print_section=0 \
+    -pretty \
+    -- '<input>' \
+    | awk -F',' '{
+        sub(/\.[0-9]+$/, "", $4)
+        sub(/\.[0-9]+$/, "", $6)
+        printf("%s: %s - %s\n", NR, $4, $6) }'
+
+# print bitrate of given audio stream
+ffprobe -loglevel quiet \
+    -show_entries stream=bit_rate \
+    -select_streams 'a:0' \
+    -print_format csv=print_section=0 \
+    -pretty \
+    -- '<input>'
+
+# print bitrate of given video file
+ffprobe -loglevel quiet \
+    -show_entries format=bit_rate \
+    -print_format csv=print_section=0 \
+    -pretty \
+    -- '<input>'
+    # This outputs the  bitrate of the whole  container; that is the  sum of the
+    # bitrates of  all the streams  contained inside  (video + audio  + subtitle
+    # ...).
+
+# print number of audio channels of given audio/video file
+ffprobe -loglevel quiet \
+    -show_entries stream=channels \
+    -select_streams 'a' \
+    -print_format csv=print_section=0 \
+    -- '<input>'
+
+# print streams enabled by default in given video file
+ffprobe -loglevel quiet \
+    -show_entries stream=index,codec_type:stream_disposition=default \
+    -print_format csv=print_section=0 \
+    -- '<input>' \
+    | awk -F',' '{ printf("index: %s, type: %s, status: %s\n", $1, $2, $3 == "1" ? "on" : "off") }' \
+    | column -t
+    # Output example:
+    #
+    #     index: 0, type: video, status: on
+    #     index: 1, type: audio, status: on
+    #     index: 2, type: subtitle, status: off
+    #     index: 3, type: subtitle, status: off
+    #     index: 4, type: subtitle, status: off
+    #
+    # Here the first video and audio streams are enabled by default.
+    # But none of the subtitles are.
+
+# print subtitles/audio tracks from given video
+ffprobe -loglevel quiet \
+    -show_entries stream=index:stream_tags=language \
+    -select_streams 's' \
+    -print_format csv=print_section=0 \
+    -- '<input>'
+    # In the output, "subrip" means "SubRip Text" (used for ".srt" files).
+    #
+    # ---
+    #
+    # For audio tracks, replace `'s'` with `'a'`.
+
+# list files using given codec
+find . -type f -print0 \
+    | while read --null file
+        ffprobe -loglevel quiet -show_entries stream -- $file \
+            | grep --quiet '^codec_\S*name=.*<codec>' \
+                && echo $file
+      end
+
+% ffmpeg, convert
+@ ffmpeg, self
+
+# convert ASS subtitle to SRT
+ffmpeg -i '<input_ass>'
+    -codec:s srt
+    -- "$(string replace --regex -- '\.ass$' '' '<input_ass>').srt"
+
+% ffmpeg, edit
+@ ffmpeg, self
+
+# cut clip
+ffmpeg -ss <position> -i '<input>' -t <duration> -map 0 -codec copy -- '<output>'
+    # To cut till the end, omit `-t ❬duration❭`.
+    #
+    # ---
+    #
+    # `-map 0` is  only useful if  you want to copy  all streams (e.g.  the file
+    # might contain multiple audio tracks).
+
+% ffmpeg, extract
+@ ffmpeg, self
+
+# audio stream
+ffmpeg -i '<input>' -map 0:a:<N> -codec:a libmp3lame -y out.mp3
+    # `-codec:a libmp3lame` might be necessary to encode the audio stream to MP3
+    # format.  Without,  the command wouldn't  work if  the audio stream  of the
+    # input file uses a different format (e.g. AAC).
+
+# video stream
+ffmpeg -i '<input>' -map 0:v:<N> -codec:v copy -y out.mkv
+
+# subtitle stream
+ffmpeg -i '<input>' -map 0:s:<N> -y out.srt
+
+% ffmpeg, metadata
+@ ffmpeg, self
+
+# print metadata of given file
+ffprobe -hide_banner -- '<input>'
+
+# set metadata of given file (e.g. title, comment, ...)
+ffmpeg -i '<input>' \
+    -codec copy \
+    -metadata <metadata>='<value>' \
+    -- '<output>'
+    # If `❬metadata❭` is `title`, its value might be displayed by the player
+    # (e.g. in the top  bar/window decoration for a GUI one,  or in the terminal
+    # for a TUI one) instead of just the file name.  For example, if you set the
+    # title of a  video file, open it  with `mpv(1)`, then press `i`  to show an
+    # overlay displaying statistics about the file,  its `title` is printed on a
+    # "Title:" line below the "File:" one.
+    #
+    # ---
+    #
+    # To delete a metadata, simply set it to an empty value:
+    #
+    #     -metadata ❬metadata❭=
+
+# delete given metadata from given file
+ffmpeg -i '<input>' \
+    -codec copy \
+    -metadata <metadata>= \
+    -- '<output>'
+
+% ffmpeg, mux
+@ ffmpeg, self
+
+# remux MP4 and SRT files to MKV
+ffmpeg -i '<input_mp4>' \
+    -i '<input_srt_eng>' \
+    -i '<input_srt_fre>' \
+    -map 0 \
+    -map 1 \
+    -map 2 \
+    -codec copy \
+    -metadata:s:s:0 language=eng \
+    -metadata:s:s:1 language=fre \
+    -- "$(string replace --regex -- '\.mp4$' '' '<input_mp4>').mkv"
+    # Useful to add support for SRT subtitles.
+    # Indeed, an MP4 container doesn't support those.
+    #
+    # Otherwise, you would have to re-encode the subtitles:
+    # https://stackoverflow.com/a/46522467/9780968f
+    #
+    # ---
+    #
+    # Without `-map 0 -map 1 -map 2`,  only the  first subtitle stream  would be
+    # selected:
+    #
+    #    > It will select that stream based upon the following criteria:
+    #    > [...]
+    #    > •   for subtitles, it is the first subtitle stream found [...]
+    #
+    # Source: `man ffmpeg-all /STREAM SELECTION/;/Description/;/for subtitles,`
+
+# replace existing audio stream with new one inside video file
+ffmpeg -i '<input_video>' \
+    -i '<input_audio>' \
+    -map 0:v:0 \
+    -map 1:a:0 \
+    -codec copy \
+    -- '<output>'
+    # Here, `❬input_audio❭` is meant to be a new audio stream which is going
+    # to replace the existing one inside the `❬input_video❭` container.  The
+    # existing one will be dropped because it's not selected by any `-map`.
+
+# add audio stream (e.g. for another language)
+ffmpeg -i '<input_video>' \
+    -i '<input_audio>' \
+    -map 0 \
+    -map 1:a:0 \
+    -codec copy \
+    -metadata:s:a:1 language=<lang> \
+    -- '<output>'
+    # `mpv(1)` temporarily prints `❬lang❭` inside an overlay when you switch
+    # the audio stream.
+
+% ffmpeg, play
+@ ffmpeg, self
+
+# audio file without windowed interface
+ffplay -hide_banner -autoexit -nodisp -volume <level> -- '<input>'
+    # useful as an audio notification in a shell script
+
+% ffmpeg, record
+@ ffmpeg, self
+
+$ screenkey_pos: printf '%s\n' 'screenkey position (number between 0 and 1)' 0.8 \
+    --- --header-lines 1
+
+# audio stream
+/usr/bin/ffmpeg -f pulse -i default -y out.wav
+    # Found here: `man ffmpeg-devices /INPUT DEVICES/;/pulse/;/Record`
+    #
+    # ---
+    #
+    # We intentionally specify  the full path to the `ffmpeg(1)`  binary in case
+    # we have a statically-linked pre-built  binary in `~/.local/bin/` which was
+    # not compiled with `--enable-libpulse`.
+    #
+    # ---
+    #
+    # `-f pulse` forces  the input file format  (by default, the format  is auto
+    # detected).
+    #
+    # ---
+    #
+    # `-i default`:
+    #
+    #    > The filename to provide to the input device
+    #    > is a source device or the string "default".
+    #
+    # Source: `man ffmpeg-devices /INPUT DEVICES/;/pulse/;/"default"`
+
+# desktop (X11 only)
+set title $(xdotool getactivewindow getwindowname) \
+    ; set id $(xwininfo -root -tree | awk -v title="$title" 'index($0, title) { print $1 }') \
+    ; xwininfo -id $id \
+    | awk '
+      /Absolute upper-left X/ { x = $NF }
+      /Absolute upper-left Y/ { y = $NF }
+      /Height/ { h = $NF }
+      /Width/ { w = $NF }
+      END { print x, y, h, w }
+    ' | read X Y HEIGHT WIDTH         \
+                                      \
+    && screenkey --geometry {$WIDTH}x10%+$X+$(math --scale=0 "$Y + $HEIGHT * <screenkey_pos>") \
+        --font-size small             \
+        --mods-mode emacs             \
+        --position fixed              \
+        --timeout 1.5 & disown        \
+                                      \
+    && ffmpeg -f x11grab              \
+        -framerate 25                 \
+        -video_size {$WIDTH}x$HEIGHT  \
+        -i :0.0+$X,$Y                 \
+        -pix_fmt yuv420p              \
+        -hide_banner                  \
+        -y                            \
+        /tmp/out.mp4                  \
+                                      \
+    ; killall screenkey
+    # Inspiration: `man ffmpeg-devices /INPUT DEVICES/;/x11grab/;/:0.0`
+    #
+    # ---
+    #
+    # `-video_size '{$WIDTH}x$HEIGHT'` specifies the geometry of the area of the
+    # screen to capture.  See: `man ffmpeg-utils /SYNTAX/;/Video size`
+    #
+    # ---
+    #
+    # `-i :0.0+X,$Y`  specifies the  input file  (here the  first screen  of the
+    # first display),  as well as the  upper-left corner of the  area to capture
+    # (the  origin  being  at  the  top  left  and  the  X/Y  axis  being  resp.
+    # horizontal/vertical).
+    #
+    # ---
+    #
+    # `-f x11grab` forces the input file format  (by default, the format is auto
+    # detected).  See: `man ffmpeg-devices /INPUT DEVICES/;/^\s*x11grab`
+    #
+    # ---
+    #
+    # `-framerate 25` sets the grabbing frame rate to 25.
+    # See: `man ffmpeg-devices /INPUT DEVICES/;/avfoundation/;/-framerate`
+    #
+    # ---
+    #
+    # `-pix_fmt yuv420p` is necessary to support Firefox.
+    # See: https://bugzilla.mozilla.org/show_bug.cgi?id=1368063#c7
+    #
+    # To get the list of supported values: `$ ffmpeg -pix_fmts`
+    #
+    # ---
+    #
+    # To prevent the mouse from being recorded, use `-draw_mouse 0`.
+    # See: `man ffmpeg-devices /INPUT DEVICES/;/x11grab/;/draw_mouse`
+    #
+    # ---
+    #
+    # To use `libx265` instead of `libx264`, use `-codec:v libx265`.
+    #
+    # ---
+    #
+    # If you  want a better  video quality, use  `-crf ❬N❭`, where `N`  is a
+    # number between 18 and 28, assuming you use `libx264`:
+    #
+    #    > For x264, sane values are between 18 and 28.
+    #    > The default is 23, so you can use this as a starting point.
+    #
+    # Source: https://slhck.info/video/2017/02/24/crf-guide.html
+    # See:
+    #    - `man ffmpeg-codecs /VIDEO ENCODERS/;/libx264, libx264rgb/;/crf`
+    #    - `man x264 /^\s*--crf`
+    #
+    # ---
+    #
+    # If you want a faster encoding time, use `-preset ultrafast`.
+    # See:
+    #    - `man ffmpeg-codecs /VIDEO ENCODERS/;/libwebp/;/-preset`
+    #    - `man x264 /ultrafast` (require `x264` package).
+    #    - `$ x264 --fullhelp | grep '^\s*--preset' --after-context=8`
+    #
+    # This implies a bigger output file.
+    #
+    # ---
+    #
+    # For screenkey, `{$WIDTH}x10%...` means:
+    #
+    #    - same width as the current window
+    #    - 10% of the height of the current window
+    #
+    # https://gitlab.com/screenkey/screenkey#command-line-placement

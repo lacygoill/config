@@ -1,0 +1,59 @@
+[Unit]
+Description=Make clipboard persist after quitting/suspending Vim
+
+[Service]
+Type=forking
+
+#     StandardInput=file:$TRIGGER_PATH
+#     ExecStart=/usr/bin/xsel --input --clipboard
+# FIXME: With this commented code, *sometimes*, we can't access the clipboard.{{{
+#
+# Follow the service messages:
+#
+#     $ journalctl --user --boot=-0 --no-hostname --pager-end -nall --unit=vim-persistent-clipboard.service --follow
+#
+# When we yank in Vim, this line might get appended:
+#
+#     ...: vim-persistent-clipboard.service: Succeeded.
+#
+# That happens  if `xsel(1x)` was running  to own the clipboard  from a previous
+# Vim instance,  and now  it's no  longer needed; the  current Vim  instance has
+# become  the  new owner.   Anyway,  when  we quit  Vim,  these  lines are  also
+# appended:
+#
+#     ...: Starting Make clipboard persist after quitting/suspending Vim...
+#     ...: Started Make clipboard persist after quitting/suspending Vim.
+#
+# That happens because Vim wrote in the watched file just before exiting.
+# But sometimes, this extra line is unexpectedly appended at the end:
+#
+#     ...: vim-persistent-clipboard.service: Succeeded.
+#
+# Was `xsel(1x)` killed/terminated by something?  Did another process become the
+# clipboard's owner, causing `xsel(1x)` to think that it was no longer necessary
+# (and then, that process was killed)?
+#}}}
+# You can gather more information by passing `--verbose` to `xsel(1x)` 4 times.{{{
+#
+#     ExecStart=/usr/bin/xsel ... --verbose --verbose --verbose --verbose
+#                                 ^-------------------------------------^
+#
+# Then, read `~/.cache/xsel.log`.
+#
+# In addition, you can write:
+#
+#     StandardError=file:/tmp/xsel.log
+#
+# Then, read `/tmp/xsel.log`.
+#}}}
+# As a workaround, we execute `xsel(1x)` until  the process does not exit; up to
+# 3 times to avoid an infinite loop.
+ExecStart=/usr/bin/sh -c ' \
+    cnt=0 ; \
+    while ! /usr/bin/pidof xsel >/dev/null ; do \
+      /usr/bin/xsel --input --clipboard < $TRIGGER_PATH ; \
+      cnt=$((cnt + 1)) ; \
+      if test "$cnt" = 3 ; then \
+        break ; \
+      fi ; \
+    done'

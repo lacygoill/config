@@ -1,0 +1,2323 @@
+#!/bin/bash -
+
+# We  need  a  dummy command  so  that  the  next  shellcheck directive  is  not
+# considered  file-wide (which  it would  be, if  it appeared  before the  first
+# command).
+:
+# shellcheck disable=SC2155
+{
+readonly SCRIPT="${0##*/}"
+
+# We'll  need to  `rsync(1)` our  `~/.cfg/` from  a backup  directory (typically
+# located  on a  USB  drive),  before we  can  `git-checkout(1)`  all our  local
+# config files.   Besides `.cfg/`,  you probably want  your backup  directory to
+# contain other personal files  (`Documents/`, `Ebooks/`, `Music/`, `Pictures/`,
+# `Videos/`, ...). See our `SOURCES` array in `~/bin/backup`.
+read -r -e -p 'need path to backup directory (where .cfg/ can be found): ' BACKUP
+if ! [[ -d "$BACKUP/.cfg" ]]; then
+  printf '%s: cannot find directory: %s/.cfg\n' "$SCRIPT" "$BACKUP" >&2
+  exit 1
+fi
+
+# `2>/dev/null` to suppress "No LSB modules are available." in Debian.
+readonly DISTRIB_CODENAME="$(lsb_release --codename --short 2>/dev/null)"
+readonly DISTRIB_ID="$(lsb_release --id --short 2>/dev/null)"
+}
+
+# Why `.cfg/` instead of the default `.git/`?{{{
+#
+# To avoid possible conflicts with another Git repository which we might have in
+# our home.  Besides, a dedicated name  makes it more clear that this repository
+# is specifically for configuration files.
+#}}}
+readonly GIT_CFG_DIR="$HOME/.cfg"
+readonly -a GIT_CFG_OPTIONS=( --git-dir="$GIT_CFG_DIR" --work-tree="$HOME" )
+
+# When we clone our config on a new system, some existing config files might be overwritten.{{{
+#
+# For example,  on a new Linux  system, `~/.bashrc` probably exists  by default,
+# but if  you've `config add`ed this  file, then it  will be overwritten  by the
+# `git-checkout(1)` from this script.
+#}}}
+# When that happens, we save them in a backup directory.
+readonly CFG_OVERWRITTEN="$HOME/.cfg-overwritten-config"
+readonly CFG_PERMISSIONS="$HOME/.cfg-fileperms"
+
+# `tldr`{{{
+#
+# https://github.com/tldr-pages/tldr#how-do-i-use-it
+#
+# ---
+#
+# There are other clients.
+#
+# Whatever you choose, make sure this still works:
+#
+#     $ navi --tldr=podman
+#}}}
+readonly -a PYTHON_APPS=(
+  'black'
+  'mypy'
+  'pudb'
+  'pylint'
+  'subliminal'
+  'tldr'
+  'trash-cli'
+  'urlscan'
+)
+
+# `inspect` for pretty-printing values.
+# `luacheck` for linting Lua code.
+readonly -a LUA_MODULES=(
+  'inspect'
+  'luacheck'
+)
+
+readonly VIM_PLUGINS_DIR="$HOME/.vim/pack/vendor/opt/"
+readonly -a VIM_PLUGINS=(
+  'https://github.com/SirVer/ultisnips'
+  'https://github.com/mbbill/undotree'
+  'https://github.com/chrisbra/unicode.vim'
+  'https://github.com/machakann/vim-sandwich'
+)
+
+readonly -a DEFAULT_APPLICATIONS=(
+  'feh'
+  'mpv'
+  'org.pwmt.zathura-cb'
+  'org.pwmt.zathura-djvu'
+  'org.pwmt.zathura-pdf-poppler'
+  'org.pwmt.zathura-ps'
+  'transmission-gtk'
+)
+
+omni_cmd="fish --interactive --command='exec $HOME/bin/drop-in/omni-GUI'"
+readonly -a XFCE_SETTINGS=(
+  # <channel>:<property>:<value>:<type>
+
+  # It doesn't work in the console!{{{
+  #
+  # Try to install a systemd service running:
+  #
+  #     $ sudo kbdrate -d <delay> -r <rate> < $(tty)
+  #
+  # This must be run in a console, and affect all consoles.
+  #
+  # ---
+  #
+  # The result might not be as expected, because of bugs in `kbdrate(8)`:
+  #
+  #    > Not all keyboards support all rates.
+  #
+  #    > Not all keyboards have the rates mapped in the same way.
+  #
+  # If you want the same rate as in the graphical environment, you'll have to find
+  # the value by experimentation:
+  #
+  #    - execute your `kbdrate(8)` command *outside tmux*
+  #      (inside, the command would not work as expected)
+  #
+  #    - open 2 terminals
+  #    - inside the first one, run: `$ watch :`
+  #    - inside the second one, maintain `l` pressed for 10 seconds
+  #      (watch the seconds pass in the 2nd pane)
+  #
+  #    - after 10 seconds, press `C-X C-E` to read the command-line in a Vim buffer
+  #    - in Vim, press `$` to jump at the end of the line, and look at the column
+  #      index in the status line: it's the number of keypresses the console
+  #      received in 10 seconds
+  #
+  # If you  want a  rate of  40 cps (character  per seconds),  in the  last bullet
+  # point, you want to read a number which is close to 400 (10s * 40cps).
+  #
+  # ---
+  #
+  # ATM, whatever I execute, the settings are not applied.
+  # The issue disappears if we stop the  keyd service.  We can reproduce with this
+  # minimal keyd config:
+  #
+  #     [ids]
+  #     *
+  #
+  # Note that it doesn't matter what `kbdrate(8)` prints while `keyd(1)` is running.
+  # The former always prints the last rate/delay it was given.
+  # But the *actual* rate/delay seems to be reset by `keyd(1)` to some fast values.
+  #}}}
+  # Do *not* set these properties via `xset(1)`.{{{
+  #
+  #     xset r rate 175 40
+  #                 ^   ^
+  #                 |   maximum number of times a key can be repeated per second (default 20)
+  #                 delay before a keypress is sent to the application (default 500)
+  #
+  # It's  not   reliable.   Sometimes,  our   keyboard  delay  and   rate  would
+  # unexpectedly reset after we log out/log back in, or when we leave the system
+  # idle for a  while then come back.   The issue can be  reproduced reliably by
+  # connecting our Surfans F20.
+  #
+  # For a possible solution, see:
+  # https://bbs.archlinux.org/viewtopic.php?pid=2025796#p2025796
+  # https://wiki.archlinux.org/title/Xorg/Keyboard_configuration#Using_AutoRepeat_configuration_option
+  #}}}
+  'keyboards:/Default/KeyRepeat/Delay:175:int'
+  'keyboards:/Default/KeyRepeat/Rate:40:int'
+
+  # applications shortcuts
+  'xfce4-keyboard-shortcuts:/commands/custom/<Alt>F1:xfce4-popup-whiskermenu:string'
+  "xfce4-keyboard-shortcuts:/commands/custom/<Shift>F1:$HOME/bin/open-cheatsheet-or-config cheat:string"
+  "xfce4-keyboard-shortcuts:/commands/custom/<Shift>F2:$HOME/bin/open-cheatsheet-or-config config:string"
+  "xfce4-keyboard-shortcuts:/commands/custom/<Super>l:$HOME/bin/run-or-raise-zathura-or-ebook-viewer:string"
+  "xfce4-keyboard-shortcuts:/commands/custom/<Super>y:$HOME/bin/yt-mpv:string"
+  'xfce4-keyboard-shortcuts:/commands/custom/<Super>i:jumpapp -m -r feh:string'
+  'xfce4-keyboard-shortcuts:/commands/custom/<Super>k:jumpapp -m -r firefox:string'
+  'xfce4-keyboard-shortcuts:/commands/custom/<Super>m:jumpapp -m -r mpv:string'
+  'xfce4-keyboard-shortcuts:/commands/custom/<Super>j:jumpapp -m -r st -e fish:string'
+  'xfce4-keyboard-shortcuts:/commands/custom/<Super>f:jumpapp -m -r thunar:string'
+  'xfce4-keyboard-shortcuts:/commands/custom/<Super>v:jumpapp -m -r virt-manager:string'
+  'xfce4-keyboard-shortcuts:/commands/custom/<Super>x:jumpapp -m -r xterm:string'
+  # FIXME: The key binding doesn't work when an xterm terminal window is already open.{{{
+  #
+  # We could use the XFCE4 terminal instead:
+  #
+  #     "... xfce4-terminal --geometry=90x15+350+200 --command=\"$omni_cmd\""
+  #
+  # But it seems slower to start.
+  #}}}
+  "xfce4-keyboard-shortcuts:/commands/custom/<Super>o:jumpapp -m -r xterm -geometry 90x15+350+200 -e \"$omni_cmd\":string"
+  'xfce4-keyboard-shortcuts:/commands/custom/<Super>s:xfce4-settings-manager:string'
+
+  # tiling shortcuts
+  'xfce4-keyboard-shortcuts:/xfwm4/custom/<Shift><Super>h:tile_left_key:string'
+  'xfce4-keyboard-shortcuts:/xfwm4/custom/<Shift><Super>j:tile_down_key:string'
+  'xfce4-keyboard-shortcuts:/xfwm4/custom/<Shift><Super>k:tile_up_key:string'
+  'xfce4-keyboard-shortcuts:/xfwm4/custom/<Shift><Super>l:tile_right_key:string'
+
+  # show desktop
+  'xfce4-keyboard-shortcuts:/xfwm4/custom/<Super>d:show_desktop_key:string'
+
+  # make sure the Whisker Menu and the contextual menu (when opened on a panel)
+  # are light (not dark)
+  'xfce4-panel:/panels/dark-mode:false:bool'
+
+  'xfce4-panel:/panels/panel-1/length:100:int'
+  'xfce4-panel:/panels/panel-1/position:p=6;x=0;y=0:string'
+  #                                     ^^^
+  #                                     upper-left corner (x and y are ignored)
+  # Warning: Only *some* `p` values let the autohide feature work as expected.
+  # For more info:
+  # https://forum.xfce.org/viewtopic.php?pid=72742#p72742
+  # https://git.xfce.org/xfce/xfce4-panel/tree/libxfce4panel/libxfce4panel-enums.h#n80
+  'xfce4-panel:/panels/panel-1/position-locked:true:bool'
+  'xfce4-panel:/panels/panel-1/size:30:int'
+
+  # hide the panel when the currently focused window overlaps the panel
+  'xfce4-panel:/panels/panel-1/autohide-behavior:1:int'
+  # disable the autohide animation
+  'xfce4-panel:/panels/panel-1/popdown-speed:0:int'
+
+  # We prefer "Whisker Menu" instead  of the default "application launcher".  It
+  # seems more useful; in particular, it includes a "Settings Manager" button.
+  'xfce4-panel:/plugins/plugin-1:whiskermenu:string'
+  'xfce4-panel:/plugins/plugin-2:tasklist:string'
+  'xfce4-panel:/plugins/plugin-3:separator:string'
+  'xfce4-panel:/plugins/plugin-3/expand:true:bool'
+  'xfce4-panel:/plugins/plugin-4:pager:string'
+  'xfce4-panel:/plugins/plugin-5:separator:string'
+  'xfce4-panel:/plugins/plugin-6:systray:string'
+  'xfce4-panel:/plugins/plugin-7:pulseaudio:string'
+  'xfce4-panel:/plugins/plugin-7/enable-keyboard-shortcuts:true:bool'
+  'xfce4-panel:/plugins/plugin-8:power-manager-plugin:string'
+  'xfce4-panel:/plugins/plugin-9:notification-plugin:string'
+
+  # focus previous/next workspace
+  'xfce4-keyboard-shortcuts:/xfwm4/custom/<Primary><Alt>h:left_workspace_key:string'
+  'xfce4-keyboard-shortcuts:/xfwm4/custom/<Primary><Alt>l:right_workspace_key:string'
+
+  # No window decorations.
+  # If you do want a theme, have a look at `/usr/share/themes/`.
+  'xfwm4:/general/theme:None:string'
+
+  # only 2 workspaces (aka virtual desktops)
+  'xfwm4:/general/workspace_count:2:int'
+
+  # set "Comix Cursors" as our cursor theme
+  'xsettings:/Gtk/CursorThemeName:ComixCursors-Opaque-Green:string'
+
+  # make the cursor icons big
+  'xsettings:/Gtk/CursorThemeSize:48:int'
+
+  # set "Greybird" as our theme
+  'xsettings:/Net/ThemeName:Greybird:string'
+)
+
+readonly -a XFCE_SETTINGS_TO_REMOVE=(
+  #     orca
+  'xfce4-keyboard-shortcuts:/commands/custom/<Alt><Super>s'
+
+  #     xfc4-screenshooter -w
+  'xfce4-keyboard-shortcuts:/commands/custom/<Alt>Print'
+  #     xfc4-screenshooter -r
+  'xfce4-keyboard-shortcuts:/commands/custom/<Shift>Print'
+
+  #     thunar
+  'xfce4-keyboard-shortcuts:/commands/custom/<Primary><Alt>f'
+  'xfce4-keyboard-shortcuts:/commands/custom/<Super>e'
+
+  #     xfce4-display-settings --minimal
+  'xfce4-keyboard-shortcuts:/commands/custom/<Super>p'
+  'xfce4-keyboard-shortcuts:/commands/custom/XF86Display'
+
+  #     xfce4-appfinder -c
+  'xfce4-keyboard-shortcuts:/commands/custom/<Super>r'
+
+  #     xfce4-appfinder --collapsed
+  'xfce4-keyboard-shortcuts:/commands/custom/<Alt>F2'
+
+  # don't lock session when we press CTRL+Alt+l
+  'xfce4-keyboard-shortcuts:/commands/custom/<Primary><Alt>l'
+
+  #     exo-open --launch TerminalEmulator
+  'xfce4-keyboard-shortcuts:/commands/custom/<Primary><Alt>t'
+
+  # don't open contextual menu when we accidentally press CTRL+Escape
+  'xfce4-keyboard-shortcuts:/commands/custom/<Primary>Escape'
+
+  #     exo-open --launch WebBrowser
+  'xfce4-keyboard-shortcuts:/commands/custom/HomePage'
+  'xfce4-keyboard-shortcuts:/commands/custom/XF86WWW'
+
+  #     exo-open --launch MailReader
+  'xfce4-keyboard-shortcuts:/commands/custom/XF86Mail'
+
+  # don't shadow our tmux prefix key
+  'xfce4-keyboard-shortcuts:/xfwm4/custom/<Alt>space'
+)
+
+readonly -a DEBUGGING_TOOLS=(
+  'gdb'
+  'ltrace'
+  'strace'
+)
+
+# If you install Debian, when you're asked for the password of the root account,
+# leave  it empty.   This  way, your  user  will automatically  be  able to  use
+# `sudo(8)` (i.e.  the `sudo` package  will be installed  and your user  will be
+# added to the `sudo` group).
+#
+# If for some  reason, you need to  manually add your user to  the `sudo` group,
+# log in as root from a console, then run:
+#
+#     # apt install sudo
+#     # adduser <user> sudo
+#
+# Then log out from your graphical  session for the `adduser(8)` command to take
+# effect.
+sudo --validate || exit 1
+
+# TODO: Review this:
+# https://lehollandaisvolant.net/linux/checklist/
+# https://commonjoe.gitlab.io/linux-install/LinuxMint21.1.html
+
+# Interface {{{1
+function Main { # {{{2
+  sudo apt-get --assume-yes install git rsync
+  Restore_Personal_Files
+  Restore_Local_Config
+
+  # Warning: Do *not* configure the system before having restored our local
+  # config.  `Configure_System` needs to read `.Xresources` and `terminalrc`.
+  # It also needs to source `~/bin/drop-in/update.d/_lib`.
+  Configure_System
+
+  # We can  only enable  our custom  systemd units  *after* restoring  our local
+  # config; the latter contains our unit files.
+  Manage_Systemd_Services
+}
+# }}}1
+# Core (configure system) {{{1
+function Configure_System { # {{{2
+  # We call this  function first, because it  creates `/etc/apt/keyrings/` which
+  # we need early.
+  Create_Directories_For_Apps
+
+  # This function must be called *before* we install packages.{{{
+  #
+  # We  might  install some  package  which  is  only  present in  some  archive
+  # or  component of  archive  not  set by  default.   For  example, on  Debian,
+  # `ttf-mscorefonts-installer` is not in `Main`; it's in `contrib`.
+  #}}}
+  Set_Packages_Sources
+
+  Install_Apps
+  Set_Default_Apps
+  Configure_GRUB
+
+  if [[ "${XDG_CURRENT_DESKTOP:=}" == 'XFCE' ]]; then
+    Configure_XFCE
+  fi
+
+  Configure_Keyboard
+  Configure_Locate
+  Configure_Virt_Manager
+  Set_DNS_Servers
+  Set_Locale
+  Local_Bashrc_And_Profile
+  Let_Debugging_Tools_Trace_Processes
+  Disable_Automatic_Debtags_Update
+  Fix_Bugs
+
+  if [[ "$DISTRIB_ID" == 'Debian' ]]; then
+    Customize_Debian
+  elif [[ "$DISTRIB_ID" == 'Ubuntu' ]]; then
+    Customize_Ubuntu
+  fi
+}
+
+function Create_Directories_For_Apps { # {{{2
+  sudo mkdir -p /etc/apt/apt.conf.d/diversions
+
+  # We'll  need `/etc/apt/keyrings`  to  add some  repositories  to our  package
+  # sources, but it does not exist on Debian.
+  if ! [[ -d '/etc/apt/keyrings' ]]; then
+    sudo mkdir -p /etc/apt/keyrings
+  fi
+
+  # To help de-coupling `$ apt update` from `$ apt-file update`.
+  # See `~/.config/etc/apt/apt-file.conf`:
+  #
+  #     Dir::State "var/lib/apt-file/";
+  #                 ^---------------^
+  sudo mkdir --mode=0700 -p /var/lib/apt-file/lists/partial
+  sudo chown _apt:root /var/lib/apt-file/lists/partial
+
+  # For the timestamp files `touch(1)`ed by our scripts.
+  mkdir "$HOME/.cache/timestamps"
+
+  # Some  of our  settings (e.g.  environment  variables) refer  to files  under
+  # directories in `~/.cache/`.  Let's make sure those exist.
+  mkdir -p "$HOME/.cache/"{bash,fish,tmux,vim}
+
+  # For some applications to create  their hitsory files under `~/.local/share/`
+  # instead of `$HOME`.
+  mkdir -p "$HOME/.local/share/"{bash,less,rlwrap,tig}
+
+  sudo mkdir -p /usr/local/share/applications
+
+  # for `ControlPath` in `~/.ssh/config`
+  mkdir --mode=0700 "$HOME/.ssh/cm_sockets"
+  #                             ^^
+  #                             Connection Multiplexing
+  #
+  # I don't think `0700` is really required.{{{
+  #
+  # The directory just needs to not be writable by other users:
+  #
+  #    > It is recommended that any ControlPath used for opportunistic connection
+  #    > sharing [...] be placed in a directory that is not writable by other users.
+  #
+  # Source: `man 5 ssh_config /^\s*ControlPath`
+  #
+  # Still, let's give it the smallest set of permissions.
+  #}}}
+
+  mkdir -p "$VIM_PLUGINS_DIR"
+}
+
+function Set_Packages_Sources { # {{{2
+  # In the future, `/etc/apt/sources.list` will be deprecated.{{{
+  #
+  #    > It is intended to make this format gradually the default format,
+  #    > deprecating the previously described one-line-style format, as it is
+  #    > easier to create, extend and modify for humans and machines alike
+  #    > especially if a lot of sources and/or options are involved.
+  #
+  # Source: `man 5 sources.list /DEB822-STYLE FORMAT/;/deprecating`
+  #}}}
+  #   Whenever you can, replace it with `/etc/apt/sources.list.d/00-<distro>.sources`.{{{
+  #
+  # `.sources` files can use the new deb822 format whose benefits are:
+  #
+  #    - more succinct
+  #    - easier to read
+  #    - easier to parse
+  #    - can embed PGP key into `Signed-By` field since APT 2.3.10
+  #
+  # Embedding a PGP key means that:
+  #
+  #    - adding a source only requires you to drop a single file in
+  #      `sources.list.d/`
+  #
+  #    - you don't have  to worry about putting  a key file in the correct
+  #      directory, with the right permissions and ownership
+  #
+  #    - you don't have to delete the associated key file when you remove
+  #      a source
+  #
+  # ---
+  #
+  # The `00-` prefix is there to ensure that the official repositories are given
+  # the  highest priority.   That is,  if a  package version  is available  from
+  # multiple sources, and one of them is  an official repository, we want to use
+  # the latter over all the other ones.
+  #}}}
+  # Warning: We don't have the guarantee that all Debian-derivatives support the
+  # new deb822 format.  For example, ATM, Linux Mint does not.
+
+  # In the URIs of your sources, prefer `https` over `http`.{{{
+  #
+  # `https` can protect you from remote code execution exploits.
+  # See: https://askubuntu.com/a/1114040
+  #
+  # Unfortunately, not all mirrors support `https`.
+  # `http://security.ubuntu.com/ubuntu` does not.
+  #}}}
+  # Warning: If you add a PPA hosted on Launchpad, use the domain name `ppa.launchpadcontent.net`.{{{
+  #
+  # And not `ppa.launchpad.net`; it would cause `$ apt update` to give an error,
+  # because the certificate was only issued for `ppa.launchpadcontent.net`:
+  #
+  #     $ gnutls-cli --port=443 ppa.launchpad.net
+  #     ...
+  #     - Status: The certificate is NOT trusted. The name in the certificate does not match the expected.
+  #}}}
+  # Warning: A trailing slash is not meaningless.{{{
+  #
+  # If you omit it in this URI:
+  #
+  #     https://deb.debian.org/debian
+  #         ^   ^^^                  ^
+  #
+  # Both Firefox and Chrome redirect to:
+  #
+  #     http://ftp.debian.org/debian/
+  #     ^--^   ^^^
+  #
+  # IOW,  omitting  a  trailing  slash  might  cause  an  unexpected  *in*secure
+  # connection.
+  #
+  # ---
+  #
+  # I'm not sure whether we can put a trailing slash unconditionally:
+  #
+  #    > this is dependent on the server; it could simply break!
+  #
+  # Source: https://webmasters.stackexchange.com/a/35646
+  #}}}
+
+  if [[ "$DISTRIB_ID" == 'Debian' ]]; then
+    Set_Debian_Package_Sources
+  elif [[ "$DISTRIB_ID" == 'Ubuntu' ]]; then
+    Set_Ubuntu_Package_Sources
+  fi
+}
+
+function Set_Debian_Package_Sources { # {{{2
+  sudo mv /etc/apt/sources.list{,.bak}
+  # Replace `/etc/apt/sources.list` with `/etc/apt/sources.list.d/00-debian.sources`
+  #
+  # ---
+  #
+  # Enable the `contrib`, `non-free`, and `non-free-firmware` components for all
+  # sources.  Also add the backports distribution.
+  #
+  # ---
+  #
+  # https://wiki.debian.org/SourcesList#debian.sources_format
+  sudo tee /etc/apt/sources.list.d/00-debian.sources >/dev/null <<EOF
+Types: deb deb-src
+URIs: https://deb.debian.org/debian/
+Suites: $DISTRIB_CODENAME $DISTRIB_CODENAME-updates $DISTRIB_CODENAME-backports
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb deb-src
+URIs: https://security.debian.org/debian-security/
+Suites: $DISTRIB_CODENAME-security
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+}
+
+function Set_Ubuntu_Package_Sources { # {{{2
+  sudo mv /etc/apt/sources.list{,.bak}
+  # replace `/etc/apt/sources.list` with `/etc/apt/sources.list.d/00-ubuntu.sources`
+  sudo tee /etc/apt/sources.list.d/00-ubuntu.sources >/dev/null <<EOF
+Types: deb deb-src
+URIs: https://fr.archive.ubuntu.com/ubuntu/
+Suites: $DISTRIB_CODENAME $DISTRIB_CODENAME-updates $DISTRIB_CODENAME-backports
+Components: main restricted universe multiverse
+
+Types: deb deb-src
+URIs: http://security.ubuntu.com/ubuntu/
+Suites: $DISTRIB_CODENAME-security
+Components: main restricted universe multiverse
+EOF
+}
+
+function Install_Apps { # {{{2
+  # Install Debian packages  first; we might need to install  some of them early
+  # (e.g. `curl(1)`).
+  Install_Debian_Packages
+  Install_Flatpak
+  Install_Lua_Modules
+  Install_Python_Packages
+  Install_Vim_Plugins
+}
+
+function Install_Debian_Packages { # {{{2
+  sudo apt-get --assume-yes install plocate \
+    && sudo updatedb
+
+  # for compiling
+  sudo apt-get --assume-yes install \
+    autoconf \
+    automake \
+    build-essential \
+    cmake \
+    gcc \
+    gcc-doc \
+    make \
+    pkg-config
+
+  # `antiword` + `odt2txt`: `convert2txt` custom script
+  # `apparmor-utils`: `aa-disable(8)`
+  # `aspell-en`: spell checking in WeeChat
+  # `binutils`: `ar(1)`, `ld(1)`, `objdump(1)`, `strings(1)`, `strip(1)`, ...
+  # `bluez` + `libspa-0.2-bluetooth`: to suppress warnings from `journalctl --boot=-0 --no-hostname --pager-end -nall`{{{
+  #
+  #     # libspa-0.2-bluetooth
+  #     wireplumber[...]: wp-device: SPA handle 'api.bluez5.enum.dbus' could not be loaded; is it installed?
+  #     wireplumber[...]: s-monitors: PipeWire's BlueZ SPA plugin is missing or broken. Bluetooth devices will not be supported.
+  #     wireplumber[...]: wp-device: SPA handle 'api.bluez5.midi.enum' could not be loaded; is it installed?
+  #     wireplumber[...]: s-monitors: PipeWire's BlueZ MIDI SPA missing or broken. Bluetooth not supported.
+  #     wireplumber[...]: pw.resource: can't create node: No such file or directory
+  #     wireplumber[...]: wp-node: failed to create node from factory 'spa-node-factory'
+  #     wireplumber[...]: s-monitors: Failed to create BLE MIDI server.
+  #
+  #     # bluez
+  #     wireplumber[...]: spa.bluez5: BlueZ system service is not available
+  #
+  # If you need to suppress more messages, check out `pipewire-pulse` and `pipewire-libcamera`.
+  #}}}
+  # `ca-certificates`: Allow SSL-based applications to check for authenticity of SSL connections.{{{
+  #
+  # For example, it's useful for WeeChat.
+  # Should already be installed but better be safe than sorry.
+  #}}}
+  # `colorized-logs`: `ansi2txt(1)`
+  # `command-not-found`: not installed by default in Debian {{{
+  #
+  # Also, the program in Debian is different from Ubuntu:
+  #
+  #    > This version is a bit different to the Ubuntu one:
+  #
+  # Source: `/usr/share/doc/command-not-found/README.Debian`
+  #
+  # And it depends on `apt-file`:
+  #
+  #     $ aptitude search '?reverse-depends(command-not-found)' | head --lines=1
+  #     p  apt-file - search for files within Debian packages (command-line interface)
+  #}}}
+  # `console-data`: more keyboard layouts for the console{{{
+  #
+  # In particular, this is useful for `$ loadkeys <layout>` and
+  # `$ localectl list-keymaps`.
+  #}}}
+  # `debconf-doc`: man page for `debconf(7)`
+  # `debconf-utils`: `debconf-get-selections(1)`
+  # `gawk`: for `--lint`ing awk scripts
+  # `gawk-doc`: for `gawkinet.pdf`
+  # `gdb-doc`: man page for `gdb(1)`
+  # `info`: not installed on Debian (`Priority: optional`)
+  # `libcap2-bin`: to add given capability to given binary (`man 8 setcap`)
+  # `libxcb-cursor0`: dependency for Calibre
+  # `manpages-posix`: manual pages about using POSIX system
+  # `manpages-posix-dev`: manual pages about using a POSIX system for development (useful for `man 3 strcmp`)
+  # `moreutils` conflicts with `parallel`.{{{
+  #
+  # We want  to use the  latter because it's better.   I don't think  it matters
+  # when we  install `parallel`  relative to `moreutils`;  what matters  is that
+  # it's installed:
+  #
+  #     $ dpkg-query --listfiles moreutils | grep diverted
+  #     diverted by parallel to: /usr/bin/parallel.moreutils
+  #     diverted by parallel to: /usr/share/man/man1/parallel.moreutils.1.gz
+  #
+  # For more info, see: https://superuser.com/a/1253492
+  #}}}
+  # `pipewire-bin`: suppress errors given when running mpv{{{
+  #
+  #     [W][21:42:10.060687] pw.conf      | [          conf.c: 1182 try_load_conf()] can't load config client.conf: No such file or directory
+  #     [E][21:42:10.060935] pw.conf      | [          conf.c: 1215 pw_conf_load_conf_for_context()] can't load config client.conf: No such file or directory
+  #
+  # https://github.com/mpv-player/mpv/issues/14517#issuecomment-2221624944
+  #}}}
+  # `psmisc`: `fuser(1)`, `killall(1)`, `pstree(1)`
+  # `renameutils`: `imv(1)`, `qmv(1)`
+  # `torsocks`: "torify" arbitrary application (useful to download images from Imgur)
+  # `wmcltr`: `jumpapp(1)` needs it
+  # `zstd`: better alternative to `gzip`{{{
+  #
+  # Tip: When comparing compression algorithms,  decompression is more important
+  # than compression; usually, you only compress  a file once, whereas you might
+  # decompress  it  several times  afterward  (whenever  you  want to  read  its
+  # contents).
+  #}}}
+  sudo apt-get --assume-yes install \
+    aiksaurus \
+    antiword \
+    apparmor-utils \
+    apt-file \
+    aptitude \
+    aptitude-doc-en \
+    aria2 \
+    aspell-en \
+    atool \
+    bat \
+    binutils \
+    bluez \
+    ca-certificates \
+    cloc \
+    cmus \
+    colorized-logs \
+    comixcursors-righthanded-opaque \
+    command-not-found \
+    conky-all \
+    curl \
+    debconf-doc \
+    debconf-utils \
+    entr \
+    feh \
+    ffmpeg \
+    file \
+    gawk \
+    gawk-doc \
+    gdb \
+    gdb-doc \
+    gnupg \
+    greybird-gtk-theme \
+    groff \
+    htop \
+    info \
+    inxi \
+    jq \
+    keepassx \
+    lftp \
+    libcap2-bin \
+    libspa-0.2-bluetooth \
+    libxcb-cursor0 \
+    ltrace \
+    lua5.1 \
+    luarocks \
+    lz4 \
+    mailutils \
+    mailutils-doc \
+    manpages-posix \
+    manpages-posix-dev \
+    mkvtoolnix \
+    moreutils \
+    mpv \
+    ncdu \
+    net-tools \
+    newsboat \
+    nmap \
+    numlockx \
+    odt2txt \
+    pipewire-bin \
+    python-is-python3 \
+    p7zip-full \
+    pandoc \
+    par \
+    parallel \
+    pastebinit \
+    podman \
+    psmisc \
+    rar \
+    redshift-gtk \
+    renameutils \
+    rlwrap \
+    ruby \
+    screenkey \
+    ssh \
+    strace \
+    systemd-container \
+    systemd-coredump \
+    tcpdump \
+    tesseract-ocr \
+    torsocks \
+    transmission \
+    transmission-cli \
+    transmission-daemon \
+    tree \
+    universal-ctags \
+    unrar \
+    valgrind \
+    virt-manager \
+    w3m \
+    w3m-img \
+    wget \
+    wmctrl \
+    xdotool \
+    xscreensaver \
+    xsel \
+    xvkbd \
+    zathura \
+    zathura-cb \
+    zathura-djvu \
+    zathura-ps \
+    zstd
+
+  # `bat` is `batcat` on Debian; let's fix that
+  sudo dpkg-divert --add --rename \
+    --divert=/usr/bin/bat \
+    /usr/bin/batcat
+  sudo dpkg-divert --add --rename \
+    --divert=/usr/share/man/man1/bat.1.gz \
+    /usr/share/man/man1/batcat.1.gz
+  sed 's/set bat batcat/set bat bat/' \
+    /usr/share/fish/vendor_completions.d/batcat.fish \
+    >"$HOME/.local/share/fish/vendor_completions.d/bat.fish"
+
+  # start `XScreenSaver(1)` automatically when we log in
+  cp /usr/share/xscreensaver/xscreensaver.desktop "$HOME/.config/autostart/"
+
+  # Installing the  `gawk` package causes  `awk(1)` to call `gawk(1)`.   We want
+  # `awk(1)`  to call  `mawk(1)` (it's  the default,  faster, simpler,  and more
+  # portable).
+  sudo update-alternatives --set awk /usr/bin/mawk
+
+  # If you want  the GRUB menu to  contain `memtest` entries, you  might need to
+  # install the `memtest86+` package.
+
+  # If you're  looking for an  easier front end  to `iptables(8)`/`nftables(8)`,
+  # have a  look at  `ufw(8)` (CLI),  or `fwbuilder(1)`  (GUI).  The  latter can
+  # generate a valid config file from a simple GUI.
+
+  # TODO: When we install `console-data`, `debconf(1)` asks some question(s).  I
+  # don't  know what  is/are the  correct answer(s).   Also, how  to script  the
+  # answers?  Make sure  our script pre-answers configuration  questions for all
+  # packages.
+  #
+  #     $ man debconf-get-selections
+  #     $ man debconf-set-selections
+  #
+  # Also, read the Debian Handbook (Section 12.3: "Automated Installation").
+  #
+  # Edit: Try something like this:
+  #
+  #     $ sudo debconf-set-selections <<<"console-data console-data/keymap/policy select Don't touch keymap"
+  #
+  # ---
+  #
+  # BTW, if you mess up the configuration of a package, you can reset it with:
+  #
+  #     $ sudo dpkg-reconfigure <package>
+
+  # TODO: Configure    `keyboard-configuration`    so    that   we    can    use
+  # Control+Alt+Backspace to terminate the X server.
+  #
+  # Alternative:
+  #
+  #     $ sed -i '/^XKBOPTIONS=/s/"\(.*\)"/"\1,terminate:ctrl_alt_bksp"/' /etc/default/keyboard
+
+  # TODO: Install more `.deb` packages (`~/bin/pkg-manually-installed`).
+  #
+  #     apt-listchanges
+  #     at
+  #     auditd
+  #     autoconf-dickey
+  #     caca-utils
+  #     ccze
+  #     console-data
+  #     debfoster
+  #     debsums
+  #     default-jre
+  #     dfc
+  #     dialog
+  #     dos2unix
+  #     evtest
+  #     fbi
+  #     fbterm
+  #     ffmpegthumbnailer
+  #     gettext
+  #     gnutls-bin (certtool(1), gnutls-cli(1))
+  #     go-md2man
+  #     gpick
+  #     graphviz
+  #     grc
+  #     imagemagick
+  #     latexmk
+  #     libglib2.0-bin (gio(1))
+  #     libosinfo-bin (osinfo-query(1))
+  #     luajit
+  #     meson
+  #     mkvtoolnix
+  #     ncurses-base
+  #     ncurses-term
+  #     ninja-build
+  #     pastebinit
+  #     perl-doc
+  #     pylint
+  #     python3-distutils
+  #     python3-docutils
+  #     python3-markdown
+  #     python3-setuptools
+  #     python-dev-is-python3
+  #     slop
+  #     socat
+  #     sqlite3
+  #     ssh-askpass
+  #     sshfs
+  #     tidy
+  #     tig
+  #     traceroute
+  #     units
+  #     watchdog
+  #     xkeycaps
+
+  # TODO: On   Debian   12,  do   we   need   to   install  `rsyslog`   to   get
+  # `/var/log/{auth.log,syslog}`?   And  do we  need  `auditd`  to get  logs  in
+  # `/var/log/audit/`?
+  #
+  # Edit: `rsyslog` is no longer necessary:
+  #
+  #    > The rsyslog package is no longer needed on most systems and you may be
+  #    > able to remove it.
+  #    > Many programs produce log messages to inform the user of what they are
+  #    > doing.
+  #    > These messages can be managed by systemd's “journal” [...]
+  #
+  #    > [...]
+  #
+  #    > If you decide to switch away from rsyslog you can use the journalctl
+  #    > command to read log messages, which are stored in a binary format under
+  #    > /var/log/journal. For example,
+  #    > journalctl -e
+  #    > shows the most recent log messages in the journal and
+  #    > journalctl -ef
+  #    > shows new messages as they are written
+  #
+  # Source: https://www.debian.org/releases/bookworm/amd64/release-notes/ch-information.en.html#changes-to-system-logging
+
+  # TODO: How to handle PPAs on Debian?
+  #
+  # Edit: I think that *some* PPAs are  intended to be used by Debian (e.g. Node
+  # Source and Oracle Corporation).  But not all (e.g. git, wireshark).
+  # For those, if you're on Debian, read this:
+  # https://wiki.debian.org/CreatePackageFromPPA
+  #
+  # ---
+  #
+  #    > If your  repos are still pointed at **debian stable, you  will most likely run
+  #    > into installation issues as **there are no repos here for debian stable**.
+  #
+  # Source: https://build.opensuse.org/package/show/devel:kubic:libcontainers:unstable/podman#comment-1755693
+  #
+  # And yet, the repo for Debian Testing seems to work in a Debian VM:
+  # https://podman.io/docs/installation#debian
+
+  # TODO: Give  some message  about all  programs which  are listed  in our  RSS
+  # subscriptions (e.g. `bat`, `jumpapp`, `navi`, ...).
+  #
+  # ---
+  #
+  # BTW, we  don't have  any PPA  nor any RSS  feed for  `ffmpeg(1)`, but  we do
+  # install an updated version from: https://johnvansickle.com/ffmpeg/
+  # Again, give a message to let us know that we might want to do it right after
+  # a fresh OS install.
+  #
+  # Try to install some of them if it can be scripted.
+  #
+  # ---
+  #
+  # Edit: I have a better idea.
+  # Download your  `.tar.gz` archives, static  builds, and single binaries  to a
+  # dedicated  directory  (maybe  `entr(1)`,  or  a  systemd  unit  path,  could
+  # move them  automatically out  of `~/Downloads/`).   Back up  that directory.
+  # Finally, run  all the scripts under  `~/bin/drop-in/update.d/` (they'll need
+  # to look into that directory instead of `~/Downloads/`).
+  #
+  # Issue: What if  we have an  `ffmpeg` archive/binary because the  program was
+  # too old on the previous system, but it's no longer necessary on the new one.
+  # Right now, this script installs `ffmpeg`  from the official repo.  It should
+  # not install yet another version in our home.  That would be confusing.
+
+  # `light-locker` is broken.{{{
+  # Leave the system idle for a while: the screen shuts off.
+  # Type some keys: a message is given:
+  #
+  #     This session is locked.  You'll be redirected to the unlock dialog
+  #     automatically in a few seconds.
+  #
+  # That's a lie (we never get a chance to unlock the session):
+  # https://github.com/the-cavalry/light-locker/issues/126#issuecomment-650484169
+  #}}}
+  # `rpcbind` is useless.{{{
+  #
+  # At least on a standalone machine:
+  #
+  #    > RPC is one of those protocols that just doesn’t want to die. The Network
+  #    > File System (NFS) and Network Information Service (NIS) systems use
+  #    > RPC, but they are **completely unnecessary on standalone machines**. But
+  #    > whenever you think that you’ve eliminated all need for rpcbind, something
+  #    > else comes up, such as File Access Monitor (FAM) support in GNOME.
+  #
+  # Source: "How Linux Works" (10.6 "Remote Procedure Calls").
+  #
+  # It automatically starts a process:
+  #
+  #     _rpc         381  0.0  0.1   7108  3760 ?        Ss   12:36   0:00 /sbin/rpcbind -f -w
+  #
+  # And creates noise in the output of `$ sudo lsof -i -nP`:
+  #
+  #     rpcbind     381             _rpc    4u  IPv4  12891      0t0  TCP *:111 (LISTEN)
+  #     rpcbind     381             _rpc    5u  IPv4  12892      0t0  UDP *:111
+  #     rpcbind     381             _rpc    6u  IPv6  12895      0t0  TCP *:111 (LISTEN)
+  #     rpcbind     381             _rpc    7u  IPv6  12898      0t0  UDP *:111
+  #
+  # And starts these systemd units:
+  #
+  #    - `rpcbind.service`
+  #    - `rpcbind.socket`
+  #
+  # ---
+  #
+  # To see what RPC services your computer has, run:
+  #
+  #     $ rpcinfo -p localhost
+  #
+  # Last time I checked, I think the output  only contained a bunch of lines for a
+  # service for RPC itself...
+  #}}}
+  sudo apt-get --assume-yes purge --autoremove \
+    light-locker \
+    rpcbind
+
+  # TODO: Should we purge LibreOffice packages (ATM, they add 7 `.desktop` files
+  # which pollutes a little our omni-GUI/applauncher script)?
+  #
+  #     $ sudo apt-get --assume-yes purge --autoremove \
+  #         $(aptitude search '?installed ?name(libreoffice)' --display-format='%p')
+  #
+  # Similarly,  the   `im-config`,  `mate-calc`,  and  `onboard`   packages  add
+  # `.desktop` files, and seem useless.
+  #
+  # Edit: On Debian 12, only `im-config` and LibreOffice are installed.
+  # On Ubuntu 23.04, only LibreOffice is installed.
+  #
+  # Is it OK to purge `im-config` on Debian?
+  #
+  # ---
+  #
+  # Instead   of  purging   some   packages,  should   we   just  "hide"   their
+  # desktop  files?   I  guess we  just  need  a  file  with the  same  name  in
+  # `~/.local/share/applications/`,  and  with  a  `Hidden=true`  directive  (or
+  # `NoDisplay=true`?).
+  #
+  # See: https://old.reddit.com/r/Ubuntu/comments/d41zcr/is_it_possible_to_remove_input_method_and/f072jrr/
+  #
+  # BTW, we've documented this in `~/.config/autostart/README.md`.
+  # But not in `~/.local/share/applications/README.md`.
+  # We should have.
+}
+
+function Install_Flatpak { # {{{2
+  # https://flatpak.org/setup/Debian
+  # TODO: When you run stremio, if you get error messages in your systemd journal:{{{
+  #
+  #     gnome-software[...]: Failed to reload changed app filter: App filtering is globally disabled
+  #
+  # Try installing `gnome-software-plugin-flatpak`.
+  #
+  # Not sure  it helps  but it's  worth a  try (it's  suggested in  the previous
+  # link;  but only  for GNOME,  so not  sure  it works  for XFCE).   If you  do
+  # install it,  note all the pulled  dependencies.  Last time we  installed it,
+  # there  were  a  lot  of  them,  and they  weren't  removed  when  we  purged
+  # `gnome-software-plugin-flatpak`.
+  #}}}
+  sudo apt-get --assume-yes install flatpak
+  flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+  # SpeechNote
+  flatpak --user install --assumeyes --noninteractive app/net.mkiol.SpeechNote/x86_64/stable
+
+  # stremio
+  flatpak --user install --assumeyes --noninteractive app/com.stremio.Stremio/x86_64/stable
+}
+
+function Install_Lua_Modules { # {{{2
+  local module
+  for module in "${LUA_MODULES[@]}"; do
+    luarocks --local install "$module"
+  done
+}
+
+function Install_Python_Packages { # {{{2
+  # pipx is useful to install Python *applications*.{{{
+  #
+  # It    installs    symlinks    in    `~/.local/bin`,    which    points    to
+  # binaries   in   virtual    environments   in   `~/.local/pipx/venvs`   (e.g.
+  # `~/.local/pipx/venvs/tldr/bin/tldr`).
+  #
+  # ---
+  #
+  # It will always use an up-to-date `pip3(1)`.
+  #
+  # It auto-updates `pip3(1)` with this command:
+  #
+  #     $ ~/.local/pipx/shared/bin/python -m pip \
+  #         --disable-pip-version-check install \
+  #         --force-reinstall --upgrade pip setuptools wheel
+  #
+  # Found when installing a package with `--verbose`.
+  #
+  # ---
+  #
+  # BTW,  avoid  the  `pip3(1)`  installed  by `python3-pip`  or  by  a  virtual
+  # environment.  They're not up-to-date.
+  #}}}
+  # But I still need pip to install Python *libraries*! (e.g. `pynvim`){{{
+  #
+  # pipx can't install those.
+  # Install your libraries inside isolated virtual environments.
+  #}}}
+  # `python3-venv`: to create virtual environments{{{
+  #
+  # Without, an error is given when we run `$ python3 -m venv`:
+  #
+  #     The virtual environment was not created successfully because ensurepip is not
+  #     available.  On Debian/Ubuntu systems, you need to install the python3-venv
+  #     package ...
+  #
+  # ---
+  #
+  # About `ensurepip`:
+  #
+  #    > The  ensurepip package  provides support for  bootstrapping the  pip installer
+  #    > into an existing Python installation or virtual environment.
+  #
+  # Source: https://docs.python.org/3/library/ensurepip.html
+  #
+  # ---
+  #
+  # `python3-venv` pulls in `python3.XY-venv`:
+  #
+  #     $ apt show python3-venv
+  #     ...
+  #     This package is a dependency package, which depends on Debian's default
+  #     Python 3 version's venv module (currently v3.11).
+  #
+  # The description of `python3.XY-venv` is misleading:
+  #
+  #     $ apt show python3.XY-venv
+  #     ...
+  #     This package contains the pyvenv-3.XY binary.
+  #
+  # It doesn't  install any `pyvenv` binary.   In fact, the `pyvenv`  script has
+  # been removed upstream:
+  #
+  #    > The pyvenv script has been removed in favor of python3.8 -m venv to help
+  #    > eliminate confusion as to what Python interpreter the pyvenv script is tied to.
+  #
+  # Source: https://docs.python.org/3/whatsnew/3.8.html#api-and-feature-removals
+  #
+  # But `python3-venv` does  install the `ensurepip` package; since  we need the
+  # latter to create virtual environments, we need to install the former here.
+  #}}}
+  # No need to install `python3-full`.{{{
+  #
+  # On Debian 12, it  pulls in 22 dependencies (including an  IDE – IDLE), and
+  # takes 117  MB of space  in total.  That's too  much.  Just install  what you
+  # need.
+  #}}}
+  sudo apt-get --assume-yes install pipx python3-venv
+
+  local app
+  for app in "${PYTHON_APPS[@]}"; do
+    pipx install "$app"
+  done
+
+  # To use Python plugins, we need the `pynvim` module.{{{
+  #
+  # We install it inside a venv (not with pipx, because `pynvim` is a library).
+  #
+  # For more info:
+  #
+  #    - `:help python-virtualenv`
+  #    - `:help g:python3_host_prog`
+  #
+  # To check if Nvim can find it, run `:checkhealth`.
+  #}}}
+  local venv_dir="$HOME/.local/lib/nvim/venv"
+  mkdir -p "$venv_dir"
+  python3 -m venv "$venv_dir"
+  # shellcheck disable=SC1091
+  source "$venv_dir/bin/activate"
+  python3 -m pip install --upgrade pip
+  python3 -m pip install --upgrade pynvim
+  deactivate
+}
+
+function Install_Vim_Plugins { # {{{2
+  local URL
+  for URL in "${VIM_PLUGINS[@]}"; do
+    git -C "$VIM_PLUGINS_DIR" clone --depth=1 "$URL"
+  done
+}
+
+function Set_Default_Apps { # {{{2
+  # shellcheck disable=SC1091
+  source "$HOME/bin/drop-in/update.d/_lib"
+
+  local app
+  for app in "${DEFAULT_APPLICATIONS[@]}"; do
+    _Set_App_As_Mimetype_Handler "$app"
+  done
+}
+
+function Manage_Systemd_Services { # {{{2
+  # TODO: Compare systemd services between a freshly installed Ubuntu and Debian.
+  # Are there services on Ubuntu we should `disable --now`?
+  #
+  #     $ vimdiff ~/VMs/{debian,xubuntu}/share/systemctl.log
+
+  # We need to be in the  `systemd-journal` group for `journalctl(1)` to give us
+  # messages from other users and the system, when run without `sudo(8)`.
+  #
+  #     $ journalctl --unit=foo.service
+  #     Hint: You are currently not seeing messages from other users and the system.
+  #           Users in groups 'adm', 'systemd-journal' can see all messages.
+  sudo adduser "$USER" systemd-journal
+
+  # TODO: Limit amount of CPU, RAM, I/O bandwidth our user can consume.
+  #
+  # Rationale: If we  start some greedy or  buggy process, we want  to make sure
+  # that the system still has enough resources  to do its job, and that the root
+  # user can kill the process if need be.
+  #
+  #     declare -i CPU_quota=90
+  #     # how to compute 90% of the currently available total RAM?
+  #     declare memory_max='3.5'
+  #     # how to compute 90% of the currently available total I/O bandwidth?
+  #     declare -i IO_max=200
+  #
+  #     ncore="$(lscpu | awk '/^CPU\(s\):[[:blank:]]*[[:digit:]]*$/ { print $2 }')"
+  #     sudo systemctl set-property user-"$UID".slice CPUQuota="$(awk "BEGIN { print $ncore * $CPU_quota }")%"
+  #     sudo systemctl set-property user-"$UID".slice MemoryMax="${memory_max}G"
+  #     device="$(findmnt --noheadings --output=SOURCE -- "$(df --output=target . | grep '^/')")"
+  #     find /dev/disk/by-path -type l -print0 \
+  #       | while IFS= read -r -d '' by_path; do
+  #           if [[ "$(realpath -- "$by_path")" == "$device" ]]; then
+  #             sudo systemctl set-property user-"$UID".slice IOReadBandwidthMax="$by_path ${IO_max}M"
+  #             sudo systemctl set-property user-"$UID".slice IOWriteBandwidthMax="$by_path ${IO_max}M"
+  #             break
+  #           fi
+  #         done
+
+  # Disable automatic updates of `.deb` packages.
+  # We prefer to download and install them manually once per week.
+  # On Ubuntu 20.04, it's useless to disable the services.{{{
+  #
+  # Because they don't  have any `[Install]` section over there;  but it doesn't
+  # give any error, and  in the future we might be using a  system where they do
+  # have an `[Install]` section.
+  #}}}
+  sudo systemctl disable --now apt-daily{,-upgrade}.{timer,service}
+
+  # The system `transmission-daemon.service` unit conflicts with our own at:
+  # `~/.config/systemd/user/transmission-daemon.service`
+  sudo systemctl disable --now transmission-daemon.service
+
+  # On XFCE, systemd might start `blueman-mechanism.service`.{{{
+  #
+  # The default target is `graphical.target`:
+  #
+  #     $ systemctl get-default
+  #     graphical.target
+  #
+  # It pulls in `multi-user.target`:
+  #
+  #     $ systemctl show graphical.target --property=Requires --value
+  #     multi-user.target
+  #
+  # Which in turn wants `blueman-mechanism.service`:
+  #
+  #     $ systemctl show blueman-mechanism.service --property=WantedBy --value
+  #     multi-user.target
+  #
+  # The whole chain can be found with this command:
+  #
+  #     $ systemctl list-dependencies --reverse blueman-mechanism.service
+  #     blueman-mechanism.service
+  #     ● └─multi-user.target
+  #     ●   └─graphical.target
+  #}}}
+  if systemctl is-enabled --quiet blueman-mechanism.service 2>/dev/null; then
+    sudo systemctl disable --now blueman-mechanism.service
+  fi
+
+  # If you want a default firewall, uncomment the next line:
+  #
+  #     sudo systemctl enable --now nftables.service
+
+  # enable (and start `--now`) all our custom user units
+  #
+  #                                             suppress "grep: /path/to/dir: Is a directory"
+  #                                                                               v---------v
+  grep --null --files-with-matches '^\[Install\]$' "$HOME/.config/systemd/user/"* 2>/dev/null \
+    | xargs --null --no-run-if-empty systemctl --user enable --now --
+  # We don't need `find(1)` nor `grep(1)`'s `--recursive`.{{{
+  #
+  # `find(1)` would be useful  with some predicates, like `-name '*.extension'`.
+  # But here, we want to look in  all kinds of unit files (`.service`, `.timer`,
+  # ...). Besides,  `find(1)`'s alternative  would be  less efficient;  it would
+  # need  to start  one `grep(1)`  process  per file;  you would  need to  write
+  # `-exec[dir] grep ... \;`  (with `\+`  instead  of `\;`,  the  test would  be
+  # always true, thus meaningless).
+  #
+  # And the unit files we're looking for should be at the root of the directory,
+  # so no need of `grep(1)`'s `--recursive`.
+  #}}}
+  # Don't replace the `systemctl(1)`'s `enable` subcommand with `reenable`.{{{
+  #
+  # The latter doesn't support `--now`.
+  #
+  # Besides, on  a freshly  installed system, `reenable`  is useless  (our units
+  # were never enabled, so there's no need for `reenable` to `disable` them).
+  #}}}
+
+  sudo systemctl daemon-reload
+  systemctl --user daemon-reload
+}
+
+function Configure_GRUB { # {{{2
+  # Remove    the   `quiet`    and   `splash`    boot   parameters    from   the
+  # `GRUB_CMDLINE_LINUX_DEFAULT`  option  to  increase  the  kernel's  verbosity
+  # during boot and disable splash screen; the goal is to be able to read kernel
+  # messages.
+  #
+  # Set the `GRUB_SAVEDEFAULT` to `true` so that when an entry is selected, it's
+  # saved  as a  new default  entry for  use by  future runs  of GRUB.   Set the
+  # `GRUB_DEFAULT` to  `saved` so that  the default menu  entry is the  last one
+  # saved.
+  #
+  # Set  the `GRUB_TIMEOUT`  option to  2 so  that GRUB  waits 2  seconds before
+  # automatically selecting entry.
+  sudo sed -i'.bak' \
+    '/GRUB_CMDLINE_LINUX_DEFAULT=/ s/\<quiet\s\+splash\>//
+    /GRUB_SAVEDEFAULT=\|GRUB_DEFAULT=/d ; $ a GRUB_SAVEDEFAULT=true\nGRUB_DEFAULT=saved
+    /GRUB_TIMEOUT=/ s/.*/GRUB_TIMEOUT=2/' \
+    /etc/default/grub
+
+  # update GRUB's config file
+  sudo update-grub
+}
+
+function Configure_XFCE { # {{{2
+  # Syntax of a `xfconf-query(1)` command:{{{
+  #
+  # Example:
+  #
+  #                              v-------v             vvv v-------------v        vv
+  #     $ xfconf-query --channel=xsettings --property=/Gtk/CursorThemeSize --set='48'
+  #
+  #    - `xsettings` is the name of a "channel"
+  #    - `Gtk` is the name of a "property"
+  #    - `CursorThemeSize` is the name of the child property which we want to set
+  #    - `48` is the value which we set
+  #
+  # All   properties   of  a   channel   are   set   in   an  `.xml`   file   in
+  # `~/.config/xfce4/xfconf/xfce-perchannel-xml/`.
+  #
+  # ---
+  #
+  # To list all the channels:
+  #
+  #     $ xfconf-query --list
+  #
+  # To list all properties (and their values) of a given channel:
+  #
+  #     $ xfconf-query --list --channel=<channel> --verbose
+  #}}}
+  # While your're experimenting, if you want to restore the default settings:{{{
+  #
+  #     $ xfce4-panel --quit \
+  #       ; killall xfconfd \
+  #       ; rm -rf ~/.config/xfce4/{panel,xfconf/xfce-perchannel-xml/xfce4-panel.xml} \
+  #       ; xfce4-panel 2>/dev/null & disown
+  #
+  # Source: https://askubuntu.com/a/224037
+  #}}}
+
+  # configure XFCE4 terminal
+  local xfce4_terminal_config="$HOME/.config/xfce4/terminal/terminalrc"
+  mkdir -p "${xfce4_terminal_config%/*}"
+  touch "$xfce4_terminal_config"
+  sed -i '/^FontName=\|^ScrollingBar=\|^ShortcutsNoMnemonics=/d' "$xfce4_terminal_config"
+  tee --append "$xfce4_terminal_config" >/dev/null <<'EOF'
+FontName=DejaVu Sans Mono 20
+MiscBordersDefault=FALSE
+MiscMenubarDefault=FALSE
+ScrollingBar=TERMINAL_SCROLLBAR_NONE
+ShortcutsNoMnemonics=TRUE
+EOF
+
+  local Xresources="$HOME/.Xresources"
+  # we delete `ColorBold` to not set a custom bold color
+  sed -i '/^Color\(Bold\|Foreground\|Background\|Cursor\|Palette\)=/d' "$xfce4_terminal_config"
+  local color_foreground color_background color_cursor color_palette
+  color_foreground="$(sed -n 's/^\*\.foreground:\s\+\(#[[:xdigit:]]\+\)$/\1/p' "$Xresources")"
+  color_background="$(sed -n 's/^\*\.background:\s\+\(#[[:xdigit:]]\+\)$/\1/p' "$Xresources")"
+  color_cursor="$(sed -n 's/^\*\.cursorColor:\s\+\(#[[:xdigit:]]\+\)$/\1/p' "$Xresources")"
+  color_palette="$(
+    sed -n '/^\*\.color[[:digit:]]\+:\s\+\(#[[:xdigit:]]\+\)$/p' "$Xresources" \
+    | sort --version-sort \
+    | sed 's/^\*\.color[[:digit:]]\+:\s\+//' \
+    | paste --serial --delimiters=';' \
+  )"
+  tee --append "$xfce4_terminal_config" >/dev/null <<EOF
+ColorForeground=$color_foreground
+ColorBackground=$color_background
+ColorCursor=$color_cursor
+ColorPalette=$color_palette
+EOF
+
+  mkdir -p "$HOME/.local/share/themes/None/xfwm4"
+  touch "$HOME/.local/share/themes/None/xfwm4/themerc"
+
+  # clear panel(s)
+  xfconf-query --channel='xfce4-panel' --property='/panels' --reset  --recursive
+  xfconf-query --channel='xfce4-panel' --property='/panels' --create --force-array --type=int --set=1
+  xfconf-query --channel 'xfce4-panel' --property '/plugins' --reset --recursive
+
+  # add panel's plugins IDs (we'll add 9 plugins)
+  xfconf-query \
+    --create \
+    --channel=xfce4-panel \
+    --property='/panels/panel-1/plugin-ids' \
+    --type=int --set=1 \
+    --type=int --set=2 \
+    --type=int --set=3 \
+    --type=int --set=4 \
+    --type=int --set=5 \
+    --type=int --set=6 \
+    --type=int --set=7 \
+    --type=int --set=8 \
+    --type=int --set=9
+
+  local parameters
+  for parameters in "${XFCE_SETTINGS[@]}"; do
+    readarray -t -d ':' parameters < <(printf '%s' "$parameters")
+    xfconf-query \
+      --channel="${parameters[0]}" \
+      --create \
+      --property="${parameters[1]}" \
+      --set="${parameters[2]}" \
+      --type="${parameters[3]}"
+  done
+
+  for parameters in "${XFCE_SETTINGS_TO_REMOVE[@]}"; do
+    readarray -t -d ':' parameters < <(printf '%s' "$parameters")
+    xfconf-query \
+      --channel="${parameters[0]}" \
+      --property="${parameters[1]}" \
+      --reset
+  done
+
+  # restart panel for taking effect
+  xfce4-panel --restart
+
+  # wallpapers
+  local interface
+  local wallpaper
+  for interface in 'VGA' 'HDMI'; do
+    local -i i=0
+    for wallpaper in "$HOME/Pictures/wallpapers/workspaces/"*; do
+      xfconf-query \
+        --channel=xfce4-desktop \
+        --create \
+        --property=/backdrop/screen0/monitor"$interface"-1/workspace"$i"/last-image \
+        --set="$wallpaper" \
+        --type='string'
+      (( i++ ))
+    done
+  done
+
+  # let us use a different wallpaper for each workspace
+  xfconf-query \
+    --channel=xfce4-desktop \
+    --create \
+    --property=/backdrop/single-workspace-mode \
+    --set=false \
+    --type=bool
+
+  # Prevent XFCE from saving & restoring a session.{{{
+  #
+  # It can happen even if you untick “Automatically save session on logout” in:
+  #
+  #     Settings
+  #     > Session and Startup
+  #     > General
+  #
+  # Maybe that's  because we  sometimes forget to  untick “Save  session for
+  # future logins” in the GUI menu which pops up when we log out by pressing
+  # Alt-F4 while on the desktop...
+  #
+  # See: https://askubuntu.com/questions/427842/how-to-permanently-disable-the-save-session-feature-in-xubuntu
+  #
+  # In any case, when that happens, you might experience many issues.
+  #
+  # E.g., sometimes, the desktop manager  (`xfdesktop(1)`) or worse the window
+  # manager (`xfwm4`)  process is not  automatically started when you  boot up
+  # the machine.
+  #
+  # Not sure,  but it  might also  affect the persistence  of a  custom cursor
+  # theme across reboots.
+  #
+  # ---
+  #
+  # Once, the  window manager was not  started, not even after  restarting the
+  # machine.  This lead to many issues.
+  #
+  # The cursor in  the terminal was not  a full block, but an  empty one (only
+  # the borders were drawn, not the inside).
+  #
+  # When starting tmux, its  status line position was too low;  half of it was
+  # not visible.
+  #
+  # After starting the  web browser, we could not enter  text anywhere, except
+  # in the  browser whose  window geometry  was too small  to be  usable.  The
+  # latter issue persisted across reboots.
+  # It was not possible to administrate  the machine anymore; we had to switch
+  # to the console and start `w3m(1)` to find a solution.
+  #
+  # ---
+  #
+  # Here is another issue which seems to confirm that this feature is buggy:
+  # https://bugs.launchpad.net/ubuntu/+source/xfce4-session/+bug/1215182
+  #
+  # I really don't want to rely on such an unreliable feature, which can cause
+  # so many different issues.
+  #}}}
+  rm -rf "$HOME/.cache/sessions/"* \
+    && chmod -w "$HOME/.cache/sessions"
+}
+
+function Configure_Keyboard { # {{{2
+  # TODO: Is that correct?
+  #
+  # Or should we run:
+  #
+  #     $ dpkg-reconfigure keyboard-configuration
+  #
+  # The latter should update `/etc/default/keyboard`.
+  # You need to reboot for the changes to take effect.
+  #
+  # ---
+  #
+  # In any  case, don't choose  a variant with  dead keys (otherwise,  you might
+  # need to  press the backtick key  twice to insert a  single backtick).  Also,
+  # make sure  our tmux key bindings  to focus the previous/next  window work as
+  # expected.
+  xfconf-query \
+    --create \
+    --channel=keyboard-layout \
+    --property='/Default/XkbModel' \
+    --type='string' \
+    --set='pc105'
+
+  xfconf-query \
+      --create \
+      --channel=keyboard-layout \
+      --property='/Default/XkbLayout' \
+      --type='string' \
+      --set='fr'
+
+  xfconf-query \
+    --create \
+    --channel=keyboard-layout \
+    --property='/Default/XkbVariant' \
+    --type='string' \
+    --set=''
+
+  xfconf-query \
+    --create \
+    --channel=keyboard-layout \
+    --property='/Default/XkbOptions' \
+    --type='string' \
+    --set='lv3:ralt_switch'
+
+  xfconf-query \
+    --create \
+    --channel=keyboard-layout \
+    --property='/Default/Backspace' \
+    --type='string' \
+    --set='guess'
+}
+
+function Configure_Locate { # {{{2
+  # Some directories often create a lot of noise in `locate(1)`'s output.
+  # Let's make the latter ignore them.
+  local -a add_prunepaths=(
+    "$HOME/.cargo/registry"
+    "$HOME/.local/share/containers"
+  )
+
+  # `%/`: remove possible trailing slash appended to a path.{{{
+  #
+  #                                           ✘
+  #                                           v
+  #     $ sudo updatedb --add-prunepaths='/usr/' --debug-pruning 2>&1 \
+  #         | grep -i 'skip.*usr'
+  #
+  #                                          ✔
+  #                                          v
+  #     $ sudo updatedb --add-prunepaths='/usr' --debug-pruning 2>&1 \
+  #         | grep -i 'skip.*usr'
+  #     Skipping `/usr': in prunepaths
+  #}}}
+  #                                   vv
+  local to_append="${add_prunepaths[*]%/}"
+  sudo sed -i'.bak' 's,^\(PRUNEPATHS\s*=.*\)\([''"]\),\1 '"$to_append"'\2,' /etc/updatedb.conf
+}
+
+function Configure_Virt_Manager { # {{{2
+  # prevent `virt-manager(1)` from asking for our password
+  sudo adduser "$USER" libvirt
+}
+
+function Set_DNS_Servers { # {{{2
+# https://wiki.debian.org/NetworkConfiguration#resolv.conf.DNS_configuration_for_NetworkManager
+# `man 7 nmcli-examples`
+
+  # Warning: Whatever   alternative   DNS   servers  you   choose,   make   sure
+  # `$ ping -c5 8.8.8.8` still  works.  If  you get  "Temporary failure  in name
+  # resolution", choose other DNS servers.
+  #
+  # Don't make a test  with Firefox; the latter might be  able to resolve domain
+  # names even  if all  other programs  can't (e.g. WeeChat).   Probably because
+  # it's configured to not use our system DNS.
+  #
+  # This breaks the DNS resolution (except for Firefox):
+  #
+  # ATM, FDN and Mullvad's servers don't seem to work for us.
+
+  nmcli connection modify 'Wired connection 1' \
+    ipv4.method 'auto' \
+    ipv4.ignore-auto-dns yes \
+    ipv4.dns '185.222.222.222,45.11.45.11'
+    #         ^-------------^
+    # dns.sb:
+    #
+    #    > Aucun filtrage.
+    #
+    # Source: https://sebsauvage.net/wiki/doku.php?id=dns-alternatifs
+
+  nmcli connection modify 'Wired connection 1' \
+    ipv6.method 'auto' \
+    ipv6.ignore-auto-dns yes \
+    ipv6.dns '2a09::,2a11::'
+
+  # Problem: Without encryption, your ISP can still hijack your DNS requests.
+  # Solution: In Firefox, configure DOH (DNS over HTTPS).
+  # https://support.mozilla.org/en-US/kb/dns-over-https
+  #
+  # For dns.sb, you'll set this provider:
+  # https://doh.dns.sb/dns-query
+}
+
+function Set_Locale { # {{{2
+  # We  need  to  set  the  locale  because  it's  inferred  by  the  system  at
+  # install-time from the chosen language and  keyboard layout, which – in our
+  # case  – come  from  different regions  (*english*  language, but  *french*
+  # keyboard  layout).   This might  make  the  system  set  a bunch  of  `LC_*`
+  # environment variables with french values, which we don't want.
+
+  sudo update-locale LANG=en_US.UTF-8
+}
+
+function Local_Bashrc_And_Profile { # {{{2
+  # Make sure the bash prompt is always colored.{{{
+  #
+  # The  default bashrc  (copied  from `/etc/skel/.bashrc`)  only colorizes  the
+  # prompt for some values of `TERM`:
+  #
+  #     # set a fancy prompt (non-color, unless we know we "want" color)
+  #     case $TERM in
+  #         xterm-color|*-256color) color_prompt=yes;;
+  #     esac
+  #
+  # `xterm-color|*-256color`  doesn't   match  various  terminals   like  kitty,
+  # alacritty, (not to mention the console where `$TERM == 'linux'`)...  We want
+  # the prompt to be always colorized, because:
+  #
+  #    - any modern terminal supports 256 colors
+  #    - losing colors, but only in the prompt, and only for some terminals,
+  #      is confusing/distracting
+  #}}}
+  # Also, make sure to source our local customizations.{{{
+  #
+  # But only at the end, to be able to undo a previous setting.
+  #}}}
+  # Warning: Do not replace `~` with `$HOME` in the `source` command.{{{
+  #
+  #     ... . "$HOME/.bashrc_local" ...
+  #            ^---^
+  #              ✘
+  #
+  # It might give an error:
+  #
+  #     $ env --ignore-environment "$(type --path bash)"
+  #     bash: /.bashrc_local: No such file or directory
+  #
+  # Besides, it would be inconsistent with the rest of the file which never uses
+  # `$HOME` but `~`.
+  #}}}
+  sed -i \
+    '/^#force_color_prompt=yes/ s/#//; $ a . ~/.bashrc_local' \
+    "$HOME/.bashrc"
+
+  # shellcheck disable=SC2016
+  sed -i \
+    '$ a . "$HOME/.profile_local"' \
+    "$HOME/.profile"
+}
+
+function Let_Debugging_Tools_Trace_Processes { # {{{2
+  # The kernel does not allow a process  A attach to another process B, unless B
+  # is a child, or A has root privileges:
+  #
+  #     $ sleep 999 && gdb --pid=$(pidof -s sleep)
+  #     Attaching to process 12345
+  #     ptrace: Operation not permitted.
+  #     ^------------------------------^
+  # Do *not* reset the `kernel.yama.ptrace_scope` kernel parameter as an alternative.{{{
+  #
+  #     $ echo 'kernel.yama.ptrace_scope = 0' >>~/.config/etc/sysctl.d/999-local.conf
+  #
+  # That  could help  a malware  getting  sensitive information;  e.g. it  could
+  # attach  to Firefox  and  log  your website  passwords.   The  issue is  that
+  # `ptrace_scope` is a global parameter  which means that *all* processes would
+  # be exempt from the non-child restriction.
+  #
+  # Only give this  capability to processes which really need  it, and which you
+  # trust.
+  #}}}
+
+  local binary
+  for binary in "${DEBUGGING_TOOLS[@]}"; do
+    sudo setcap cap_sys_ptrace=eip "$(type --path "$binary")"
+    #           ^----------------^
+    #                 clause{{{
+    #
+    #    - `cap_sys_ptrace`: capability name (`man 7 capabilities /cap_sys_ptrace`)
+    #
+    #    - `=eip`: action-list
+    #
+    #    - `=`: operator indicating that `cap_sys_ptrace` is first reset in all
+    #      three capability sets (Effective, Inheritable, Permitted)
+    #
+    #    - `e`, `i`, `p`: raise the Effective, Inheritable, and Permitted
+    #      `cap_sys_ptrace` capability
+    #
+    # See: `man 3 cap_from_text`
+    #}}}
+  done
+}
+
+function Disable_Automatic_Debtags_Update { # {{{2
+  # If we  install `debtags(1)`, `$ debtags update` is  post-invoked after every
+  # `$ apt update`, causing the latter to take a few more seconds.  I don't like
+  # that.   We  can  still  update  the  package  tags  database  manually  with
+  # `$ sudo debtags update`.
+  sudo dpkg-divert \
+    --add \
+    --rename \
+    --divert=/etc/apt/apt.conf.d/diversions/80debtags \
+    /etc/apt/apt.conf.d/80debtags
+}
+
+function Fix_Bugs { # {{{2
+  # The  AppArmor profile  for  the man  command prevents  Vim  from working  as
+  # expected when started as a man pager.  Disable it.
+  sudo aa-disable /etc/apparmor.d/usr.bin.man
+
+  # "Fix" `$ localectl list-keymaps`.{{{
+  #
+  #     $ localectl list-keymaps
+  #     Failed to read list of keymaps: No such file or directory
+  #
+  # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=790955
+  #
+  # ---
+  #
+  # It  comes  from the  fact  that  the  package `console-data`  installs  some
+  # archives  with  the  extension   `.kmap.gz`,  while  `localectl(1)`  expects
+  # `.map.gz`.
+  #}}}
+  # Don't try to use symlinks instead of diversions.
+  # For some reason, it doesn't work.
+  local file
+  find /usr/share/keymaps/i386/azerty -name '*.kmap.gz' -type f -print0 \
+    | while IFS= read -r -d '' file; do
+        sudo dpkg-divert \
+          --add \
+          --rename \
+          --divert="${file/%.kmap.gz/.map.gz}" \
+          "$file"
+          #     "${file/%.kmap.gz/.map.gz}"
+          #             ^
+          # `$`-like anchor; the pattern must match at the end
+      done
+}
+
+function Customize_Debian { # {{{2
+  :
+  # TODO: Make sure the font is nice to read.
+  # https://docs.xfce.org/xfce/xfce4-settings/4.14/appearance#fonts
+  # https://unix.stackexchange.com/a/529602
+  # https://angelos.dev/2020/03/beautiful-fonts-in-debian-gnu-linux/
+  # https://wiki.debian.org/Fonts#Configuration
+  # https://wiki.archlinux.org/title/Font_configuration
+  # https://old.reddit.com/r/debian/comments/9bsfp6/bad_font_rendering/e55oz7p/
+  # https://old.reddit.com/r/debian/comments/b2io8l/how_can_i_fix_ugly_fonts_in_firefox/eit0s66/
+  # https://old.reddit.com/r/debian/comments/ny05nr/how_to_make_debian_fonts_look_like_ubuntus_in/h1hqmnk/
+  # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1028643#77
+  #
+  #     $ sudo dpkg-reconfigure fontconfig-config
+  #
+  #     # Is `fonts-liberation` equivalent/better?
+  #     $ sudo apt install ttf-mscorefonts-installer
+  #
+  #     # Do we care about "Ancient Scripts"?  If so, install `ttf-ancient-fonts`.
+  #
+  # Should we install `fonts-ubuntu{,-console}`?
+  # What about these packages suggested by Debian when we install firefox-esr:
+  #     fonts-stix
+  #     otf-stix
+  #     fonts-lmodern
+  #
+  # ---
+  #
+  # Tip: If you  find that a package  behaves differently in Ubuntu  compared to
+  # Debian, and you want it to behave  the same, look for the patches applied by
+  # Ubuntu: https://patches.ubuntu.com/
+  # For example, for `fontconfig`: https://patches.ubuntu.com/f/fontconfig/
+
+  # TODO: Do we need to install some firmwares?
+  # Should we install the `fwupd` package?
+  # Or maybe try this:
+  #
+  #     $ sudo apt install isenkram-cli
+  #     $ sudo isenkram-autoinstall-firmware
+  #
+  # According  to the  Debian book,  it might  be necessary  to make  a wireless
+  # network card  work.  But  the book  was written before  the creation  of the
+  # `non-free-firmware` component which we enable during installation:
+  #
+  #     "Use non-free firmware?"
+  #     Yes
+}
+
+function Customize_Ubuntu { # {{{2
+  Remove_Ubuntu_Packages
+  Remove_Snap_Packages
+  Disable_Ubuntu_Pro
+}
+
+function Remove_Ubuntu_Packages { # {{{2
+  # `apport`: can make it hard to find where a core dump has been written{{{
+  #
+  # On Ubuntu, if the `apport` package is installed, a core dump should be in:
+  #
+  #     /var/lib/apport/coredump/
+  #
+  # Which does not seem to be documented anywhere.
+  # Not even in `/var/log/apport.log`.
+  #
+  # ---
+  #
+  # Besides,  `apport`  conflicts  with  `systemd-coredump`  which  we  want  to
+  # install, because it makes it easier to find and interact with core dumps.
+  #}}}
+  # `bsd-mailx`: on Debian, shadows `mail(1)` from `mailutils` package (higher priority in alternatives system){{{
+  #
+  # Which  is an  issue because  BSD  mail does  not seem  to support  GNU-style
+  # options like `--file`, and we use those in our scripts/snippets.
+  #}}}
+  # `sgt-launcher`: creates too many diversions (see `$ dpkg-divert --list`)
+  # `ubuntu-advantage-desktop-daemon`: installs a useless systemd service{{{
+  #
+  #     /usr/lib/systemd/system/ubuntu-advantage-desktop-daemon.service
+  #
+  # On Ubuntu  20.04, the  service unit  contains a directive  which is  not yet
+  # recognized by systemd; this causes errors to be logged in `/var/log/syslog`:
+  #
+  #     ... systemd[1]: /lib/systemd/system/ubuntu-advantage-desktop-daemon.service:14: Unknown key name 'ProtectProc' in section 'Service', ignoring.
+  #
+  # ---
+  #
+  # The source code is developed here:
+  # https://github.com/canonical/ubuntu-advantage-desktop-daemon
+  # Where it's described as:
+  #
+  #    > A daemon to allow desktop applications to interface with Ubuntu Advantage.
+  #
+  # Clicking on the "Ubuntu Advantage" hyperlink, we get:
+  # https://github.com/canonical/ubuntu-pro-client
+  #
+  # Which is described as:
+  #
+  #    > The Ubuntu Pro Client (pro) is the official tool to enable Canonical offerings on your system.
+  #
+  # I don't want anything related to Ubuntu Pro.
+  #}}}
+  # `unattended-upgrades`: automatically installs updates in the background{{{
+  #
+  # Can consume a lot of CPU at  unexpected times.  I don't like that.  Besides,
+  # after an  upgrade, new issues might  appear; it's harder to  reason about an
+  # issue which has been caused by an update that we didn't perform ourselves.
+  #}}}
+  # `update-notifier`: daemon notifying about package updates{{{
+  #
+  # Its popups are too distracting.
+  # I don't need a daemon to remind me about updates.
+  # I prefer to run them manually during the weekend.
+  #
+  # ---
+  #
+  # Removing it will cause `apt(8)` to remove `xubuntu-desktop`.
+  # Which is OK; from `$ apt show xubuntu-desktop`:
+  #
+  #    > It is safe to remove this package if some of the desktop system packages are not desired.
+  # }}}
+  # `whoopsie`: submits crash reports back to an Ubuntu server{{{
+  #
+  # I don't like/need telemetry.
+  #}}}
+  sudo apt-get --assume-yes purge --autoremove \
+    apport \
+    bsd-mailx \
+    sgt-launcher \
+    ubuntu-advantage-desktop-daemon \
+    unattended-upgrades \
+    update-notifier \
+    whoopsie
+}
+
+function Remove_Snap_Packages { # {{{2
+  # For why you should remove snaps:
+  # https://linuxmint-user-guide.readthedocs.io/en/latest/snap.html#criticism
+
+  local snap_packages
+  readarray -t snap_packages < <(snap list | awk '$1 != "Name" { print $1 }')
+
+  # remove snap packages
+  local pkg
+  local -i i=0
+  for pkg in "${snap_packages[@]}"; do
+    if ! [[ "$pkg" =~ ^(bare|core|snapd).* ]]; then
+      sudo snap remove --purge "$pkg"
+      unset -v "snap_packages[$i]"
+    fi
+    (( i++ ))
+  done
+
+  i=0
+  for pkg in "${snap_packages[@]}"; do
+    if ! [[ "$pkg" == 'snapd' ]]; then
+      sudo snap remove --purge "$pkg"
+      unset -v "snap_packages[$i]"
+    fi
+    (( i++ ))
+  done
+
+  sudo snap remove --purge snapd
+
+  # purge `snapd` package
+  sudo apt-get --assume-yes purge --autoremove snapd
+
+  # remove left-over files in `$HOME`
+  rm -rf "$HOME/snap/"
+
+  # make sure `/snap/bin` is removed from `PATH`
+  sudo sed -i'.bak' 's@:/snap/bin@@' /etc/environment
+}
+
+function Disable_Ubuntu_Pro { # {{{2
+  # I don't want anything related to Ubuntu Pro; it prioritizes paying customers:{{{
+  #
+  #    > We   are  prioritizing   people   being  able   to   easily  activate   Ubuntu
+  #    > Advantage/Ubuntu  Pro more  than people  who  worry about  2.6 MB. People  who
+  #    > activate  Ubuntu  Advantage  are   generally  paying  customers. Those  paying
+  #    > customers make  Ubuntu better for all  of us by helping  to fund a lot  of the
+  #    > work done in Ubuntu.
+  #    >
+  #    > Respectfully,  I don't think there's  any benefit to me  continuing to explain
+  #    > why we made this decision.
+  #
+  # Source: https://bugs.launchpad.net/ubuntu/+source/ubuntu-meta/+bug/1930914/comments/11
+  #}}}
+
+  # `$ apt upgrade` might include a noisy ad for Ubuntu Pro.{{{
+  #
+  #     $ sudo apt upgrade
+  #     ...
+  #     Get more security updates through Ubuntu Pro with 'esm-apps' enabled:
+  #       libavformat58 libpostproc-dev exo-utils libavfilter7 ffmpeg
+  #       ...
+  #
+  # It's caused by `/etc/apt/apt.conf.d/20apt-esm-hook.conf`.  Which is owned by
+  # the `ubuntu-advantage-tools`  package.  I don't  want to remove  the package
+  # because it  would also  remove `ubuntu-minimal` which  is recommended  to be
+  # kept for proper upgrades:
+  #
+  #     $ apt show ubuntu-minimal
+  #     ...
+  #     It is also used to help ensure proper upgrades, so it is recommended that
+  #     it not be removed.
+  #}}}
+  # Get rid of the ad by adding a diversion.
+  sudo dpkg-divert \
+    --add \
+    --rename \
+    --divert=/etc/apt/apt.conf.d/diversions/20apt-esm-hook.conf \
+    /etc/apt/apt.conf.d/20apt-esm-hook.conf
+  # To inspect the diversion:{{{
+  #
+  #     $ dpkg-divert --list | grep '^local.*esm'
+  #     local diversion of /etc/apt/apt.conf.d/20apt-esm-hook.conf to /etc/apt/apt.conf.d/diversions/20apt-esm-hook.conf
+  #}}}
+  # To undo the diversion:{{{
+  #
+  #     $ sudo dpkg-divert --remove --rename /etc/apt/apt.conf.d/20apt-esm-hook.conf
+  #}}}
+
+  # There *might* be another ad:
+  # https://askubuntu.com/questions/1441035/what-is-meant-by-apt-news/
+  # I think the diversion took care of it too, but let's make sure of it.
+  sudo pro config set apt_news=false
+
+  # Disable Ubuntu Pro systemd units.{{{
+  #
+  # The `ubuntu-advantage-tools` package installs these systemd units:
+  #
+  #     apt-news.service
+  #     esm-cache.service
+  #     ua-reboot-cmds.service
+  #     ua-timer.timer
+  #     ubuntu-advantage.service
+  #}}}
+  sudo systemctl disable --now \
+    apt-news.service \
+    esm-cache.service \
+    ua-reboot-cmds.service \
+    ua-timer.timer \
+    ubuntu-advantage.service
+}
+# }}}1
+# Core (restore personal files) {{{1
+function Restore_Personal_Files { # {{{2
+  rsync --archive \
+    --info=progress2 \
+    --human-readable \
+    --partial \
+    "$BACKUP/" "$HOME"
+
+  find "$BACKUP" -type l -printf '%P\0' \
+    | Fix_Stale_USER_Symlinks
+}
+# }}}1
+# Core (restore local config) {{{1
+function Restore_Local_Config { # {{{2
+# What is a bare Git repo?{{{
+#
+# When you init or clone a repo, you end up with 2 things:
+# a workspace and a `.git/` directory.
+#
+# A bare  repo has  no workspace  and no `.git/`  directory; instead,  it just
+# contains all the Git files (`.git/*`), directly at the top level.
+#
+#     $ mkdir /tmp/test
+#     $ cd /tmp/test || exit
+#
+#     $ git init
+#     Initialized empty Git repository in /tmp/test/.git/
+#
+#     $ ls -l .git
+#     ... branches/
+#     ... config
+#     ... description
+#     ... HEAD
+#     ... hooks/
+#     ... info/
+#     ... objects/
+#     ... refs/
+#
+#     $ rm -rf .*
+#
+#                v----v
+#     $ git init --bare
+#     $ ls -l
+#     ... branches/
+#     ... config
+#     ... description
+#     ... HEAD
+#     ... hooks/
+#     ... info/
+#     ... objects/
+#     ... refs/
+#
+# Notice that  the output  of `ls(1)` is  the same in  the 2  experiments, but
+# with  `$ git init`, the  files/directories  are hidden  under `.git/`;  with
+# `$ git init --bare`, they are not hidden, they are at the top level.
+#}}}
+# How is that useful?{{{
+#
+# Its purpose is to  *serve* files.  Not to *work* on them.   There is no need
+# for a workspace when you serve files.
+#
+# Suppose you have a project in `/tmp/project/`:
+#
+#     $ mkdir /tmp/project
+#     $ cd /tmp/project || exit
+#     $ git init
+#     $ touch file
+#     $ git add file
+#     $ git commit --message='first commit'
+#
+# And suppose you don't  want to host your project on GitHub,  but on your own
+# server.  First, create a copy of your project as a bare repo:
+#
+#     $ mkdir /tmp/bare_repo
+#     $ cd /tmp/bare_repo || exit
+#     $ cp ../project/.git/* .
+#     $ git config --type=bool core.bare true
+#
+# Then, upload your  bare repo to your  server.  Now, anybody who  has access to
+# your server can clone the repo via `$ git clone`.
+#
+# To test this, delete your project:
+#
+#     $ cd /tmp || exit
+#     $ rm -rf project
+#
+# And clone it back from the bare repo:
+#
+#     $ git clone bare_repo project
+#     $ ls -l project
+#     ... file
+#
+# Notice that it contains the previously  committed `file`.  Also, note that –
+# for simplicity's sake – we didn't actually  upload the bare repo to a remote
+# server.  But you can pretend that your machine is the server.
+#}}}
+# But here, how is that useful for us?{{{
+#
+# With a non-bare repo, the Git files are put under `.git/`.
+# With a bare repo, you can control where the Git files are put:
+#
+#     $ mkdir /path/to/dir
+#     $ cd /path/to/dir
+#     $ git init --bare
+#
+#     OR
+#
+#     $ git init --bare /path/to/dir/
+#
+# Here, we leverage this  feature to put the Git files  under `.cfg/` instead of
+# `.git/`.  See  our comment in this  script about `GIT_CFG_DIR` for  why that's
+# useful.
+#
+# Basically,  it gives  us the  guarantee  that an  accidental `git(1)`  command
+# doesn't mess up our  config repo.  Indeed, the latter can  only be altered via
+# `--git-dir=$HOME/.cfg/` and `--work-tree=$HOME`.  The former option suppresses
+# this error:
+#
+#     fatal: not a git repository (or any of the parent directories): .git
+#
+# The latter option suppresses this error:
+#
+#     fatal: this operation must be run in a work tree
+#}}}
+
+  # The   function   sometimes   deals    with   paths   relative   to   `$HOME`
+  # (`git-ls-files(1)`, `$CFG_PERMISSIONS`).  So, better be in it.
+  cd || return
+  # `git-checkout(1)` will need `$GIT_CFG_DIR`; make sure we've restored it
+  [[ -d "$GIT_CFG_DIR" ]] || return
+
+  # `git-checkout(1)` might overwrite some default config files; back them up
+  Backup_Overwritten_Config
+
+  # `--force` lets `git-checkout(1)` overwrite any existing file
+  git "${GIT_CFG_OPTIONS[@]}" checkout --force
+
+  git "${GIT_CFG_OPTIONS[@]}" ls-files -z \
+    | Fix_Stale_USER_Symlinks
+
+  Restore_Gitignore_And_Hooks
+  Restore_Etc_Config
+  Set_File_Permissions
+
+  # don't report untracked files when running `$ config status`
+  git "${GIT_CFG_OPTIONS[@]}" config --local status.showUntrackedFiles no
+
+  if ! Cfg_Overwritten_Is_Empty; then
+    tee <<EOF
+
+Some existing config files have been overwritten by \`git-checkout(1)\`.
+They've been all saved in $CFG_OVERWRITTEN
+EOF
+  fi
+}
+
+function Backup_Overwritten_Config { # {{{2
+  if ! [[ -d "$CFG_OVERWRITTEN" ]]; then
+    mkdir -p "$CFG_OVERWRITTEN"
+  fi
+
+  local path
+  git "${GIT_CFG_OPTIONS[@]}" ls-tree --full-tree -r --name-only HEAD -z \
+    | while IFS= read -r -d '' path; do
+        # `-e` handles the case where `$path` is a file or a directory.
+        # `-L` handles the case where `$path` is a dangling symlink.{{{
+        #
+        # In  that case,  `-e` fails,  because it  operates on  the target  of a
+        # symlink,  which here  does  not exist.   We still  want  to restore  a
+        # dangling symlink  (we might  install its target  later); thus  we also
+        # want to backup whatever will be overwritten by it.
+        #}}}
+        # Info: `-e`,  `-f`, `-d` all  operate on the  target of a  symlink.  If
+        # the  target is  again a  symlink,  it's resolved  recursively until  a
+        # non-symlink is found.
+        if [[ -e "$path" ]] || [[ -L "$path" ]]; then
+          # Can't use `cp(1)` here; need `rsync(1)`.{{{
+          #
+          # Suppose  we  need  to  backup `~/file`  then  `~/dir/file`.   Inside
+          # `$CFG_OVERWRITTEN`,  `cp(1)` would  overwrite  the  former with  the
+          # latter.  To prevent this, we need to preserve the path of the file.
+          #}}}
+          rsync --archive --compress --partial --relative \
+            "$path" "$CFG_OVERWRITTEN"
+        fi
+      done
+
+  # The current  script is a  special case: it's  backed up in  `$BACKUP`, *and*
+  # version-controlled in our bare Git repo.  As such, it has been backed up yet
+  # again in `$CFG_OVERWRITTEN`; that's not necessary.
+  rm -- "$CFG_OVERWRITTEN/$SCRIPT"
+
+  if Cfg_Overwritten_Is_Empty; then
+    rmdir "$CFG_OVERWRITTEN"
+  fi
+}
+
+function Restore_Gitignore_And_Hooks { # {{{2
+  ln --symbolic --force "$HOME/.cfg-info-exclude" "$HOME/.cfg/info/exclude"
+
+  local script
+  for script in "$GIT_CFG_DIR-hooks/"*; do
+    ln --symbolic --force "$script" "$GIT_CFG_DIR/hooks/"
+  done
+}
+
+function Restore_Etc_Config { # {{{2
+  # We have config files under `~/.config/etc/`.
+  # They're meant to be installed under `/etc/`.
+
+  # Give a message to justify why `sudo(8)` password is going to be asked.
+  echo 'restoring config files under /etc/'
+
+  local copy
+  while IFS= read -r -d '' copy; do
+    local original="${copy#"$HOME"/.config}"
+
+    local parent_dir="${original%/*}"
+    if ! [[ -d "$parent_dir" ]]; then
+      sudo mkdir -p "$parent_dir"
+    fi
+    sudo cp "$copy" "$original"
+
+    case $original in
+    /etc/sudoers.d/*)
+      sudo chmod -w "$original"
+    ;;
+
+    /etc/lightdm/lightdm.conf.d/99-local.conf)
+      sudo sed -i'.bak' "s/^autologin-user=.*/autologin-user=$USER/" "$original"
+    ;;
+    esac
+  done < <(find "$HOME/.config/etc/" -type f ! -name '*.md' -print0)
+}
+
+function Set_File_Permissions { # {{{2
+  # Git does not preserve all permissions (only the executable bit).
+  #
+  # This  is an  issue for  some files,  such as  `~/.netrc`, whose  permissions
+  # should be `600`.  From `man aria2c /FILES/;/Netrc`:
+  #
+  #    > Your .netrc file should have correct permissions(600).
+  #
+  # We've installed a pre-commit hook which  saves the permissions of such files
+  # in a version-controlled database.  We use the latter here to set the correct
+  # permissions.
+
+  if ! [[ -f "$CFG_PERMISSIONS" ]]; then
+    printf '%s is missing.\n' "$CFG_PERMISSIONS" >&2
+    return
+  fi
+
+  local line file perms
+  while IFS= read -r line; do
+    IFS=$'\t' read -r file perms <<<"$line"
+    echo chmod -- "$perms" "$file"
+  done <"$CFG_PERMISSIONS"
+}
+# }}}1
+# Util {{{1
+function Cfg_Overwritten_Is_Empty { # {{{2
+  find -- "$CFG_OVERWRITTEN" -prune -type d -empty \
+    | grep --quiet '^'
+}
+
+function Fix_Stale_USER_Symlinks { # {{{2
+  # After restoring files  from a backup or from `~/.cfg/`,  some symlinks might
+  # be broken  because we're  working on  a machine with  a different  user name
+  # (`$USER`), and  our old user name  is hard-coded in some  symlinks' targets.
+  # This function can fix that.
+
+  local file
+  while IFS= read -r -d '' file; do
+    if ! [[ -L "$HOME/$file" ]]; then
+      continue
+    fi
+    local target
+    # `--canonicalize-missing`: give us the target's path even if it doesn't exist yet.{{{
+    #
+    # Without this option, if `$file` is  a dangling symlink, whose target is in
+    # `/home/old_user/` while we're logged in as `new_user`, `realpath(1)` gives
+    # an error.
+    #}}}
+    target="$(realpath --canonicalize-missing -- "$file")"
+    if ! [[ "$target" =~ ^/home/[^/]*/ ]]; then
+      continue
+    fi
+    local user
+    user="$(awk -F/ '{ print $3 }' <<<"$target")"
+    if [[ "$user" != "$USER" ]]; then
+      local fixed_target
+      #     /home/old_user/file
+      #     →
+      #     /home/new_user/file
+      # shellcheck disable=SC2001
+      fixed_target="$(sed "s@^/[^/]*/[^/]*/@$HOME/@" <<<"$target")"
+      ln --symbolic --force "$fixed_target" "$file"
+    fi
+  done
+}
+# }}}1
+# Execution {{{1
+
+Main 2>&1 | tee --append "$HOME/$SCRIPT.log"
+tput bel

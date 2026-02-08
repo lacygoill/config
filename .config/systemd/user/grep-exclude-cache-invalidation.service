@@ -1,0 +1,6 @@
+[Unit]
+Description=Invalidate grep(1) exclude cached files whenever .cvsignore is modified
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/rm -rf %C/grep
