@@ -1,0 +1,16 @@
+[Unit]
+Description=Clean user files which might take too much space (e.g. Vim backup/undo files)
+
+[Service]
+Type=oneshot
+
+# TODO: Does `nice(1)` work at all here?
+# https://superuser.com/questions/805599/nice-has-no-effect-in-linux-unless-the-same-shell-is-used
+# https://old.reddit.com/r/linux/comments/d7hx2c/why_nice_levels_are_a_placebo_and_have_been_for_a/
+Nice=19
+# `man systemd.exec /SCHEDULING/;/IOSchedulingClass`
+IOSchedulingClass=best-effort
+# `man ioprio_set /NOTES/;/The Completely Fair Queuing (CFQ) I/O scheduler/;/IOPRIO_CLASS_BE`
+IOSchedulingPriority=7
+
+ExecStart=%h/bin/timers/clean-system

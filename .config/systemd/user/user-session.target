@@ -1,0 +1,63 @@
+[Unit]
+Description=Services which we want to run automatically when we log in
+
+BindsTo=graphical-session.target
+
+Wants=conky.service
+Wants=redshift.service
+Wants=transmission-daemon.service
+Wants=xbanish.service
+
+# TODO: Whenever we log in, XTerm's background is black instead of yellow.{{{
+#
+# It's  the only  setting which  is unexpectedly  reset (the  other ones  remain
+# correctly configured;  e.g. font size).  I  can reproduce the issue  even when
+# `cfg-reload-xterm.path` is disabled.  What happens?
+#
+# As a workaround, let's pull in `cfg-reload-xterm.service`.
+# The latter is normally meant to be triggered by `cfg-reload-xterm.path`.
+#}}}
+# Edit: *Sometimes*, XTerm's background is still black.{{{
+#
+# A trace reveals that XTerm does not read `~/.Xresources`.
+# And the latter file appears only in a few man pages:
+#
+#     man 5 Xsession
+#     man 5 Xsession.options
+#     man 7 X
+#     man xinit
+#     man xrdb
+#
+# Next time it happens, run this:
+#
+#     $ xrdb -query | grep background
+#
+# Note the color code.  Grep it in files under `/etc`.
+#
+# ---
+#
+# Note that `~/.Xresources` is the correct location.
+#
+# Do *not* use `~/.Xdefaults`:
+#
+#    > $HOME/.Xresources
+#    >        contains X resources specific to the  invoking  user's  environ‐
+#    >        ment.   The  settings  are  loaded  with xrdb -merge.  Note that
+#    >        **$HOME/.Xdefaults is a relic** from X Version 10 (and X11R1)  days,
+#    >        before  app-defaults files were implemented.  It has been depre‐
+#    >        cated for over ten years at the time  of  this  writing.   **.Xre‐**
+#    >        **sources should be used instead.**
+#
+# Source: `man 5 Xsession /INPUT FILES/;/\.Xresources`
+#
+# ---
+#
+# Writing `After=graphical-session.target` in this unit does not help.
+#
+# ---
+#
+# In `~/.Xresources`,  we wrote that if  the `directColor` resource is  not set,
+# XTerm chooses a black background no matter what.  Is the issue somehow related
+# to that resource?
+#}}}
+Wants=cfg-reload-xterm.service

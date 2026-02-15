@@ -1,0 +1,223 @@
+% keyboard, X11
+
+$ label_type: printf 'name\nsymbols'
+$ layout: localectl list-x11-keymap-layouts
+$ list_what: printf 'layouts\nmodels\noptions'
+$ model: localectl list-x11-keymap-models
+$ option: localectl list-x11-keymap-options
+$ variant: localectl list-x11-keymap-variants $layout
+
+# list layouts, models or options
+localectl list-x11-keymap-<list_what>
+
+# list variants for given layout
+localectl list-x11-keymap-variants <layout>
+
+# print given layout
+less /usr/share/X11/xkb/symbols/<layout>
+
+# print key names or symbols of current layout, e.g. "<AB01>" or "X"
+xkbprint -label <label_type> $DISPLAY - | ps2pdf - >/tmp/pdf.pdf && xdg-open /tmp/pdf.pdf
+
+# print current layout, variant, options
+setxkbmap -query
+
+# print default layout
+localectl status
+    # The info  should be pulled  from `/etc/default/keyboard` for X11  and from
+    # `/etc/vconsole.conf` for the console.
+    #
+    # The default layout is not the same thing as the current layout.
+    # The default one persists after a reboot/restart of the OS/Xorg; not the current one.
+    # The current one might be set differently for the duration of a session.
+
+# write source description of current keyboard layout in given file
+xkbcomp -xkb "$DISPLAY" <file>
+
+# print information about how current keyboard layout was built
+setxkbmap -print -verbose 10
+    # For more help:
+    # https://wiki.archlinux.org/title/Xorg/Keyboard_configuration
+
+# print information about how reactive the keyboard is
+xset q | grep 'repeat '
+
+# print keysyms generated for all keys with and without modifier
+xmodmap -pke
+    # Ignore the keysyms beyond the 4th one; they don't mean anything:
+    # https://unix.stackexchange.com/a/299267
+    #
+    # The keymap table is printed in the form of expressions that can be fed
+    # back to xmodmap(1), hence `pke`: Print Keymap Expression
+    #
+    # The output depends on the chosen keyboard layout and variant.
+    # It ignores configurations performed at a level lower than the X server (e.g. via keyd(1)).
+
+# set current layout, variant, options and model
+setxkbmap -layout <layout> -variant <variant> -option <option> -model <model>
+
+# set default layout, variant, options and model
+localectl set-x11-keymap <layout> <model> <variant> <option>
+    # Only the layout is mandatory.
+    # With `--no-convert`, this should only affect X11.
+    # Without `--no-convert`, this should also affect the console.
+    #
+    # ---
+    #
+    # `set-x11-keymap` can be replaced with `set-keymap`.
+    # The latter works the same, except the meaning of `--no-convert` is reversed.
+    # With `--no-convert`, it should only affect the console.
+    # Without `--no-convert`, it should also affect X11.
+    #
+    # ---
+    #
+    # Alternative: `$ sudo dpkg-reconfigure keyboard-configuration`
+    # Or edit `/etc/default/keyboard` manually.
+
+# make sure a no-break space can never be inserted by accident
+setxkbmap -option 'nbsp:none'
+    # An accidental no-break space is confusing:
+    #
+    #     # press C-x C-e
+    #     :call setline(1, "grep\xa0--help")
+    #     # press ZZ
+    #     $ grep --help
+    #     grep --help: command not found
+    #         ^
+    #         no-break space
+
+# debug a localectl(1) command which failed
+journalctl --unit=systemd-localed --since='5m ago' --no-hostname
+    # `localectl(1)` invokes the  service `systemd-localed(8)`.
+    # Looking at the messages in the journal logged for this service might help.
+    #
+    # Alternatively, trace the process:
+    #
+    #     $ strace --output=$TMPDIR/log localectl ...
+
+% keyboard, console
+
+$ layout: localectl list-keymaps
+
+# make keyboard more reactive and keypresses faster in console
+sudo kbdrate -d 175 -r 40
+    # BUG: the rate (and delay) might be mapped to another value.
+    # From `man kbdrate(8)`:
+    #    > Not all keyboards have the rates mapped in the same way.
+
+# list layouts for console
+localectl list-keymaps
+    # requires the `console-data` package to get layouts
+
+# set current layout
+loadkeys <layout>
+    # requires the `console-data` package to get layouts
+
+% keyboard, system
+
+# print help to find which command key to press to invoke SysRq function
+echo h | sudo tee /proc/sysrq-trigger \
+    && dmesg \
+    | tail --lines=1 \
+    | sed 's/.*HELP : //; s/\s\+/\n/g'
+    # The output should look like this:
+    #
+    #     loglevel(0-9)
+    #     reboot(b)
+    #     crash(c)
+    #     ...
+    #
+    # If a key inside parenthesis is pressed after `A-SysRq` (aka `A-PrintScreen`),
+    # the previously kernel function is called.
+
+# test if kernel supports SysRq functions
+grep -i 'config_magic_sysrq=' "/boot/config-$(uname -r)"
+    # The value of `CONFIG_MAGIC_SYSRQ` should be `y`.
+    # If it's not, the kernel was not compiled with the `CONFIG_MAGIC_SYSRQ`
+    # option enabled.
+
+# test if kernel allows SysRq functions to be invoked via a command key
+grep -i config_magic_sysrq_default_enable "/boot/config-$(uname -r)"
+    # It should contain:
+    #
+    #     CONFIG_MAGIC_SYSRQ_DEFAULT_ENABLE=0x❬some_hex_number❭
+    #
+    # The value of this option is a hex number.
+    # The decimal representation of the latter tell you which commands can be
+    # sent to the kernel.
+
+# test if OS allows SysRq functions to be invoked via a command key
+sysctl --all --pattern='sysrq'
+    # Alternative: `$ cat /proc/sys/kernel/sysrq`
+    #
+    # 0 means the functions are not allowed.
+    # 1 means all functions are allowed.
+    #
+    # Any value above 1 is a bitmask.
+    # Break it down into a sum of powers of 2.
+    # Each term in the sum stands for an allowed function.
+    # Example:
+    #
+    #     176 = 128 + 32 + 16
+    #           │     │    │
+    #           │     │    └ sync
+    #           │     └ remount read-only
+    #           └ reboot/poweroff
+    #
+    # To test whether a given function is allowed, convert in binary the output
+    # number and the function number.  Then perform an AND operation between the
+    # two:
+    #
+    #     Output:    10110000 (176)
+    #     Function:  01000000 (64)
+    #     ---- AND ---------
+    #     Result:    00000000
+    #                 ^
+    #                 ✘
+    #
+    # The result tells us that the function associated to 64 is NOT allowed.
+    #
+    # For more info: `man 5 proc`.
+
+# invoke SysRq function
+echo <command_key> | sudo tee /proc/sysrq-trigger
+    # Useful if the OS prevents it from being invoked by a command key.
+    #
+    # To read its output:  `$ dmesg | less`
+    # Useless in a console; in that  case the output is automatically written in
+    # the console itself.
+
+# fix A-SysRq-e if it does not terminate all processes
+sudo --preserve-env systemctl edit --full display-manager.service
+    # 1. comment out the "Restart=" directive
+    # 2. write file and quit editor
+    # 3. `$ sudo systemctl daemon-reload`
+    #
+    # This is necessary if after pressing `A-SysRq-e`, you get back to the desktop.
+    #
+    # A modified copy of the original service file will get saved in the
+    # `/etc/systemd/system/` directory.
+    #
+    # As long as this file exists, it will always override the original file in the
+    # `/lib/systemd/system/` directory.
+
+% keyboard, keyd
+
+# fix broken config
+    # Press this panic sequence:
+    #
+    #     ❬backspace❭+❬escape❭+❬enter❭
+    #
+    # It will force `keyd(1)` to terminate.
+
+# discover key names and input device IDs
+sudo keyd --monitor
+
+# list valid key names
+keyd --list-keys
+
+# reload config
+sudo systemctl daemon-reload \
+    ; sudo systemctl restart keyd \
+    ; sleep 1 \
+    ; xset r rate 175 40

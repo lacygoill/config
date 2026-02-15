@@ -1,0 +1,37 @@
+# If your version is too old for some of these options, compile from source:{{{
+#
+# Download the latest version from this url: https://ftp.gnu.org/gnu/gdb/
+# Extract the archive, and `cd` into the new `gdb-...` directory.
+# Configure, compile, and install:
+#
+#     $ ./configure
+#     $ make
+#     $ sudo make install
+#
+# Warning: The  compilation might  take  a long  time (20  minutes  last time  I
+# tried).
+#
+# To install the documentation:
+#
+#     $ cd /tmp
+#     $ curl --fail --location --show-error --silent --remote-name \
+#         https://sourceware.org/gdb/current/onlinedocs/gdb.html.tar.gz
+#     $ tar --extract --file=gdb.html.tar.gz --verbose
+#     $ sudo cp -R gdb /usr/local/share/doc/
+#}}}
+
+# gdb can disassemble machine code into assembly code.
+# When printing such code, we want the intel syntax, because it should be easier
+# to read than the default AT&T syntax: https://www.youtube.com/watch?v=VroEiMOJPm8
+set disassembly-flavor intel
+
+# Machine-Code.html#index-Intel-disassembly-flavor
+# skip "Quit anyway?" prompt
+# https://stackoverflow.com/a/17975687
+define hook-quit
+    set confirm off
+end
+# Warning: Do *not* move this block in `~/.config/gdb/gdbearlyinit`.{{{
+#
+# It would cause gdb to crash on startup.
+#}}}

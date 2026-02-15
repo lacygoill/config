@@ -1,0 +1,64 @@
+#!/bin/bash -
+
+# The Node.js runtime system installed by `apt(8)` is too old.{{{
+#
+# That causes too many issues.
+#
+# Like this one:
+# https://github.com/nodejs/help/issues/3644#issuecomment-996048756
+#
+# It   might   also   prevent   you   from   using   some   applications   (e.g.
+# `readability-cli`).
+#}}}
+
+sudo --validate || exit 1
+
+tmp_dir="$(mktemp --directory)"
+trap 'rm -rf "$tmp_dir"; tput bel' ABRT EXIT HUP INT QUIT TERM
+cd "$tmp_dir" || exit 1
+
+# Make sure to use the latest LTS version:
+# https://nodejs.org/en/about/previous-releases#looking-for-the-latest-release-of-a-version-branch
+if ! read -r -p "What's the LTS version? " lts_version; then
+  exit 1
+fi
+
+# https://github.com/nodesource/distributions?tab=readme-ov-file#installation-instructions-deb
+curl --fail --location --show-error --silent \
+  "https://deb.nodesource.com/setup_${lts_version}.x" \
+  --output nodesource_setup.sh
+
+sudo --preserve-env bash nodesource_setup.sh
+
+# Do *not* install the `npm` package to get the `npm(1)` command.{{{
+#
+# First,  there  is  no  need   to;  the  `nodejs`  package  already  installs
+# `/usr/bin/npm`.
+#
+# Second, the PPA does not provide this package:
+#
+#     $ apt-cache policy npm
+#     npm:
+#       Installed: (none)
+#       Candidate: 6.14.4+ds-1ubuntu2
+#       Version table:
+#          6.14.4+ds-1ubuntu2 500
+#             500 https://fr.archive.ubuntu.com/ubuntu focal/universe amd64 Packages
+#             500 https://fr.archive.ubuntu.com/ubuntu focal/universe i386 Packages
+#
+# So, you would install an old version from the official mirrors.
+# In fact, the installation would not even work:
+#
+#     The following packages have unmet dependencies:
+#      npm : Depends: nodejs (>= 6.11~)
+#            Depends: node-abbrev (>= 1.1.1~) but it is not going to be installed
+#            ...
+#}}}
+sudo apt-get --assume-yes install nodejs
+
+printf 'installed version: %s\n' "$(node --version)"
+
+# `instant-markdown-d`: preview markdown documents in Vim.
+# `js-beautify`: used in Vim's 'formatprg' option (for HTML, CSS, javascript).
+npm install --global instant-markdown-d
+npm install --global js-beautify

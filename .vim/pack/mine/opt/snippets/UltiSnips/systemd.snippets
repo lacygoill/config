@@ -1,0 +1,505 @@
+# ExecStart {{{1
+
+snippet t01 "override ExecStart in drop-in file" Am
+# If \`ExecStart\` is  assigned the empty string, the list  of commands to start
+# is reset; prior assignments have no effect.
+#
+# ---
+#
+# Unless \`Type\` is \`oneshot\`, \`ExecStart\` can only be assigned one command.
+[Service]
+ExecStart=
+ExecStart=${1:some command}
+$0
+endsnippet
+
+# ExecStop, ExecReload {{{1
+
+snippet t02 "stop and reload service" Am
+# What's this \`MAINPID\`?{{{
+#
+# A special  environment variable that systemd  *might* set with the  PID of the
+# main process of the daemon.
+#
+# From \`man systemd.service /OPTIONS/;/^\s*ExecReload=$/;/$MAINPID\`:
+#
+#    > One additional, special environment variable is set: **if known**,
+#    > $MAINPID is set to the main process of the daemon, and may be used
+#    > for command lines like the following:
+#    >
+#    >     /bin/kill -HUP $MAINPID
+#}}}
+# Warning: \`MAINPID\` is not necessarily set.{{{
+#
+# It's not set if \`Type=\` is \`oneshot\`.
+#
+# And it might not be set if you start several processes:
+#
+#     [Service]
+#     ExecStart=/usr/bin/sh -c 'echo -n one ; echo -n two'
+#     ExecStop=/usr/bin/kill -STOP $MAINPID
+#                                  ^------^
+#                                     ✘
+#
+# If you  try to start  or stop this service,  \`kill(1)\` will complain  in the
+# journal:
+#
+#     $ systemctl --user daemon-reload \
+#         ; systemctl --user stop <unit>.service \
+#         ; journalctl --user --boot=-0 --no-hostname --pager-end -nall --unit=<unit>.service
+#
+#     ... kill[...]: Usage:
+#     ... kill[...]:  kill [options] <pid> [...]
+#     [...]
+#
+# Whether the variable is  set or not depends on the  actual command(s), and the
+# \`Type=\` of the service.  In the previous  example, if you replace one of the
+# command with  \`conky --daemonize\`, the issue disappears.   Unless, \`Type=\`
+# is \`forking\` and \`conky --daemonize\` is executed multiple times.
+#
+# Also,  the issue  can be  reproduced with  a single  command (and  \`Type\` !=
+# \`forking\`):
+#
+#     /usr/bin/sh -c 'sleep 1 &'
+#}}}
+# Warning: There's no guarantee that \`HUP\` is interpreted as a config reload.{{{
+#
+# If a daemon  is capable of re-reading its configuration  file and adjusting to
+# changes  without restarting,  \`HUP\` can  *generally* trigger  this behavior.
+# But it's not  required.  For example, \`HUP\` causes  \`rsyslogd(8)\` to close
+# all open  log files, which  is useful  for rotating (renaming  and restarting)
+# logs.  And  it causes  \`$ gawk --profile\` to dump  the profile  and function
+# call stack, then exit.
+#
+# To be sure, refer to the documentation of your program.
+# }}}
+# Warning: To be more reliable, try to replace those \`kill(1)\` with synchronous commands.{{{
+#
+#    > Note however that reloading a daemon by sending a signal (as with
+#    > the example line above) is usually not a good choice, because this
+#    > is an asynchronous operation and hence not suitable to order
+#    > reloads of multiple services against each other. It is strongly
+#    > recommended to set ExecReload= to a command that not only triggers
+#    > a configuration reload of the daemon, but also synchronously waits
+#    > for it to complete.
+#
+# Source: \`man 5 systemd.service /OPTIONS/;/asynchronous\`
+#
+#    > Note that it is usually not sufficient to specify a command for
+#    > this setting that only asks the service to terminate (for example,
+#    > by sending some form of termination signal to it), but does not
+#    > wait for it to do so. Since the remaining processes of the services
+#    > are killed according to KillMode= and KillSignal= or
+#    > RestartKillSignal= as described above immediately after the command
+#    > exited, this may not result in a clean stop. The specified command
+#    > should hence be a synchronous operation, not an asynchronous one.
+#
+# Source: \`man 5 systemd.service /OPTIONS/;/asynchronous\`
+#
+# I guess the  issue is that you  might need the guarantee that  the process did
+# reload  its config  (or stopped)  completely before  interacting with  another
+# unit,  and  sending a  signal  does  not give  you  that  because it's  not  a
+# synchronous operation.
+#
+# ATM, we don't have any \`ExecStop\` to refer to on our system.  But we do have
+# a few \`ExecReload\`:
+#
+#     $ grepc 'ExecReload=' /etc/ /usr/lib/systemd/user
+#     [...]
+#
+# And only \`ssh.service\` sends a signal.
+# The other services prefer more specific and meaningful syntaxes:
+#
+#     # dbus.service
+#     /usr/bin/dbus-send --print-reply [...] org.freedesktop.DBus.ReloadConfig
+#                        ^-----------^                            ^----------^
+#
+#     # gpg-agent.service
+#     /usr/bin/gpgconf --reload gpg-agent
+#                      ^------^
+#
+#     # dirmngr.service
+#     /usr/bin/gpgconf --reload dirmngr
+#                      ^------^
+#
+# \`gpgconf(1)\`'s \`--reload\`  is basically  the same  as sending  \`HUP\`; so
+# it's not more reliable.  But the  \`dbus-send(1)\` command might be, thanks to
+# \`--print-reply\` which makes it wait for a reply.  Refer to the documentation
+# of your program, and try to find such a syntax.
+#}}}
+# After writing these directives, make sure that stopping/reloading the service works as expected.{{{
+#
+# In particular,  make sure  it does  not cause \`kill(1)\`  to print  its usage
+# message in the journal:
+#
+#     $ systemctl --user daemon-reload \
+#         ; systemctl --user stop <unit>.service \
+#         ; journalctl --user --boot=-0 --no-hostname --pager-end -nall --unit=<unit>.service
+#
+# If it does,  try to replace \`$MAINPID\` with a  process name, and \`kill(1)\`
+# with \`killall(1)\`.
+#}}}
+[Service]
+ExecStop=/usr/bin/kill -STOP $MAINPID
+ExecReload=/usr/bin/kill -HUP $MAINPID
+$0
+endsnippet
+
+# KillMode {{{1
+
+snippet t03 "don't kill children too if main process of service is killed" Am
+# If we kill the main process, don't kill its children.{{{
+#
+# We might kill it with one of these:
+#
+#     $ killall service
+#     $ systemctl --user stop service
+#     $ systemctl --user restart service
+#
+# In the last command,  the process is only killed temporarily;  but it is still
+# killed for some short period of time.
+#}}}
+# Warning: This doesn't apply to \`$ systemctl kill\`.
+[Service]
+KillMode=process
+$0
+endsnippet
+
+# PassEnvironment {{{1
+
+snippet t04 "pass environment variable from manager to executed process" Am
+# \`PassEnvironment=\` is  only relevant  for the  *system* service  manager, as
+# system  services  by default  do  not  automatically inherit  any  environment
+# variables set for the service manager itself.
+#
+# In the case  of the \`--user\` service manager, all  environment variables are
+# automatically passed to the executed processes; no need of this option then.
+#
+# For more info: \`man 5 systemd.exec /^ENVIRONMENT/;/PassEnvironment=$\`.
+PassEnvironment=${1:VAR}
+$0
+endsnippet
+
+# RefuseManualStart, RefuseManualStop {{{1
+
+snippet t05 "don't let us stop a unit accidentally" Am
+[Unit]
+RefuseManualStart=true
+RefuseManualStop=true
+$0
+endsnippet
+
+# StandardInput, StandardOutput, StandardError {{{1
+
+snippet t06 "redirect input/output of unit into file" Am
+# \`=file:\`: read or write mode (like \`<\` or \`>\` in shell)
+# \`=append:\`: append mode (like \`>>\` in shell)
+#
+# ---
+#
+# Pitfall: \`$3\` must not start with the name of an environment variable:
+#
+#                            ✘
+#                        v-------v
+#     StandardInput=file:${TMPDIR}/vim/clipboard
+#     [...] StandardInput= path is not absolute: ${TMPDIR}/vim/clipboard
+#
+# The alternative is to use a specifier (if one is available):
+#
+#     StandardInput=file:%T/vim/clipboard
+#                        ^^
+#                        this assumes that $TMPDIR expands to /tmp
+#
+# Or to  wrap your command (the  one assigned to an  \`Exec*\` directive) inside
+# \`sh -c '...'\`:
+#
+#     ExecStart=/usr/bin/sh -c '/usr/bin/xsel --input --clipboard < ${TMPDIR}/vim/clipboard'
+#               ^------------^                                    ^
+#
+# But whenever  possible, prefer a \`Standard*\`  directive, as it is  easier to
+# read and  maintain (and  more efficient  because it doesn't  need to  start an
+# extra shell).
+#
+# ---
+#
+# Note that these directives support \`%\` specifiers.
+# So, you can write something like:
+#
+#     # /etc/systemd/system/getty@.service.d/white-background.conf
+#     ExecStartPre=/usr/bin/setterm --background=white --foreground=black --store
+#     StandardOutput=file:/dev/%I
+#                              ^^
+Standard${1:Input|Output|Error}=${2:file|append}:${3:/path/to/file}
+$0
+endsnippet
+
+# Type=simple, Type=forking {{{1
+
+snippet t07 "Type=simple vs Type=forking" Am
+[Service]
+# TLDR:  use \`Type=forking\`  if and  only if  your service  backgrounds itself
+# (\`&\`, \`--daemonize\`, ...).
+#
+# ---
+#
+# By default, \`Type=simple\` is assumed; the latter implies 2 things.
+#
+# First, the systemd  manager considers the unit started as  soon as the service
+# process  is \`fork()\`'ed.   In contrast,  with \`Type=forking\`,  the manager
+# only  considers  the  unit  started after  \`execve()\`  has  returned.   This
+# determines when the manager starts the following units.
+#
+# Second,  the manager  sends  \`SIGTERM\`  to all  processes  started from  the
+# service as soon as the latter exits.  See:
+#
+#    - \`man systemd.service /EXAMPLES/;/Example 2. Simple service.\`
+#    - \`man systemd.service /EXAMPLES/;/Example 5. Traditional forking services\`
+#
+# That's why you need \`Type=forking\` for a service that backgrounds itself.
+# Because  if it  does, it  \`fork()\`s,  and \`exit()\`s  immediately; at  that
+# point, you don't want the systemd manager to send it \`SIGTERM\`.
+$0
+endsnippet
+
+# Wants, Requires, BindsTo, PartOf {{{1
+
+snippet t08 "Wants vs Requires vs BindsTo vs PartOf" Am
+[Unit]
+
+# \`Wants\` specifies a soft dependency.
+# If the configured unit C "Wants" a dependency unit D, and C gets activated but
+# D fails to start, C starts regardless.
+#
+# ---
+#
+# \`Requires\` specifies a stronger dependency than \`Wants\`.
+# If C gets activated but D fails to start, C does not start (*).
+# If D is restarted/stopped, C is also restarted/stopped.
+#
+# (*) TODO: Are  you sure?  According  to the man page,  it seems you  also need
+# \`After=D\` for that to be true.
+#
+# ---
+#
+# \`BindsTo\` specifies an even stronger dependency.
+# If D is stopped without involvement of systemd, C is stopped too.
+# For example, a service might be  manually killed, or crash; the backing device
+# of a device unit might be unplugged; the  mount point of a mount unit might be
+# unmounted; ....
+#
+# For  an even  stronger  dependency,  also use  \`After=D\`.   This  way, if  C
+# is  running  and  D  gets  skipped  due to  a  failed  condition  check  (like
+# \`ConditionPathExists=\`  or  \`ConditionPathIsSymbolicLink=\`),   C  will  be
+# stopped.
+#
+# Do   *not*   use   it   to   make   a   path/socket/timer   unit   depend   on
+# \`graphical-session.target\`.   If you  do, \`graphical-session.target\`  will
+# no  longer  be   stopped  (and  restarted)  whenever  you  log   out  and  log
+# back  in.  Path/socket/timer  units  are  only meant  to  be \`WantedBy\`  the
+# \`paths.target\`/\`sockets.target\`/\`timers.target\`.
+#
+# ---
+#
+# \`PartOf\`   is  similar   to  \`Requires\`   but  is   limited  to   D  being
+# restarted/stopped.  That is, if C is started, D is not started.
+#
+# Typically, you will use \`PartOf=graphical-session.target\` in your \`--user\`
+# services, so  that they're  stopped/restarted whenever your  graphical session
+# is.  Even though  \`PartOf\` does not start your services,  those should still
+# be  started whenever  you  log  in, because  they  should  be \`Wants\`ed  (or
+# \`Wanted\`) by  your user session target,  and the latter is  reached whenever
+# you log in.
+#
+# \`PartOf\` is recommended in this man page, but only for a *service* unit:
+#
+#    > graphical-session.target
+#    >     This target is active whenever any graphical session is running. It
+#    >     is used to stop user **services** which only apply to a graphical (X,
+#    >     Wayland, etc.) session when the session is terminated. Such
+#    >     **services** should have "**PartOf**=graphical-session.target" in their
+#    >     "[Unit]" section. A target for a particular session (e. g.
+#    >     gnome-session.target) starts and stops "graphical-session.target"
+#    >     with "BindsTo=graphical-session.target".
+#
+# Source: \`man 7 systemd.special /UNITS MANAGED BY THE USERS SERVICE MANAGER/;/Special Passive User Units\`.
+#
+# And indeed, \`PartOf\` is never used outside services in default system units:
+#
+#     $ grep --files-with-matches -rI '^PartOf=' /etc /usr/lib/systemd 2>/dev/null \
+#       | grep -v '\.service$'
+#
+# Do   *not*   use   it   to   make   a   path/socket/timer   unit   depend   on
+# \`graphical-session.target\`.   If you  do, it  will be  stopped whenever  you
+# log  out and  log  back in.   Path/socket/timer  units are  only  meant to  be
+# \`WantedBy\` the \`paths.target\`/\`sockets.target\`/\`timers.target\`.
+$0
+endsnippet
+
+# Wants, WantedBy {{{1
+
+snippet t09 "Wants vs WantedBy" Am
+# Assuming a unit C wants a unit D, either:
+#
+#    - \`Wants\` should be specified in the \`[Unit]\` section of C
+#    - or \`WantedBy\` should be specified in the \`[Install]\` section of D
+#
+# Use \`Wants\` if C is aware of D; otherwise, use \`WantedBy\`.
+
+[Unit]
+Wants=
+
+[Install]
+WantedBy=
+$0
+endsnippet
+
+# access control {{{1
+
+snippet t10 "only allow connections from whitelisted IPs" Am
+[Service]
+IPAddressAllow=$1
+IPAddressDeny=any
+$0
+endsnippet
+
+# process privileges {{{1
+
+snippet t11 "give specific privilege(s) to non-privileged service process" Am
+# This is useful, for example, to run a server listening on a port lower than 1024,
+# which a normal user can't do:
+# https://www.w3.org/Daemon/User/Installation/PrivilegedPorts.html
+#
+# Instead of running the server as root, you can include the \`CAP_NET_BIND_SERVICE\`
+# capability in the ambient set of the server process:
+#
+#     # make the service run a non-privileged server process
+#     User=toto
+#     # give the server the capability it needs to listen on a privileged port
+#     AmbientCapabilities=CAP_NET_BIND_SERVICE
+#
+# See \`man 7 capabilities\` for the full list of capabilities.
+AmbientCapabilities=$1
+$0
+endsnippet
+
+snippet t12 "whitelist the privilege(s) which are allowed for privileged service process" Am
+# The process will only  be able to copy a capability from  its permitted set to
+# its effective set, if, and only if, it's also in its bounding set.
+# This is useful, for example, to remove all privileges of a service process:
+#
+#     CapabilityBoundingSet=
+#
+# \`CapabilityBoundingSet\`  and  \`AmbientCapabilities\`  have  opposite  goals
+# (give privileges vs limit privileges).
+CapabilityBoundingSet=$1
+$0
+endsnippet
+
+# restart {{{1
+
+snippet t13 "restart automatically in case of issue but not too often" Am
+# \`Restart=\` is useful to restart the service in case it ends prematurely because of some unexpected issue.{{{
+#
+# \`always\` and \`on-failure\` seem the most popular values.
+#
+#     $ grep --recursive 'Restart=' /usr/lib/systemd/system/ \
+#         | awk -F':' '{ sub("^Restart=", "", $NF); ++cnts[$NF]; };
+#                END { for (val in cnts) printf "%s: %d\n", val, cnts[val] }' \
+#         | sort --key=2bnr,2
+#
+#     always: 12
+#     on-failure: 11
+#     no: 1
+#     on-abort: 1
+#     on-success: 1
+#}}}
+# But don't try to restart the service more than X times per Y minutes.{{{
+#
+# As default  values for \`X\`  and \`Y\`, we  choose 3 and  60, to copy  the docker
+# service at \`/usr/lib/systemd/system/docker.service\`.
+#
+# ---
+#
+# If the  limit is reached,  no further action is  taken and the  service simply
+# remains in the failure state without any further attempted restarts.
+#}}}
+[Unit]
+StartLimitBurst=${1:3}
+StartLimitInterval=${2:60s}
+
+[Service]
+Restart=${3:always|on-failure}
+RestartSec=${4:2}
+$0
+endsnippet
+
+# security {{{1
+
+snippet t14 "security: limit resources which can be accessed by started processes" Am
+# All these directives are useful to lower the exposure score of a service:
+#     $ systemd-analyze security <service>
+[Service]
+# \`/home\`, \`/root\`, and \`/run/user\`.
+# Recommended for a long-running service (particularly a network-facing one), to
+# ensure that it can't access private user data.
+ProtectHome=true
+
+# \`/usr\`, \`/boot\`, and \`/etc\`.
+# Recommended  for a  long-running  service, unless  it's  involved with  system
+# updates or needs to modify the operating system in other ways.
+ProtectSystem=full
+
+# Physical devices, such as \`/dev/sda\`, \`/dev/mem\`, \`/dev/port\`.
+# Pseudo devices  such as \`/dev/null\`, \`/dev/random\`,  and \`/dev/tty1\` are
+# still accessible.
+PrivateDevices=true
+
+# kernel variables accessible through pseudo files under \`/proc\` and \`/sys\`
+ProtectKernelTunables=true
+
+# kernel modules (un)loading
+ProtectKernelModules=true
+
+# cgroups hierarchies accessible through \`/sys/fs/cgroup\`
+ProtectControlGroups=true
+
+# system calls {{{
+#
+# Only allow \`@system-service\` which is a  reasonable set of system calls used
+# by common system services, excluding any special purpose calls.
+#
+# Any system call outside this set  will result in immediate process termination
+# with the SIGSYS signal.
+#}}}
+SystemCallFilter=@system-service
+# Don't terminate a process if it invokes a disallowed system call.{{{
+#
+# Instead, return the \`EPERM\` error (aka "Operation not permitted").
+# See \`man 3 errno\`.
+#}}}
+SystemCallErrorNumber=EPERM
+
+# new privileges{{{
+#
+# Ensures  that the  service process  and all  its children  can never  gain new
+# privileges through \`execve()\` (e.g. via setuid or setgid bits, or filesystem
+# capabilities).
+#}}}
+NoNewPrivileges=true
+$0
+endsnippet
+
+# specifiers {{{1
+
+snippet t15 "specifiers" Am
+# Contrary  to  what  \`man systemd.unit /SPECIFIERS\`  says,  \`%C\`  does  not
+# resolve to \`$XDG_CACHE_HOME\`, but to \`$HOME/.cache\`.  Usually, they're the
+# same,  but not  necessarily.   Same thing  for  other specifiers  (e.g. \`%T\`
+# resolves to \`/tmp\`; not \`$TMPDIR\`).
+#
+#    - \`%C\`: \`$HOME/.cache\`
+#    - \`%E\`: \`$HOME/.config\`
+#    - \`%T\`: \`/tmp\`
+#    - \`%U\`: \`$UID\`
+#    - \`%h\`: \`$HOME\`
+endsnippet

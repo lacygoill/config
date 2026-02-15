@@ -1,0 +1,246 @@
+! The syntax highlighting of a multi-line list item in a comment is wrong in this file.{{{
+!
+! This is because of `keepend`:
+!
+!     :syn list xdefaultsComment
+!     xdefaultsComment xxx match /^!.*$/  keepend contains=xdefaultsTodo,@Spell˜
+!                                         ^-----^
+!
+! I donʼt care ATM, but if you do later, then redefine the item without `keepend`:
+!
+!     :syn clear xdefaultsComment
+!     :syn match xdefaultsComment /^!.*$/  contains=xdefaultsTodo,@Spell
+!}}}
+! Some characters are not properly displayed！{{{
+!
+! Try to update XTerm; compile from source if necessary.
+!
+! ---
+!
+! See also: https://unix.stackexchange.com/a/548619/289772
+!}}}
+
+! XTerm {{{1
+
+! allow an OSC 52 sequence to set xtermʼs selection(s)
+
+! What is the purpose of ʼdisallowedWindowOpsʼ?{{{
+!
+! Itʼs  a  resource   which  specifies  which  features  will   be  disabled  if
+! ʼallowWindowOpsʼ is false.
+! Its value is a comma-separated list of names or operation numbers.
+!
+! See `man xterm /^\s*disallowedWindowOps`.
+!
+! ---
+!
+! ʼallowWindowOpsʼ is a resource which specifies whether extended window control
+! sequences should be allowed.
+! These  include several  control sequences  which manipulate  the window  size or
+! position, as well as reporting these values and the title or icon name.
+!}}}
+!   Whatʼs its default value?{{{
+!
+!     1,2,3,4,5,6,7,8,9,11,13,14,18,19,20,21,GetSelection,SetSelection,SetWinLines,SetXprop
+!
+! IOW, no operation is allowed.
+!}}}
+!   Why do you use this new value?{{{
+!
+! It lets us  send an OSC 52  sequence (stored in the `Ms`  capability) to write
+! arbitrary text in  xtermʼs clipboard, probably because it  doesnʼt include the
+! name ʼSetSelectionʼ.
+!
+! Also, this value is recommended in `man tmux /set-clipboard`:
+!
+! > Note  that this  feature needs  to  be enabled  in xterm(1)  by setting  the
+! > resource:
+!
+! >       disallowedWindowOps: 20,21,SetXprop
+!
+! ---
+!
+! Basically, all operations are allowed, except:
+!
+!    - GetIconTitle (20): Report XTerm windowʼs icon label as a string.
+!    - GetWinTitle (21): Report XTerm windowʼs title as a string.
+!    - SetXprop: Set X property on top-level window.
+!}}}
+! Why donʼt you simply set ʼallowWindowOpsʼ with the value ʼtrueʼ?{{{
+!
+! Extended window control sequences can be abused in a script.
+!
+! Itʼs better  to let ʼallowWindowOpsʼ with  its default value ʼfalseʼ,  and set
+! ʼdisallowedWindowOpsʼ which  lets you  fine-tune which  sequences you  want to
+! allow.
+!}}}
+XTerm*.disallowedWindowOps: 20,21,SetXprop
+
+! By default, write in the *clipboard* selection when receiving an OSC 52 sequence.{{{
+!
+! Without this setting, XTerm would write in the primary selection.
+!
+! MRE:
+!
+!     # start XTerm
+!     $ printf ʼbyeʼ | xsel -i -b
+!     C-S-v
+!     bye˜
+!     ✔
+!
+!     $ printf ʼ\e]52;;%s\x07ʼ $(printf ʼhelloʼ | base64)
+!     C-S-v
+!     bye˜
+!     ✘
+!
+! We should get `hello` when pressing C-S-v.
+! We donʼt because  XTerm has written `hello` in the  *primary* selection, which
+! you can confirm like so:
+!
+!     $ xsel -p
+!     hello˜
+!
+! ---
+!
+! Hereʼs how `selectToClipboard` is documented:
+!
+! >     Tells xterm whether to  use the PRIMARY or CLIPBOARD for  SELECT tokens in the
+! >     selection  mechanism. [...]  The default  is “false”,  which tells  it to  use
+! >     PRIMARY.
+!}}}
+!   In the previous example, canʼt you specify the clipboard with `c`?{{{
+!
+! Yes, you can:
+!
+!     $ printf ʼ\e]52;c;%s\x07ʼ $(printf ʼhelloʼ | base64)
+!                     ^
+!
+! But it would fail inside tmux, because the latter will remove `c`.
+! You can check  this by logging the  activity of the server,  and searching for
+! `]52;` in the logfile.
+!}}}
+XTerm*.selectToClipboard: true
+
+! `$TERM` should be `xterm-256color`, so that  our programs use the full palette
+! of the terminal
+XTerm*.termName: xterm-256color
+
+! font (face and size)
+XTerm*.faceName: DejaVu Sans Mono
+XTerm*.faceSize: 20
+
+! This *drastically* improves the bandwidth output performance of XTerm.{{{
+!
+! It lets XTerm  drop some screen updates  to catch up with the  flow, when your
+! command outputs a lot of data.
+!
+! MRE:
+!
+!     $ time seq -f "the quick brown fox jumps over the lazy dog %g" 1000000
+!
+! In st, this command takes about 3.5 seconds.
+! In XTerm, it takes 70 seconds.
+!
+! When this resource is set to  true, XTerm needs only 8 seconds; unfortunately,
+! for a few seconds, the screen appears  to have stopped since it is waiting for
+! a new set of screen updates after having discarded some.
+!
+! However, if  you run XTerm in  tmux, then, not only  does it catch up  st (3.5
+! seconds), but the screen doesnʼt appear to have stopped anymore!
+!}}}
+XTerm*.fastScroll: true
+
+! Let us copy-paste in various ways.{{{
+!
+!    - copy the clipboard selection by pressing `C-S-c`
+!    - paste the clipboard selection by pressing `C-S-v`
+!
+!    - copy the primary selection after pressing-moving-releasing the left click
+!      (useful to paste some text selected from XTerm into another application)
+!
+!    - paste the primary selection after clicking on the mouse wheel
+!      (useful to paste some text selected from another application into XTerm)
+!
+! Source:
+!
+! https://unix.stackexchange.com/a/225076/277716
+! https://www.davidsimmons.com/soft/xtermhacks/#copynpastenopatch
+!}}}
+! Do *not* replace `.VT100` with `*`; it would give warnings:{{{
+!
+!     Warning: Actions not found: insert-selection, copy-selection
+!}}}
+XTerm.VT100.translations: #override \
+    Ctrl Shift <Key>C: copy-selection(CLIPBOARD) \n\
+    Ctrl Shift <Key>V: insert-selection(CLIPBOARD) \n\
+    <Btn1Up>: select-end(PRIMARY) \n\
+    <Btn2Up>: insert-selection(PRIMARY)
+
+! Do not let XTerm intercept a `M-Enter` keypress.
+! By default , the latter is bound to the `fullscreen()` action.
+! `man xterm /KEY BINDINGS/;/Default Key Bindings/;/fullscreen()`
+XTerm*.fullscreen: never
+
+! Make key bindings using the meta modifier work.
+!
+! If “true”,  Meta characters (a  character combined with the  Meta modifier
+! key) are  converted into  a two-character sequence  with the  character itself
+! preceded by  ESC.
+XTerm*.metaSendsEscape: true
+
+! fix backspace key for `$ emacs --no-window-system`
+XTerm*.backarrowKey: false
+
+! Colors (for all X programs) {{{1
+
+! enable true color in xterm{{{
+!
+!    > If  xterm  is  compiled  with   direct-color  support,  and  the  resource
+!    > directColor is  true, then rather  than choosing the closest  match, xterm
+!    > asks the X server to directly render a given color.
+!
+! Source:
+! http://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Functions-using-CSI-_-ordered-by-the-final-character_s_
+!
+! Useful for  XTerm to use  the colors defined  in this file.   Without enabling
+! `directColor`, XTerm chooses a black background no matter what we set up here.
+!
+! ---
+!
+! Note  that  if  XTerm  was   not  compiled  with  `--enable-direct-color`,  it
+! approximates a true color to the closest match in its palette.
+! This compiling option is recent (XTerm 331?).
+!}}}
+*.directColor: true
+
+! "Novel" theme ported from the Mac Terminal application
+! I donʼt like the colors!!{{{
+!
+! Start Kitty and use the "themes" kitten to choose a different one:
+!
+!     # from a kitty terminal
+!     $ kitty +kitten themes
+!
+! It should  present you a collection  of a few hundreds  pre-built themes, with
+! live previews  of the colors.  You  can choose between light  and dark themes,
+! and search by theme name by just typing a few characters from the name.
+!}}}
+*.background: #dfdbc3
+*.foreground: #3b2322
+*.cursorColor: #73635a
+*.color0: #000000
+*.color8: #7f7f7f
+*.color1: #cc0000
+*.color9: #cc0000
+*.color2: #009600
+*.color10: #009600
+*.color3: #d06b00
+*.color11: #d06b00
+*.color4: #0000cc
+*.color12: #0000cc
+*.color5: #cc00cc
+*.color13: #cc00cc
+*.color6: #0087cc
+*.color14: #0086cb
+*.color7: #f5f5f5
+*.color15: #ffffff

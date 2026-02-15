@@ -1,0 +1,87 @@
+% fish
+
+# list builtin commands for which there's a help page
+builtin --names
+
+# cd to recently visited directory
+cdh
+    # to navigate in the stack, press `M-b`/`M-f` (which we bound to `prevd(1)`/`nextd(1)`)
+
+# clear history file from all activity of current session
+history clear-session
+    # the history file is at `~/.local/share/fish/fish_history`
+
+# delete all history entries matching given command
+history delete --prefix --case-sensitive -- '<cmd> '
+
+% fish, debug
+
+# list completions definitions for given command
+complete --command=<cmd>
+    # You might first need to press Tab after `❬cmd❭`.
+    # That's because completions definitions are not loaded immediately (they're
+    # autoloaded).
+
+# run given command verbosely
+fish --debug-output=$TMPDIR/fish/trace.log --command='fish_trace=1 <command>'
+    # If you need to debug a completion function, run this instead:
+    #
+    #     $ fish --debug-output=$TMPDIR/fish/trace.log
+    #     $ ❬command❭  # press Tab for the completion function to be installed
+    #     $            # press C-u to erase the command-line
+    #     $ set fish_trace 1
+    #     $ my_completion_function
+    #     $ set -e fish_trace
+
+# start fish without config
+fish --no-config
+    # That's too much!  I only want my config to be ignored.  But I need fish to
+    # load its own usual config.
+    #
+    #     $ mkdir -p $TMPDIR/empty
+    #     $ HOME=$TMPDIR/empty XDG_CONFIG_HOME= fish
+    #
+    # This will let fish source its main config located at:
+    #
+    #     $__fish_data_dir/config.fish
+
+# log list of config files read by fish on startup
+fish --debug=config --debug-output=$TMPDIR/fish/config.log
+
+# measure startup time
+set tmp_file $(mktemp) \
+    ; fish --profile-startup $tmp_file --interactive --command exit \
+    ; sort --key=2bn,2 $tmp_file \
+    | awk '{ print $0; SUM += $2 } END { printf("        ----\n        %s ms\n", SUM / 1000) }' \
+    ; rm $tmp_file \
+    ; set --erase tmp_file
+    # `sort(1)` sorts by the second column, to show the biggest time investments
+    # last (i.e. closest to the next prompt).
+    #
+    # ---
+    #
+    # `awk(1)` prints  the sum of  all timings in the  second column, and  get a
+    # rough estimate of the total time it took for fish to start.
+    #
+    # ---
+    #
+    # In the final output, the first  column measures the time each command took
+    # just on its own (in microseconds).
+    # Same thing for  the second column, except that it  includes function calls
+    # and command substitutions.
+    # The third column prints  the command plus an indicator of  how deep in the
+    # callstack it is.
+    #
+    # Source: https://stackoverflow.com/a/63320336
+
+# measure how long a function takes
+find $__fish_config_dir $__fish_data_dir -name '*.fish' \
+    | fzf --bind='enter:become(time fish {})'
+
+# get profile log
+fish --profile=$TMPDIR/fish/profile.log
+    # Reproduce whatever steps are required to make fish noticeably slow.
+    # Then, press `C-d` to quit this child fish shell.
+    # Finally, run:
+    #
+    #     $ sort --key=2bn,2 /tmp/fish.profile.log

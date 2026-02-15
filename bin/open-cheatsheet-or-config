@@ -1,0 +1,147 @@
+#!/bin/bash -
+# Open the cheatkeys or config file for the program running in the focused window.
+
+# Functions {{{1
+function Is_Supported { #{{{2
+  case $open_what in
+  cheat)
+    [[ -f "$HOME/Wiki/cheatkeys/$pgm_name" ]]
+  ;;
+  config)
+    # shellcheck disable=SC1087
+    fish --command="complete --do-complete 'cfg '" \
+      | grep --quiet "^$pgm_name[[:blank:]]"
+  ;;
+  esac
+}
+
+function Get_Editor_Cmd { #{{{2
+  case $open_what in
+  cheat)
+    if [[ -n "$pane_pid" ]]; then
+      printf 'editor +normal!\ zM %s %s' \
+        "$HOME/Wiki/cheatkeys/$pgm_name" \
+        "${shell:+"$HOME/Wiki/cheatkeys/$shell"}"
+        # `${shell:+...}`: only  open a  file for  the shell  if it  makes sense
+        # (i.e. if `shell` is set)
+    else
+      # We start fish so that our Vim  fzf plugin doesn't complain that it can't
+      # find `fzf(1)`.   And we  start it  interactively so that  if we  use the
+      # plugin, fzf's UI is configured as usual.
+      printf "fish --interactive --command='editor +normal!\ zM $HOME/Wiki/cheatkeys/%s'" "$pgm_name"
+    fi
+  ;;
+  config)
+    printf 'editor +"Cfg %s"' "$pgm_name"
+  ;;
+  esac
+}
+# }}}1
+
+open_what="$1"
+case $open_what in
+cheat | config)
+  :
+;;
+*)
+  exit 1
+;;
+esac
+
+pgm_pid="$(xdotool getactivewindow getwindowpid)"
+
+# CLI/TUI program running inside tmux
+if [[ "$(pstree --ascii --hide-threads "$pgm_pid")" == *tmux:[[:blank:]]client* ]]; then
+  #                                                    ^----------------------^
+  # We want to match any of these:{{{
+  #
+  #     xterm---bash---tmux: client
+  #     st---fish---2*[tmux: client]
+  #
+  # Alternative:
+  #
+  #                             a literal opening bracket – contrary to a closing one – needs to be escaped
+  #                             v
+  #     ... =~ ---([[:digit:]]\*\[)?tmux:[[:blank:]]client]?$
+  #         ^^
+  #         regex comparison
+  #}}}
+
+  # The  tmux  format  variable `#{pane_current_command}`  is  unreliable.   For
+  # example, if we  run `$ sudo vim`, it will evaluate to  `sudo`, while we need
+  # `vim`.  Instead,  let's get the  pane PID, and  ask `pstree(1)` what  is its
+  # child.
+  pane_pid="$(tmux display-message -p '#{pane_pid}')"
+
+  # `s/---sh([[:digit:]]\+)$//`: Handle  some  corner  case  where  our  command
+  # starts a shell (e.g. `$ less *` starts `sh(1)`).
+  #
+  # `head --lines=1`: Vim might have multiple children (e.g. `fish(1)` and `zathura(1)`).
+  #
+  # `...\(fish\|zathura\)...`: Handle case  where we've started a  process child
+  # from Vim (e.g. zathura by pressing `gx` on a "Reference:" line in our Wiki);
+  # in that case, if we're focusing Vim, we want Vim's cheatsheet, not zathura's
+  # or fish's or tmux's one.
+  pgm_pid="$(
+    pstree --show-pids --hide-threads "$pane_pid" \
+    | head --lines=1 \
+    | sed 's/---sh([[:digit:]]\+)$//
+           s/\(vim([[:digit:]]\+)\)...\(fish\|zathura\)([[:digit:]]\+)$/\1/
+           s/.*(\([[:digit:]]\+\))$/\1/' \
+  )"
+
+  pgm_name="$(ps --pid="$pgm_pid" --format=comm=)"
+  # If no program is  running in the pane, there is ambiguity:  we might want to
+  # read the cheatkeys file for the shell or  for tmux.  There is no way to tell
+  # which file  we want; let's save  the shell's name  so that we can  open both
+  # later.
+  if [[ "$pgm_name" =~ ^(ba|fi)sh$ ]]; then
+    shell="$pgm_name"
+    pgm_name='tmux'
+  fi
+
+  # canonicalize the command name (necessary for something like `vimdiff` or `editor`)
+  pgm_name="$(realpath -- "$(type --path -- "$pgm_name")")"
+  pgm_name="${pgm_name##*/}"
+  # Remove possible suffix appended to the command name.{{{
+  #
+  #     $ basename "$(realpath "$(type --path mail)")"
+  #     mail.mailutils
+  #         ^--------^
+  #}}}
+  pgm_name="${pgm_name%%.*}"
+
+  if ! Is_Supported; then
+    exit 1
+  fi
+
+  tmux display-popup \
+    -E \
+    -xC -yC \
+    -w75% -h75% \
+    "$(Get_Editor_Cmd)"
+  exit
+fi
+
+if ! command -v jumpapp >/dev/null; then
+  echo 'missing dependency: jumpapp' >&2
+  exit 1
+fi
+
+pgm_name="$(ps --pid="$pgm_pid" --format=comm=)"
+# the Firefox process is named `firefox-bin`; not `firefox`
+if [[ "$pgm_name" == 'firefox-bin' ]]; then
+  pgm_name='firefox'
+fi
+pgm_name="$(realpath -- "$(type --path -- "$pgm_name")")"
+pgm_name="${pgm_name##*/}"
+
+if ! Is_Supported; then
+  exit 1
+fi
+
+# found empirically so that it matches approximately the geometry of the tmux popup
+geometry='87x23+260+125'
+# We call  `jumpapp(1)` so  that if a  cheatkeys window is  already open  but no
+# longer focused, we don't open a new one; instead, we focus it again.
+jumpapp -m -r xterm -geometry "$geometry" -e "$(Get_Editor_Cmd)"

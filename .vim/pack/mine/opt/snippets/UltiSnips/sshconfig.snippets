@@ -1,0 +1,724 @@
+# client config {{{1
+
+snippet t01 "client: match servers in given domain" Am
+#             pattern
+#          v-----------v
+#     Host *.some.domain
+#     ^--^ ^
+#
+# In a pattern, \`*\` is a wildcard operator which matches zero or more characters.
+# \`?\` is another wildcard operator; it matches exactly 1 character.
+# For more info about such operators, see \`man 5 ssh_config /PATTERNS\`.
+$0
+endsnippet
+
+snippet t02 "client: match servers in given domain except those from given subdomain" Am
+#     Host !*.sub.some.domain *.some.domain
+#          ^
+#
+# \`!\` is a negation operator.
+$0
+endsnippet
+
+snippet t03 "client: set user name on remote server" Am
+User ${1:alice}
+$0
+endsnippet
+
+snippet t04 "client: set port on which to connect to remote server" Am
+# The default is 22, but the server might listen on a different port.
+Port ${1:123}
+$0
+endsnippet
+
+snippet t05 "client: use alias to log to remote server" Am
+Host ${1:alias}
+	Hostname ${2:hostname}
+# \`$1\` can be whatever you want (e.g.\`debian\`, \`web\`).
+# \`$2\` must be the real host name of the server (FQDN, IP address).
+#
+# Then, on the command-line, run:
+#
+#     $ ssh ... $1
+#
+# This works because:
+#
+#    - the argument to \`Host\` is matched against the host name argument as
+#      given to \`ssh(1)\` on the command-line; \`ssh(1)\` doesn't check
+#      whether that argument is a valid FQDN or IP address
+#
+#    - if \`Hostname\` is present, \`ssh(1)\` does not connect to the host name
+#      given on  the command-line  (as it  usually does);  instead, it
+#      connects to  the machine specified as argument to \`Hostname\`
+#
+# ---
+#
+# Don't use \`/etc/hosts\`:
+#
+#     $ echo '<server IP> $1' | sudo tee --append /etc/hosts
+#
+# That file is  owned by the root user,  which makes it harder to  edit and back
+# up.  Besides, the general rule of thumb is  that if a host has a DNS entry, it
+# has  no place  in  \`/etc/hosts\`.   Finally, the  scope  of  that command  is
+# broader; it  affects *any* program trying  to connect to the  server (not just
+# \`ssh(1)\`), which might not be what you want.
+$0
+endsnippet
+
+snippet t06 "client: host names canonicalization (strip long domain from host name on CLI)" Am
+# You can tell  \`ssh(1)\` to rewrite standalone host names  on the command-line
+# into specific domains, and then (if they exist) use them for configuration.
+#
+# This lets you simplify:
+#
+#     $ ssh machine.some.domain
+#
+# Into this:
+#
+#     $ ssh machine
+#
+# While   still  making   \`ssh(1)\`  process   the  \`Host\`   blocks  matching
+# \`machine.some.domain\`.
+#
+# You  can specify  several  domains for  \`CanonicalDomains\`.   In that  case,
+# \`ssh(1)\` will  try to  complete a lone  host name with  each domain,  in the
+# order they're listed, until it finds one which exists.  The first match wins.
+CanonicalizeHostname yes
+CanonicalDomains ${1:some.domain} ${2:another.one}
+
+# How many dots are allowed in a lone host name on the command-line for it to be
+# canonicalized.  The default is 1, which allows this to work:
+#
+#              1 dot allowed
+#              v
+#     $ ssh www.on
+#           ^----^
+#           canonicalized into www.on.some.domain
+#
+CanonicalizeMaxDots ${3:0}
+# See also "alias" (in our snippets).
+$0
+endsnippet
+
+snippet t07 "client: make it easier to visually compare host keys" Am
+# By displaying a small ASCII graphic (aka random art image) on every login to a
+# server.
+#
+# Pro: By learning the pattern a known  server produces, you can easily find out
+# that  the  host  key  has  changed when  a  completely  different  pattern  is
+# displayed.
+#
+# Cons: Because these patterns might be  ambiguous, a pattern that looks similar
+# to the one you  remembered only gives a good probability that  the host key is
+# the same; but no guarantee.
+#
+# Besides, it  adds a  lot of noise,  even when  you only want  to run  a simple
+# command:
+#
+#                                vv
+#     $ ssh -l <user> <hostname> ls
+#
+#     Host key fingerprint is SHA256:pG42dwYLchZlo5H/z9ZIPPEcwlMZIBcN/AVFQuCOYfI
+#     +---[ECDSA 256]---+
+#     |      ..+ ..*B=*o|
+#     |      .= . +. +..|
+#     |      o.o o..o . |
+#     |       +.+ += o  |
+#     |    . = S.E..* . |
+#     |     = . o. + o  |
+#     |      = o o+ +   |
+#     |     o o o  = .  |
+#     |           .     |
+#     +----[SHA256]-----+
+#
+#     ...
+VisualHostKey yes
+$0
+endsnippet
+
+snippet t08 "client: log to server from intermediate jump host" Am
+# \`$1\` is the user you log in on the jump host; not on the final server.
+# \`:$3\`  is optional,  but might  be useful  if the  server on  the jump  host
+# listens on a non-standard port.
+ProxyJump ${1:user}@${2:jump_host}:${3:port}
+$0
+endsnippet
+
+snippet t09 "client: enable connection multiplexing" Am
+# Connection multiplexing is useful if your SSH sessions take a long time to start.{{{
+#
+#    - the server can't find a reverse DNS entry for your IP
+#    - the server or your machine is so old that  the initial key exchange
+#      takes  several  seconds
+#    - you're often disconnected (because of poor internet connection; often
+#      the case over WAN links)
+#    ...
+#
+# It  doesn't get  rid of  the  delay for  the first  session, *but*  additional
+# sessions start much more quickly.  Besides, you will only see the banner, last
+# login,  and  MOTD  in  the  first  session.   That's  because  you're  already
+# authenticated in  subsequent sessions; they  re-use the authentication  of the
+# first one.
+#
+# ---
+#
+# It works by letting you use a single network connection for multiple sessions.
+# Suppose you want to access an  interactive shell to administer the server, and
+# you simultaneously  want to copy a  big file from  it (which is going  to take
+# time).  You need 2 sessions; each  of which require their own connection.  The
+# more sessions,  the more time  the connections will  need to be  created.  But
+# with "connection multiplexing", you only need to create one single connection,
+# no matter how many sessions you want to start for the same server.
+#
+# \`ssh(1)\`  will  listen  for   connections  on  the  \`ControlPath\`  socket.
+# Additional sessions  can connect to this  socket (provided they have  the same
+# \`ControlPath\`, and  regardless of  how their  \`ControlMaster\` is  set), to
+# re-use the  "master" instance's  network connection  rather than  creating new
+# ones, but will fall back to connecting  normally if the socket does not exist,
+# or is not listening.
+#
+# We set the  keyword to \`auto\` instead  of \`yes\`; I *think*  it handles the
+# case where  the server does  not support the  feature (\`auto\` falls  back to
+# connecting normally in that case).
+#}}}
+ControlMaster auto
+# Where to find the socket.{{{
+#
+# Require that you have created  \`~/.ssh/cm_sockets/\` and made it not writable
+# by other users.
+#
+# \`%C\`: hash of \`%l%h%p%r\`
+# \`%l\`: local host name, including domain name
+# \`%h\`: remote host name
+# \`%p\`: remote port
+# \`%r\`: remote user name
+#
+# \`%C\` gives  us the guarantee  that connections are uniquely  identified.  We
+# could replace it with something like \`%r@%h:%p\`, but that would disclose the
+# host name  to someone who  can read \`~/.ssh/cm_sockets/\` (an  intruder might
+# work around restrictive permissions, or another  user might simply snoop on us
+# if they can access our machine while we're logged in).
+#}}}
+ControlPath ~/.ssh/cm_sockets/%C
+# Save the socket for half an hour even if the first connection (the “master”) disconnects.{{{
+#
+# By keeping  an \`ssh(1)\` process running  in the background listening  on the
+# socket.
+#}}}
+ControlPersist 30m
+$0
+# Warning: Only enable this feature on a single-user desktop machine.{{{
+#
+# Anyone  who can  read the  socket  can access  all  data going  over your  SSH
+# connection.  An intruder wouldn't even need your password to get a terminal on
+# the server, because the original connection has already authenticated.
+#}}}
+# Warning: And only when necessary.{{{
+#
+# That  is, only  for a  host for  which  you perceive  that it  makes you  gain
+# significant time; not globally for any host.
+#
+# Otherwise, it causes too many subtle issues.
+#
+# We need to run a command twice if we use \`-f\`:
+#
+#     # kill possible lingering ssh(1) processes due to ControlPersist
+#     # (they might interfere with the next observations)
+#     $ pkill --exact ssh
+#
+#     $ ssh -f <user>@<host> 'touch /tmp/file'
+#     $ ssh <user>@<host> 'ls /tmp/file'
+#     ls: cannot access '/tmp/file': No such file or directory
+#
+#     $ ssh -f <user>@<host> 'touch /tmp/file'
+#     $ ssh <user>@<host> 'ls /tmp/file'
+#     /tmp/file
+#
+# ---
+#
+# It breaks the background behavior of \`-f\`:
+#
+#     $ pkill --exact ssh
+#
+#     # yes, twice
+#     $ ssh -f <user>@<host> 'sleep 5'
+#     $ ssh -f <user>@<host> 'sleep 5'
+#     # expected: ssh(1) backgrounds itself
+#     # actual: ssh(1) runs in the foreground for the whole duration of sleep(1)
+#
+# ---
+#
+# It prevents  us from  changing connection  options by  starting a  new session
+# (which might seem unexpected):
+#
+#     $ pkill --exact ssh
+#
+#     # Start an SSH session on the server for a socket to be created in ~/.ssh/cm_sockets/,
+#     # and make sure X forwarding is not enabled (i.e. \`ForwardX11\`
+#     # and \`ForwardX11Trusted\` are not set to \`yes\` in \`ssh_config\`).
+#     $ ssh <user>@<host>
+#
+#     # try to run xeyes(1) on the remote, and display it on the local machine
+#     $ ssh -X <user>@<host> xeyes
+#     Error: Can't open display:
+#     ✘
+#     # \`-X\` didn't work because ssh(1) re-used the previous connection
+#     # which did not enable X forwarding
+#
+#     # try again after disabling the connection multiplexing feature
+#     $ ssh -o ControlPath=/dev/null -o ControlMaster=no -X <user>@<host> xeyes
+#     ✔
+#
+# Note that an  alternative would be to temporarily  comment out \`ControlPath\`
+# in \`ssh_config\`.  No need to comment out \`ControlMaster\`.  On the CLI, the
+# reason  why we  also  need to  reset  the  latter is  because  we can't  unset
+# \`ControlPath\`:
+#
+#     $ ssh -o ControlPath=
+#     command-line line 0: Missing argument.
+#
+# ---
+#
+# It's incompatible with \`UpdateHostKeys ask\`:
+#
+#    > Confirmation is currently incompatible with ControlPersist, and will be
+#    > disabled if it is enabled.
+#}}}
+endsnippet
+
+snippet t10 "client: specify IP version" Am
+# Your host might have  both IPv4 and IPv6 addresses, and  you might have better
+# connectivity  over one  protocol  or the  other.   \`AddressFamily\` lets  you
+# specify  which one  you  prefer to  connect  to the  server.   The default  is
+# \`any\`,  which means  that the  client connects  over whichever  protocol the
+# system resolver returns an address for.
+AddressFamily ${1:any|inet|inet6}
+$0
+endsnippet
+
+snippet t11 "client: set source IP address (useful when client has multiple)" Am
+# Your client  machine might have multiple  IP addresses on a  single interface.
+# In that case, by  default, it uses that interface's primary  IP address as the
+# source of  all connections.   This is  not always  desirable.  You  can choose
+# which source IP \`ssh(1)\` should use:
+BindAddress ${1:address}
+$0
+endsnippet
+
+snippet t12 "client: disconnect if port forwarding fails" Am
+# This is useful  if the *only* reason to  connect to a given host is  to set up
+# some local/remote/dynamic port  forwarding.  In that case, if  for some reason
+# the setup fails, there is no reason for the connection to persist.
+ExitOnForwardFailure yes
+endsnippet
+
+snippet t13 "client: run local given command on successful login" Am
+# \`$1\` is run on the *local* machine; not on the remote.
+#
+# ---
+#
+# \`$1\` can include tokens as documented at \`man 5 ssh_config /^TOKENS\`.
+#
+# ---
+#
+# Do not quote \`$1\`!
+#
+#     LocalCommand "echo 'do something'"
+#                  ^                   ^
+#                  ✘                   ✘
+#
+#     LocalCommand echo 'do something'
+#                  ^
+#                  ✔
+PermitLocalCommand yes
+LocalCommand ${1:some command}
+endsnippet
+
+snippet t14 "client: cache all host keys that server can offer in known_hosts" Am
+# Not just  cache the one  key which is used  for the current  connection.  This
+# lets a sysadmin proactively distribute new host keys before getting rid of the
+# old ones (aka a graceful key rotation).
+#
+# ---
+#
+# It might seem that the value \`ask\` is useless, because you're still prompted
+# to trust the new keys, just like without \`UpdateHostKeys\`.  That's true, but:
+#
+#    - you're prompted only once for all of them; not for each of them
+#      individually
+#
+#    - you know that these keys are offered by a server for which you already
+#      trust one key (without \`UpdateHostKeys\`, you would have to trust a key
+#      from a completely unknown server); that doesn't give you the *absolute*
+#      guarantee that they're authentic, but it does give you *some* guarantee
+#
+# With regard to the last bullet point, the prompt is different.
+# Without \`UpdateHostKeys\`:
+#
+#     The authenticity of host '<domain> (<IP>)' can't be established.
+#     <algo> key fingerprint is SHA256:<fingerprint>
+#     Are you sure you want to continue connecting (yes/no/[fingerprint])?
+#
+# With \`UpdateHostKeys ask\`:
+#
+#     The server has updated its host keys.
+#     These changes were verified by the server's existing trusted key.
+#     Learned new hostkey: <algo> SHA256:<fingerprint>
+#     Accept updated hostkeys? (yes/no):
+#
+# ---
+#
+# If  you set  the keyword  to  \`ask\`, you'll  need \`LogLevel\`  to keep  its
+# default value of \`INFO\` (or a more verbose value).  Otherwise, the prompt is
+# disabled.
+#
+# ---
+#
+# If \`StrictHostKeyChecking\` is set to \`no\`, you'll need to connect twice to
+# cache all  the server keys.   Indeed, in that  case, on the  first connection,
+# only  1  host  key is  cached.   But  that  key  was not  trusted  before  the
+# connection, and it's  not explicitly accepted by the user.   So, no additional
+# keys are cached:
+#
+#    > Additional hostkeys are only accepted if the key used to authenticate
+#    > the host was already trusted or explicitly accepted by the user.
+#
+# ---
+#
+# For now, I  prefer to avoid this keyword, because  it can make \`known_hosts\`
+# much more verbose (if  a server offers 10 keys, it will  append 10 lines; some
+# possibly very long), and I would like to keep a short and tidy cache.
+UpdateHostKeys ${1:yes | ask}
+endsnippet
+
+snippet t15 "client: revoke given host keys" Am
+# In that file, write the public host keys that you want to revoke, one per line:
+#
+#     <keytype> <key> <comment>
+#
+# If a client is offered any key from  that file, it will be refused, even if it
+# has  an accompanying  certificate.  This  is useful  for a  sysadmin, if  they
+# discovered that a host key pair has been disclosed to an intruder.
+#
+# ---
+#
+# Another way to revoke a host key  is to prefix it with the \`@revoked\` marker
+# in \`known_hosts\`.   However, prefer \`RevokedHostKeys\`.  It's  more tidy to
+# separate revoked host  keys from valid ones.  Also, it's  more consistent with
+# \`RevokedKeys\` in  \`sshd_config\`, which can  be used for a  similar purpose
+# (i.e. revoke *user* authentication keys).
+RevokedHostKeys /etc/ssh/revoked-host-keys
+endsnippet
+
+snippet t16 "client: disable user file known_hosts" Am
+# Useful if  you prefer to  validate host keys  with certificates signed  with a
+# trusted CA key; i.e. written  in the file assigned to \`GlobalKnownHostsFile\`
+# (e.g. \`/etc/ssh/ssh_known_hosts\`).
+#
+# ---
+#
+# Do *not*  use the value \`none\`;  host keys would  be cached in a  file named
+# \`none\` in the current working directory.
+UserKnownHostsFile /dev/null
+endsnippet
+
+# server config {{{1
+
+snippet t17 "server: match clients whose IP address are in given network" Am
+# In  a  \`Match Address\`  declaration,  express the  network  using  the  CIDR
+# address/masklen notation:
+#
+#     Match Address 192.0.2.0/24
+#                   ^----------^
+#
+# ---
+#
+# The mask length must be consistent with the address; i.e. not too long:
+#
+#     192.0.2.0/33
+#               ^^
+#               ✘
+#               addresses in this network only occupy 32 bits
+#
+# And no bits set in the host portion of the address:
+#
+#     192.0.2.0/8
+#               ^
+#               ✘
+#               that means that the network portion ends after 192;
+#               which means that 2 is in the host portion;
+#               but only 0s are accepted in the host portion
+$0
+endsnippet
+
+snippet t18 "server: make server listen on given port for one of its IP address" Am
+# Remember that a host can have multiple IP addresses.
+# So, for example, you could write:
+#
+#     ListenAddress 192.168.0.1:3333
+#     ListenAddress 192.168.0.2:4444
+#
+# The  server would  listen  on \`3333\`  with its  IP  \`192.168.0.1\`; and  on
+# \`4444\` with its IP \`192.168.0.2\`.
+ListenAddress ${1:IP}:${2:Port}
+
+# Tip: This might  be useful to evade  a naïve firewall which  blocks all ports
+# including 22, except a few of them (e.g. 80 or 443): run \`sshd(8)\` on one of
+# the latters.   That might be unwise  though (e.g. 80 and 443  are the standard
+# ports reserved for HTTP and SMTP).
+$0
+endsnippet
+
+snippet t19 "server: PermitOpen" Am
+# The  IP (or  host name)  and port  are matched  against the  ones used  on the
+# *remote* host  (i.e. the ones  specified at the *end*  of the value  passed to
+# \`-L\`).
+#
+# ---
+#
+# Multiple permissions can be specified by separating them with whitespace:
+#
+#     PermitOpen host1:port1 host2:port2 ...
+#
+# ---
+#
+# \`any\` can be used to remove all restrictions and permit any forwarding requests.
+# \`none\` can be used to prohibit all forwarding requests.
+#
+# ---
+#
+# In the  place of the host  (or port), \`*\` (alone)  can be used to  allow all
+# hosts (or ports).  Otherwise, no pattern matching is performed.
+#
+# \`PermitListen\` supports more patterns than a single \`*\` for the host.
+#
+# ---
+#
+# Contrary to \`PermitListen\` which supports  a single port number as argument,
+# \`PermitOpen\` must also be supplied a host (as an IP or a name).
+#
+# ---
+#
+# When the keyword is  processed, a host name is not resolved  to an IP (neither
+# in the  keyword's value, nor  in the  value passed to  \`-L\` on the  CLI); in
+# particular, \`localhost\` does not match \`127.0.0.1\`.
+PermitOpen ${1:host}:${2:port}
+endsnippet
+
+snippet t20 "server: PermitListen" Am
+# The  IP (or  host name)  and port  are matched  against the  ones used  on the
+# *remote* host (i.e. the  ones specified at the *start* of  the value passed to
+# \`-R\`).
+#
+# ---
+#
+# Multiple permissions can be specified by separating them with whitespace:
+#
+#     PermitListen port1 host:port2 ...
+#
+# ---
+#
+# \`any\` can be used to remove all restrictions and permit any listen requests.
+# \`none\` can be used to prohibit all listen requests.
+#
+# ---
+#
+# The  host name  can contain  the  wildcards \`*\`  and \`?\`  as described  at
+# \`man 5 ssh_config /^PATTERNS\`.  And in  the place of the port,  \`*\` can be
+# used to allow any number.
+#
+# ---
+#
+# On the CLI,  in the value passed  to \`-R\`, an omitted remote  IP defaults to
+# \`localhost\`.
+#
+# ---
+#
+# When the keyword is  processed, a host name is not resolved  to an IP (neither
+# in the  keyword's value, nor  in the  value passed to  \`-R\` on the  CLI); in
+# particular, \`localhost\` does not match \`127.0.0.1\`.
+PermitListen ${1:port | host:port}
+endsnippet
+
+snippet t21 "server: force given command to be run on remote, ignoring the one requested by user" Am
+# This  is similar  to  the \`command\`  option  that  you can  give  to a  user
+# authentication  key  in  \`authorized_keys\`:   just  like  with  the  latter,
+# \`~/.ssh/rc\` is  also ignored on  the remote,  and the requested  command (if
+# any) can still be read from \`$SSH_ORIGINAL_COMMAND\`.
+#
+# ---
+#
+# In  case  of conflict  with  the  \`command\` option  in  \`authorized_keys\`,
+# \`ForceCommand\` wins;  which makes sense,  otherwise a user could  override a
+# restriction imposed by the sysadmin.
+#
+# ---
+#
+# Do not quote \`$1\`!
+#
+#     ForceCommand "echo 'do something'"
+#                  ^                   ^
+#                  ✘                   ✘
+#
+#     ForceCommand echo 'do something'
+#                  ^
+#                  ✔
+ForceCommand ${1:some command}
+endsnippet
+
+snippet t22 "server: revoke given user authentication keys" Am
+# In that file, write the public user keys that you want to revoke, one per line:
+#
+#     <keytype> <key> <comment>
+#
+# If a server is offered any key from  that file, it will be refused, even if it
+# has  an accompanying  certificate.  This  is useful  for a  sysadmin, if  they
+# discovered that a user key pair has been disclosed to an intruder.
+RevokedKeys /etc/ssh/revoked-user-keys
+endsnippet
+
+snippet t23 "server: disable user file authorized_keys" Am
+# Useful if  you prefer to  validate user keys  with certificates signed  with a
+# trusted CA  key; i.e.  written in the  file assigned  to \`TrustedUserCAKeys\`
+# (e.g. \`/etc/ssh/user-ca-keys.pub\`).
+AuthorizedKeysFile none
+endsnippet
+
+# any config {{{1
+
+snippet t24 "any: conditional block" Am
+# A block of lines  starting with a \`Match\` declaration which  is only used if
+# all of its conditions are satisfied.
+#
+# ---
+#
+# In a *server* config file, it ends at the next \`Match\` keyword or the end of
+# the file.   In a *client* config  file, it can  also end at the  next \`Host\`
+# keyword.
+#
+# Keywords in a conditional block can  override those set in the global section,
+# but only in a *server* config file.   This means that – in a *server* config
+# file – the  global section should appear *before* any  \`Match\` block.  But
+# in  a *client*  config file,  they can't  override anything;  thus the  global
+# section should appear last.
+#
+# Note that  in a  *client* config file,  I recommend the  global section  to be
+# wrapped inside a \`Host *\` block (it makes the code more readable, and that's
+# what the system-wide config file does).  In a *server* config file, the global
+# section is usually not indented (outside any block).
+#
+# ---
+#
+# In a  server config  file, if a  keyword appears in  the global  section *and*
+# inside a \`Match\` block that is used but with conflicting values, the keyword
+# in the block  overrides the one in  the (prior) global section.   IOW, in that
+# case, the *last* of 2 keywords wins.
+#
+# In any  kind of  config file, if  a keyword appears  in multiple  \`Match\` or
+# \`Host\` blocks  that are  used but  with conflicting  values, only  the first
+# instance of  the keyword is applied.   IOW, in that case,  the *first* keyword
+# wins.
+#
+# ---
+#
+# The condition argument is a criteria-pattern pair:
+#
+#     # only match a logged in user who is member of the \`admin\` group
+#
+#           criteria
+#           v---v
+#     Match Group admin
+#                 ^---^
+#                 pattern
+#
+# Multiple patterns can be specified, separated with commas:
+#
+#     # match users alice and bob
+#
+#                v---v  vvv
+#     Match User alice, bob
+#                     ^
+#
+# Multiple criteria-pattern pairs can be specified, separated with spaces:
+#
+#     # match alice when she logs in from 192.1.2.3
+#
+#           criteria-pattern 1
+#           v--------v
+#     Match User alice Address 192.1.2.3
+#                      ^---------------^
+#                      criteria-pattern 2
+#
+# ---
+#
+# By convention, declarations inside a block  are indented to make the code more
+# readable:
+#
+#       used unconditionally
+#     v-----------------------v
+#     PasswordAuthentication no
+#
+#     Match User alice
+#         PasswordAuthentication yes
+#         ^------------------------^
+#         used on the condition that the logged in user is alice
+#
+# ---
+#
+# Inside  a \`Match\`  block,  you can't  write all  possible  keywords; only  a
+# subset.  For example, \`AcceptEnv\` is accepted, but not \`AddressFamily\`:
+#
+#     Match ...
+#         AcceptEnv ...
+#         ^-------^
+#             ✔
+#
+#     Match ...
+#         AddressFamily ...
+#         ^-----------^
+#               ✘
+#
+# For an exhaustive list, see \`man 5 sshd_config /subset\`.
+$0
+endsnippet
+
+snippet t25 "any: differences between Host and Match keywords in server vs client config" Am
+# The \`Host\`  *keyword* is only available  in the client config  file.  In the
+# server config  file, you  can use  the \`Host\`  *criteria* after  a \`Match\`
+# keyword.
+#
+# For example, you would write this in the client config file:
+#
+#     Host 192.1.2.3
+#         ...
+#
+# But this in the server one:
+#
+#     Match Host 192.1.2.3
+#         ...
+#
+# ---
+#
+# In  the client  config file,  a  \`Match\` block  stops at  the next  \`Host\`
+# keyword (in addition to  the next \`Match\` and the end  of the file); there's
+# no \`Host\` keyword in the server config file.
+#
+# ---
+#
+# The \`Match\`  keyword doesn't accept  the same criteria depending  on whether
+# it's used in the client or server config.
+$0
+endsnippet
+
+snippet t26 "any: %x tokens" Am
+# Arguments to some keywords can include tokens, which are expanded at runtime.
+#
+# In  particular,  \`%u\`  expands  to  the user  name,  \`%h\`  to  their  home
+# directory, and \`%%\` to a literal percent character.
+#
+# In a  *client* config  file, \`%u\`  expands to the  *local* user  name, while
+# \`%h\` expands to the *remote* home directory.
+#
+# To  know  which   keywords  accept  which  tokens  in   their  arguments,  see
+# \`man 5 ssh_config /^TOKENS\` and \`man 5 sshd_config /^TOKENS\`.
+endsnippet

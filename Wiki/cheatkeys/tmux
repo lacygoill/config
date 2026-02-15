@@ -1,0 +1,38 @@
+Open {{{1
+
+selected url                            gx                                     C
+selected file path                      gf                                     C
+
+relevant cheatkeys                      «S-F1»                                 N
+# for program running in current pane
+
+Kill {{{1
+
+kill pane                               «pfx» Q Q
+kill window                             «pfx» Q q
+
+Search {{{1
+
+selected text                           S                                      C
+
+Paste {{{1
+
+paste buffer                            «pfx» «C-p»                            N
+choose and paste buffer                 «pfx» p                                N
+yank and paste selected text            p                                      C
+
+paste hinted text                       «pfx» f                                N
+# press the hint in lowercase
+
+Move {{{1
+
+start of previous prompt                !                                      C
+
+Annex {{{1
+Labels used in modes {{{2
+
+#    ┌───┬─────────────────────┐
+#    │ N │ Type in Normal mode │
+#    ├───┼─────────────────────┤
+#    │ C │ Type in Copy mode   │
+#    └───┴─────────────────────┘

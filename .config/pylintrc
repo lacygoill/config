@@ -1,0 +1,120 @@
+# For more options: `$ pylint --generate-rcfile`
+# TOML alternative:{{{
+#
+#     $ pylint --generate-toml-config
+#
+# Example:
+#
+#     [tool.pylint.main]
+#     ignored-modules = ['weechat']
+#
+#     [tool.pylint.'messages control']
+#     disable = [
+#         'fixme',
+#         'global-statement',
+#         'line-too-long',
+#         'missing-function-docstring',
+#     ]
+#}}}
+# Unfortunately, pylint can only read a TOML configuration file on a per-project basis.{{{
+#
+# In `pyproject.toml` at the top level:
+#
+#    > [...] it is  possible to use a configuration file  to specify the default
+#    > values. [...] Pylint  searches for a configuration file  in the following
+#    > order [...]:
+#    > [...]
+#    > 3. `pyproject.toml` in the current working directory, providing it has at
+#    > least  one `tool.pylint`.  section.   The  `pyproject.toml` must  prepend
+#    > section  names with  `tool.pylint.`, for  example:
+#    > `[tool.pylint.'MESSAGES > CONTROL']`.
+#
+# Source: https://pylint.pycqa.org/en/latest/user_guide/usage/run.html?highlight=pylintrc#command-line-options
+#
+# There is no global TOML configuration file location.  So, for now, we stick to
+# a regular `pylintrc`.
+#}}}
+
+# `~/.config/pylintrc` is documented here:{{{
+#
+#    > [...] Otherwise, Pylint searches for a configuration file in the
+#    > following order and uses the first one it finds:
+#    > [...]
+#    > 9. if you have a home directory which isn't /root:
+#    >     [...]
+#    >     .config/pylintrc in your home directory
+#
+# Source: https://pylint.pycqa.org/en/latest/user_guide/usage/run.html#command-line-options
+#}}}
+
+
+[MAIN]
+
+# List of module names for which member attributes should not be checked (useful
+# for modules/projects where namespaces are  manipulated during runtime and thus
+# existing member attributes cannot be deduced by static analysis).  It supports
+# qualified module names, as well as Unix pattern matching.
+# Ignore `weechat` module to suppress this error:{{{
+#
+#     script.py:1: [E0401(import-error), ] Unable to import 'weechat'
+#}}}
+#   Do not try to create a symlink instead.{{{
+#
+#     $ ln --symbolic weechat.pyi weechat.py
+#
+# It wouldn't be the correct solution:
+#
+#    > trygveaa  i've just set `ignored-modules = ["weechat"]` for pylint
+#    > trygveaa  looks like pylint recently got support for .pyi files,
+#    >           but i haven't checked it out: https://github.com/pylint-dev/pylint/issues/4987
+#    > trygveaa  either way, linking weechat.pyi to weechat.py is not the correct solution
+#}}}
+ignored-modules=weechat
+
+
+[MESSAGES CONTROL]
+
+# Disable the message, report, category or checker with the given ID(s).
+# Multiple identifiers must be separated with commas.
+#
+# You  can  also  use  `--disable=all`  to disable  everything  first  and  then
+# re-enable  specific  checks.   For  example,  if you  want  to  run  only  the
+# similarities checker, you can use:
+#
+#     disable=all
+#     enable=similarities
+#
+# We disable those IDs because in practice, they give too many false positives:
+# `fixme`: ignore our TODOs and FIXMEs{{{
+#
+# We only  want Pylint to tell  us about mistakes/pitfalls that  we missed.  Our
+# TODOs and FIXMEs might be mistakes/pitfalls, but we didn't miss them.  We just
+# don't know how to handle them yet.
+#}}}
+# `global-statement`: in the general case, there is nothing wrong with using the `global` statement
+# `invalid-name`: can give false positives{{{
+#
+# For example, in the original `autosort` WeeChat plugin, we get this message:
+#
+#     Constant name "signal_delay_timer" doesn't conform to UPPER_CASE naming style
+#
+# That's because of `sort_limit_timer` declared at the module level:
+#
+#     sort_limit_timer = None
+#
+# But the message would only make  sense if `signal_delay_timer` was a constant.
+# It's not.  It's a variable which can be reset in other functions.
+#}}}
+# `line-too-long`: ignore long commented URLs{{{
+#
+#     # Source: some-very-long-URL
+#               ^----------------^
+#}}}
+disable=fixme,
+        global-statement,
+        invalid-name,
+        line-too-long,
+        missing-class-docstring,
+        missing-function-docstring,
+        missing-module-docstring,
+        redefined-outer-name

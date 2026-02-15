@@ -1,0 +1,23 @@
+[Unit]
+# Problem: If we  copy something into  the clipboard from Vim,  and quit/suspend
+# the latter, then we lose the clipboard.
+#
+# Solution: Before quitting/suspending Vim, make  the latter write its clipboard
+# into a  file, and watch  that file; whenever  it changes, start  `xsel(1x)` so
+# that it becomes the new owner of the clipboard.
+Description=Make clipboard persist after quitting/suspending Vim
+
+[Path]
+# We use `PathModified` instead of `PathChanged`  to be sure that the service is
+# triggered whenever the file is written to.
+PathModified=/tmp/%U-user/vim/clipboard
+# TODO: How to use `$TMPDIR` instead  of `/tmp/%U-user`?  `PathChanged` does not
+# expand it.  At least, not if it's at  the start of the path.  I guess the same
+# is true for most directives?  Which directives expand environment variables?
+#
+# Update: Besides, you might need to import the variable from `~/bin/user-session`:
+#
+#     systemctl --user import-environment TMPDIR
+
+[Install]
+WantedBy=paths.target

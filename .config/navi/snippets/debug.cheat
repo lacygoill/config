@@ -1,0 +1,394 @@
+% debug
+
+; See our resource about `syslog(3)`.
+$ priority: printf '%s\n' emerg alert crit err warn notice info debug
+
+# print kernel messages
+dmesg --kernel --decode --human --level=<priority>
+    # Systemd alternative (uglier):
+    #
+    #     $ journalctl --dmesg --priority=❬priority❭
+    #
+    # For warnings, `dmesg(1)` expects  the priority `warn`, but `journalctl(1)`
+    # expects `warning`.
+
+# print various info about hardware and software environment
+inxi --full --filter --extra=3
+
+# print limit on length of arguments which can be passed to shell command
+xargs --show-limits --no-run-if-empty </dev/null 2>&1 | grep buffer
+    # `--no-run-if-empty`: prevent xargs(1) from executing `/usr/bin/echo`
+
+# list all system configuration variables (useful to query limits)
+getconf -a
+
+# find file from which given environment variable got its value
+find /etc -type f -exec /usr/bin/grep -I '\b<var>\b' '{}' \+ 2>/dev/null
+    # Note that we must use `-exec`, and not `-execdir`.
+    #
+    # So that each match starts with a path relative to our CWD (instead of just
+    # `./` regardless of where the file containing the match is).
+    #
+    # ---
+    #
+    # Some typical locations include:
+    #
+    #    - `/etc/login.defs`
+    #    - `/etc/pam.d/login`
+    #    - `$ cat /etc/environment{,.d/*}`
+    #
+    # See also `man login`.
+    #
+    # ---
+    #
+    # Alternatively, if it was set in a shell init file:
+    #
+    #     # bash
+    #     $ bash -x -l -v -c 'exit' 2>&1 | less
+    #
+    #     # fish
+    #     $ fish_trace=1 fish --command='exit' 2>&1 | less
+
+# print environment of graphical application
+    # To open the whisker menu, press `Alt-F1`.
+    # Then, from the input field, run:
+    #
+    #     xterm -e bash --norc --noprofile
+    #     # --norc: do not read ~/.bashrc
+    #     # --noprofile: do not read /etc/profile, ~/.profile, ~/.bash_profile, ~/.bash_login
+    #
+    # Finally, from the shell, run `env(1)`.
+
+# run command in pristine environment
+env --ignore-environment "$(type --path <cmd>)"
+    # `type --path` is useful in case `❬cmd❭` is not in the default `PATH`.
+    # For example, `~/.fzf/bin` is not in `PATH` by default; that's an issue for
+    # `fzf(1)` if it is at `~/.fzf/bin/fzf`.
+
+
+% debug, bash
+@ debug
+
+# debug script
+bash --debugger <script>
+    # Require the installation of `bashdb`.
+    #
+    # ---
+    #
+    # If your script needs to be passed options, use this instead:
+    #
+    #     $ bashdb /path/to/my/script --option
+    #           ^^
+    #
+    # Otherwise, you'll get issues:
+    #
+    #                       vv
+    #     $ bash --debugger -- ~/bin/frec --add ~/.bashrc
+    #     bad option: `--add'
+    #
+    # Note that moving `--` fixes this error but might break your script:
+    #
+    #                                  vv
+    #     $ bash --debugger ~/bin/frec -- --add ~/.bashrc
+    #     bashdb❬0❭ finish
+    #
+    #     $ echo $status
+    #     1
+
+# dump (environment) variables and functions
+set
+
+# list enabled options
+bash -c '{ set -o; shopt; } | awk '\''/on$/ { print $1 }'\'''
+    # You can  also limit the  listing to enabled/disabled `shopt`  options with
+    # `$ shopt -{s|u}`.
+
+# list readline variables
+bash -i -c 'bind -v'
+
+% debug, binary
+@ debug
+
+$ debug: printf '%s\n' 'start in debugger mode?' \
+    no \
+    yes \
+    --- --header-lines 1 \
+        --map "\
+            case $(cat) in \
+                no) ;; \
+                yes) printf -- '-d' ;; \
+            esac \
+        "
+
+# print version of glibc
+/usr/lib/x86_64-linux-gnu/libc.so.6  # `man 7 libc`
+
+# list shared libraries dependencies of given binary
+ldd <binary> | awk '/=>/ { $4 = ""; print $0 }' | column -t
+    # `❬binary❭` doesn't know the location of its shared libraries; only their names (LHS of `=>`).
+    #
+    # At runtime, `ld.so(8)` finds them (RHS of `=>`) and loads them for `❬binary❭`.
+    #
+    # ---
+    #
+    # `/=>/`: Filter out the first and last lines which are not interesting.
+    #
+    # They're  for  the `linux-vdso`  and  `ld-linux`  shared dependencies  (see
+    # `vdso(7)` and `ld.so(8)`).
+
+# list symbols defined in given static library
+nm --defined-only $(locate --basename '<library>.a') 2>/dev/null
+
+# open given binary in radare2
+radare2 <debug> <binary>
+    # r2 is symlinked to radare2
+
+# print binary file in hexadecimal
+hexdump -C <binary>
+
+# print byte contents of given string/file
+printf '<string>' | od --format=cx1 --address-radix=n
+    # `od(1)` also accepts a file name as argument:
+    #
+    #     $ od --format=cx1 --address-radix=n ❬file❭
+    #                                         ^----^
+    #
+    # ---
+    #
+    # Example:
+    #
+    #     $ printf 'a\u03A3b'
+    #     aΣb
+    #
+    #     $ printf 'a\u03A3b' | od --format=cx1 --address-radix=n
+    #      a 316 243   b
+    #     61  ce  a3  62
+    #
+    # Note that  by default, bytes and  file offsets are all  expressed as octal
+    # numbers; the name of the  program comes from "**o**ctal **d**ump".  That's
+    # why in this example, `316` and `243` are octal numbers.
+    #
+    # ---
+    #
+    # `--format=c`: print a line  containing `❬string❭` where each character
+    # is  represented  with  a  printable  character, or  –  for  a  multibyte
+    # character – the actual bytes as octal numbers.
+    #
+    # `--format=x1`:  print another  line containing  `❬string❭` where  each
+    # character is  represented with  the actual  bytes as  hexadecimal numbers,
+    # separated one by one (by default, they're grouped by 4).
+    #
+    # `--address-radix=n`: suppress the file offset column on the left (`n` = None).
+
+# print all strings with minimal length found in given binary
+strings --bytes=<minlength> <binary>
+
+# print disassembly of given binary
+objdump --disassemble <binary>
+
+# print all available header information from given binary
+objdump --all-headers <binary>
+
+% debug, crash
+@ debug
+
+$ core_ID: coredumpctl --reverse list \
+    --- --header-lines 1  \
+        --map "awk '{ print $5 }'"
+
+$ PID: ps ax --format=pid=,comm= \
+    --- --map "awk '{ print $1 }'"
+
+# list core dumps captured today in the systemd journal
+coredumpctl --reverse list --since=today
+
+# get GDB backtrace for given core dump captured by systemd
+coredumpctl gdb <core_ID>
+    # If you omit the core dump ID, the last one is assumed
+    #
+    # ---
+    #
+    # The core dump ID can also be:
+    #
+    #    - the name of an executable (or a path to it)
+    #    - a journalctl predicate (see coredumpctl(1) and journalctl(1) for details)
+
+# print details about given core dump captured by systemd
+coredumpctl info <core_ID>
+
+# extract core dump from systemd location into file named "core"
+coredumpctl dump <core_ID> --output=core
+
+# print where a core dump goes
+sysctl kernel.core_pattern
+    # Alternative: `$ cat /proc/sys/kernel/core_pattern`
+    #
+    # ---
+    #
+    # If the first character is a bar, it means the core dump is piped to another command.
+    #
+    # The % items are specifiers automatically replaced with some values.
+    # For more info: `man 5 core`.
+    #
+    # ---
+    #
+    # Some tips if you don't get a core dump, or it's not the right one:
+    #
+    #    - restart your buggy process whenever you've updated its binary
+    #    - before reproducing a crash, remove any existing core dump from the CWD
+
+# print maximum size of core file (in kB) created when process crashes
+ulimit --core-size
+    # 0 means that if a process crashes, and tries to dump a core file, it won't
+    # be able to.
+
+# remove limit on size of dumped core file
+ulimit --core-size unlimited
+    # The effect  of this command doesn't  persist beyond the life  of the shell
+    # where it's run.
+    #
+    # ---
+    #
+    # Note that this might not be  enough.  There are other mechanisms which can
+    # prevent a core file from being dumped.  If you just need a backtrace, then
+    # forget about  a core file; just  run your buggy program  via `gdb(1)`, and
+    # use the  latter to get a  backtrace.  See our "get  backtrace without core
+    # dump" snippet.
+
+# simulate a program crashing
+sleep 30
+    # Then, press CTRL-\
+    # It should cause sleep(1) to crash.
+    # If it doesn't, you might need to run:  `$ stty quit '^\'`
+    # If it does, but no core file is dumped:  `$ ulimit --core-size unlimited`
+
+# generate a core dump on-demand
+gdb --pid=<PID>
+    # Then, on the gdb(1) command-line run:
+    #     (gdb) generate-core-file
+
+% debug, gdb
+@ debug
+
+# get backtrace from core dump
+gdb -ex='thread apply all bt full' --batch <path_to_binary> <path_to_core> >backtrace.txt
+    # `--batch` enables a non-interactive mode (and implies `--quiet`), in which
+    # gdb only executes the commands passed via `-ex`.  The output is printed on
+    # the terminal.
+
+# get backtrace without core dump
+gdb --args <command>
+    # Then, on the gdb(1) command-line:
+    #
+    #     (gdb) set logging enabled on
+    #     (gdb) set pagination off
+    #     (gdb) run
+    #     # if necessary, execute some interactive commands to trigger the crash
+    #     (gdb) thread apply all bt full
+    #     (gdb) quit
+    #
+    # The log should be in `gdb.txt`.
+    #
+    # ---
+    #
+    # `thread  apply all` applies  the following  command (here:  `bt full`), to
+    # all  the  process  threads;  that  might  be  useful  if  the  program  is
+    # multi-threaded.
+    #
+    # ---
+    #
+    # In `bt full`, full is a qualifier asking to print the values of local variables.
+    #
+    # ---
+    #
+    # `--args` lets you pass options to `❬command❭`.
+    # Otherwise, gdb would wrongly think they're for itself.
+    #
+    # ---
+    #
+    # Alternatively, if you don't need to run any interactive command, run this:
+    #
+    #     $ gdb --batch -ex=run -ex='thread apply all bt full' --args ❬command❭ >gdb.txt
+    #
+    # ---
+    #
+    # For more info about any `gdb(1)` command, execute:
+    #
+    #     (gdb) help ❬command❭
+
+% debug, trace
+@ debug
+
+$ child: printf '%s\n' 'trace children processes too?' \
+    no \
+    'in same file' \
+    'in separate files' \
+    --- --header-lines 1 \
+        --map "\
+            case $(cat) in \
+                in\ same\ file) printf -- '-f' ;; \
+                in\ separate\ files) printf -- '-ff' ;; \
+                no) ;; \
+            esac \
+        "
+
+$ duration: printf '%s\n' 'print time spent in each system call (at end of line)?' \
+    no \
+    yes \
+    --- --header-lines 1 \
+        --map "\
+            case $(cat) in \
+                no) ;; \
+                yes) printf -- '-T' ;; \
+            esac \
+        "
+
+$ logfile: printf '$TMPDIR/trace.log'
+
+; This  is especially  useful for  `write(2)` system  calls, because  they might
+; write long strings of text in files.
+; Note that filenames are not considered strings and are always printed in full.
+$ string_limit: printf '32\n64\n128\n256\n512\n1024'
+
+$ timestamp: printf '%s\n' 'print timestamps (at start of line)?' \
+    no \
+    absolute \
+    relative \
+    --- --header-lines 1 \
+        --map "\
+            case $(cat) in \
+                absolute) printf -- '-t' ;; \
+                relative) printf -- '-r' ;; \
+                no) ;; \
+            esac \
+        "
+
+$ value: printf '%s\n' file open,openat,creat read
+
+$ what: printf '%s\n' 'log new process started by given command, or log existing process?' \
+    'new process' \
+    'existing process' \
+    --- --header-lines 1 \
+        --map "\
+            case $(cat) in \
+                new\ process) printf 'some command' ;; \
+                existing\ process) printf -- '--attach=$(pidof -s app)' ;; \
+            esac \
+        "
+
+# log system calls of given process
+strace --output=<logfile> --string-limit=<string_limit> <child> <duration> <timestamp> <what>
+
+# log library calls of given process
+ltrace --output=<logfile> -s <string_limit> <child> <duration> <timestamp> <what>
+
+# log given system calls of given process
+strace --output=<logfile> --string-limit=<string_limit> <child> <duration> <timestamp> --trace=<value> <what>
+    # For `--trace=`,  `%file` is useful when  a program fails because  it can't
+    # find/read its configuration file, but doesn't tell you where it's supposed
+    # to be.
+    #
+    # `%net` is useful for network related issues.
+
+# print statistics about system calls of given process (time, count, number of errors...)
+strace --output=<logfile> --summary-only <what>

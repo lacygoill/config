@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Name=Firefox Web Browser
+Comment=Browse the World Wide Web
+GenericName=Web Browser
+Keywords=Internet;WWW;Browser;Web;Explorer
+Exec=firefox %u
+Terminal=false
+X-MultipleArgs=false
+Type=Application
+Icon=/home/lgc/.local/bin/firefox-browser/browser/chrome/icons/default/default128.png
+Categories=GNOME;GTK;Network;WebBrowser;
+MimeType=application/rdf+xml;application/rss+xml;application/x-extension-htm;application/x-extension-html;application/x-extension-shtml;application/x-extension-xht;application/x-extension-xhtml;application/x-xpinstall;application/xhtml+xml;application/xml;image/gif;image/jpeg;image/png;text/html;text/xml;video/webm;x-scheme-handler/chrome;x-scheme-handler/ftp;x-scheme-handler/http;x-scheme-handler/https
+StartupNotify=true

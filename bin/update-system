@@ -1,0 +1,487 @@
+#!/bin/bash -
+
+# Config {{{1
+
+# TODO: Instead  of having  a timer  running `$ update-system --reminder`  every
+# day,  investigate  whether we  could  make  it run  `$ update-system`  without
+# `--reminder` every week.  We  don't do it now because I  don't like the system
+# becoming less responsive at an unexpected time.  But once you learn more about
+# systemd, and how to control resource usage  with cgroups, you might be able to
+# limit how much CPU/RAM/bandwidth/... the script consumes.
+
+# Minimum of  days to  wait before reminding  us of updating  the system  (if we
+# forgot to do it recently).
+declare -i -r MIN_DAYS=8
+
+readonly JOURNAL_FILES_MAX_AGE='100d'
+
+# https://sebsauvage.net/wiki/doku.php?id=dns-blocklist-en
+readonly HOSTS_URL='https://sebsauvage.net/hosts/hosts'
+
+# Reminder {{{1
+
+# TODO: Have  a look  at `apticron(1)`.   Section "6.8. Keeping  a System  Up to
+# Date" in "The Debian Administrator's Handbook":
+#
+#    > Its main effect is to run a  script daily (via cron). The script updates the
+#    > list of available  packages, and, if some installed packages  are not in the
+#    > latest available  version, it sends an  email with a list  of these packages
+#    > along with the  changes that have been made in  the new versions. Obviously,
+#    > this package mostly  targets users of Debian Stable, since  the daily emails
+#    > would be very long for the faster paced versions of Debian. When updates are
+#    > available, apticron  automatically downloads them. It does  not install them
+#    > — the administrator  will still do it — but  having the packages already
+#    > downloaded and available locally (in APT's cache) makes the job faster.
+#
+# It wouldn't  be able to replace  `--reminder`, because it only  deals with APT
+# packages, while `--reminder`  deals with much more  (e.g. Python packages, Vim
+# plugins, ...). However, you might want to know when APT updates are available,
+# and what they contain (to decide whether you should apply them immediately).
+
+if [[ "$1" == '--reminder' ]]; then
+  # shellcheck disable=SC1091
+  source "$HOME/bin/util/lib"
+  if ! _Did_Wait_Enough "$MIN_DAYS"; then
+    exit
+  fi
+
+  IFS= read -r -d '' msg <<EOS
+You have not updated the system in the last $MIN_DAYS days.
+
+Consider doing it in the near future.
+You might be missing important security updates.
+EOS
+  printf '%s' "$msg" | mail --subject='remember to update system' "$USER@localhost"
+
+  _Update_Timestamp_File
+  exit
+fi
+
+# Interface {{{1
+function Main { #{{{2
+  Tmp Update_APT
+  Tmp Update_Caches
+  Tmp Update_Etc_Hosts
+  Tmp Update_Flatpaks
+  Tmp Update_Go_Packages
+  Tmp Update_Lua_Modules
+  Tmp Update_Npm
+  Tmp Update_Pipx
+  Tmp Update_Rustup
+  Tmp Update_Shfmt
+  Tmp Update_Terminfo
+  #     Tmp Update_Texlive
+  Tmp Update_Vim_Plugins
+  Tmp Update_Completions
+
+  Sync_Config_Etc
+  Clean
+}
+# }}}1
+# Core {{{1
+function Update_APT { #{{{2
+  Print_Title 'update APT packages'
+
+  sudo apt-get update
+  # Without `--with-new-pkgs`, you might miss some important updates:{{{
+  #
+  #    > The following packages have been kept back:
+  #    >   linux-generic-hwe-20.04 linux-headers-generic-hwe-20.04 linux-image-generic-hwe-20.04
+  #
+  # That can happen if an update needs to install new packages.
+  # Note that `aptitude(8)` does not suffer from this issue.
+  #}}}
+  # If you want this process to be automatic, you need to:{{{
+  #
+  #    1. feed an endless stream of newlines to `apt-get(8)`:  `$ yes '' | sudo ...`
+  #    2. set `DEBIAN_FRONTEND` to `noninteractive`:  `... sudo DEBIAN_FRONTEND apt-get ...`
+  #    3. pass `--option='dpkg::options::=--force-confdef,confold'` to `apt-get(8)`
+  #
+  # `1.`  is for  the  configuration  scripts run  by  `dpkg(8)`.  Most  scripts
+  # consider a lack of reply as an acceptance of the default value.
+  #
+  # `2.` is to make `debconf(1)` use the default answers for all questions.
+  # See `man 7 debconf /Frontends/;/noninteractive`.
+  #
+  # `3.`  is  for  `dpkg(8)`  not  to ask  for  confirmation  when  replacing  a
+  # configuration file.
+  #}}}
+  sudo apt-get --with-new-pkgs --assume-yes upgrade
+
+  if [[ -x /usr/bin/apt-file ]]; then
+    sudo apt-file update
+  fi
+
+  if [[ -x /usr/bin/debtags ]]; then
+    sudo debtags update
+  fi
+}
+
+function Update_Caches { #{{{2
+  Print_Title 'update caches'
+
+  # Removing/updating stale cache files regularly might prevent some weird issues.{{{
+  #
+  # A program can cache config data,  for better performance.  This implies that
+  # your  config  might  be  overridden  by a  cache  file,  causing  unexpected
+  # behaviors.
+  #}}}
+
+  # see our navi snippet
+  sudo ldconfig --verbose
+  # update manual page index caches (improve `man(1)` performance/reliability)
+  sudo mandb
+  # update database for `locate(1)`
+  sudo updatedb
+
+  # That should not be necessary but better be safe.{{{
+  #
+  # The next `update-mime-database(1)` and `update-desktop-database(1)` commands
+  # should overwrite  all caches anyway.   That said,  we might have  some stale
+  # cache for which we don't run any updating command.
+  #}}}
+  locate --regex '/mime(info)?\.cache$' --null \
+    | while IFS= read -r -d '' file; do
+        sudo rm -- "$file"
+      done
+  # Useful if `xdg-open(1)` calls the wrong application to open a file.{{{
+  #
+  # Indeed, it  looks in some  MIME cache  files to determine  which application
+  # should be called.  IOW, these  files might override whatever application you
+  # previously set with `$ xdg-mime default ...`.
+  #}}}
+  sudo update-mime-database /usr/share/mime
+  sudo update-desktop-database
+  update-desktop-database "$HOME/.local/share/applications"
+}
+
+function Update_Etc_Hosts { #{{{2
+  Print_Title 'update /etc/hosts'
+
+  if ! [[ -f '/etc/hosts.old' ]]; then
+    sudo cp /etc/hosts{,.old}
+  fi
+
+  curl --fail --location --output hosts --show-error --silent "$HOSTS_URL"
+  sed -i -e '1,/^# Blocked hosts:$/ c \' -e '\' -e '# Blocked hosts:' hosts
+  sudo sed -i '/^# Blocked hosts:$/,$ d' /etc/hosts
+  sudo tee --append /etc/hosts <hosts >/dev/null
+}
+
+function Update_Flatpaks { #{{{2
+  Print_Title 'update flatpaks'
+  flatpak update --assumeyes --noninteractive
+
+  # Remove possible leftover runtimes that aren't needed anymore.
+  # https://docs.flathub.org/docs/for-users/uninstallation#uninstalling-unused-dependencies
+  flatpak uninstall --unused --assumeyes --noninteractive
+}
+
+function Update_Go_Packages { #{{{2
+  Print_Title 'update Go packages'
+
+  # `shfmt`
+  go install mvdan.cc/sh/v3/cmd/shfmt@latest
+  # `s`
+  go install github.com/zquestz/s@latest
+}
+
+function Update_Lua_Modules { #{{{2
+  Print_Title 'update Lua modules'
+
+  # Unfortunately, `luarocks` does not accept any `upgrade` subcommand.{{{
+  #
+  # https://github.com/luarocks/luarocks/issues/22
+  #
+  # So, we retrieve the list of outdated modules:
+  #
+  #     $ luarocks --local list --outdated
+  #
+  # Then, remove/re-install each outdated module:
+  #
+  #     $ luarocks --local remove <module>
+  #     $ luarocks --local install <module>
+  #}}}
+
+  local module
+  luarocks --local list --outdated \
+    | sed '/^Outdated\|^---\|^$/d' \
+    | while IFS= read -r module; do
+        luarocks --local remove "$module"
+        luarocks --local install "$module"
+      done
+}
+
+function Update_Npm { #{{{2
+  # https://docs.npmjs.com/cli/v9/commands/npm-update
+  Print_Title 'update npm packages'
+
+  npm install --global npm
+  npm update --global
+
+  # Necessary for `npm audit fix` to work.{{{
+  #
+  # Without, an error is given:
+  #
+  #     $ npm audit fix
+  #     npm ERR! code ENOLOCK
+  #     npm ERR! audit This command requires an existing lockfile.
+  #     npm ERR! audit Try creating one first with: npm i --package-lock-only
+  #     ...
+  #}}}
+  npm install --package-lock-only 2>/dev/null
+  # address issues that do not require attention
+  npm audit fix
+  # `$ npm install --packages-lock-only` created this file, but it's no longer necessary
+  rm package-lock.json
+}
+
+function Update_Pipx { #{{{2
+  Print_Title 'update pipx packages'
+  pipx upgrade-all
+}
+
+function Update_Rustup { #{{{2
+  Print_Title 'update rustup'
+
+  # `--quiet`: disable progress output
+  rustup --quiet update
+}
+
+function Update_Shfmt { #{{{2
+  Print_Title 'update shfmt'
+
+  # https://github.com/mvdan/sh#shfmt
+  go install mvdan.cc/sh/v3/cmd/shfmt@latest
+  # If you get an error:{{{
+  #
+  #     can't load package: package mvdan.cc/sh/v3/cmd/shfmt@latest: cannot use path@version syntax in GOPATH mode
+  #
+  # Update your Go installation:
+  # https://go.dev/doc/install
+  #}}}
+}
+
+function Update_Terminfo { #{{{2
+  Print_Title 'update terminfo'
+
+  curl --fail --location --show-error --silent --output terminfo.src.gz \
+    'https://invisible-island.net/datafiles/current/terminfo.src.gz'
+  gzip --decompress --force terminfo.src.gz
+  # `sudo` is necessary for the descriptions to be found even when we're using a terminal as root.{{{
+  #
+  # You can test this by moving the `xterm-kitty` terminal description to
+  # `~/lgc/.terminfo/x/xterm-kitty`.
+  # Then, open a kitty terminal, and switch to the root user with `$ sudo -i`.
+  # Finally, type some characters on the command-line, and press `C-U`.
+  # Expected: the line is erased.
+  # Actual: a tab character is inserted.
+  #}}}
+  sudo tic -s -x terminfo.src
+  rm terminfo.src
+}
+
+function Update_Texlive { #{{{2
+  # For more info:{{{
+  # https://tex.stackexchange.com/a/55459/169646
+  #}}}
+  Print_Title 'update texlive packages'
+
+  if command -v tlmgr >/dev/null; then
+    tlmgr update --self --all --reinstall-forcibly-removed
+    #              │      │     │{{{
+    #              │      │     └ reinstall a package
+    #              │      │       if it was corrupted during a previous update
+    #              │      │
+    #              │      └ update all packages
+    #              │
+    #              └ update `tlmgr` itself}}}
+  fi
+
+}
+
+function Update_Vim_Plugins { #{{{2
+  Print_Title 'update Vim plugins'
+
+  local plugin
+  for plugin in "$HOME"/.vim/pack/vendor/opt/*; do
+    printf "\nupdating %s\n" "$plugin"
+    git -C "$plugin" pull
+  done
+}
+
+function Update_Completions { #{{{2
+  Print_Title 'update miscellaneous fish completions'
+
+  mkdir -p "$HOME/.local/share/fish/completions"
+
+  # pipx (code given by `$ pipx completions`)
+  # The command does not exist on Ubuntu 20.04.
+  if command -v register-python-argcomplete >/dev/null; then
+    register-python-argcomplete --shell=fish pipx >"$HOME/.local/share/fish/vendor_completions.d/pipx.fish"
+  fi
+
+  # `nnn(1)`
+  curl --fail --location --show-error --silent \
+    --output "$HOME/.local/share/fish/vendor_completions.d/nnn.fish" \
+    'https://raw.githubusercontent.com/jarun/nnn/master/misc/auto-completion/fish/nnn.fish'
+  # man page
+  curl --fail --location --show-error --silent \
+    --output "$HOME/.local/share/man/man1/nnn.1" \
+    'https://raw.githubusercontent.com/jarun/nnn/master/nnn.1'
+
+  # `podman(1)`
+  podman completion fish >"$HOME/.local/share/fish/vendor_completions.d/podman.fish"
+
+  # `$ s --help`
+  s --completion fish >"$HOME/.local/share/fish/vendor_completions.d/s.fish"
+}
+
+function Sync_Config_Etc { #{{{2
+  Print_Title 'synchronize /etc with ~/.config/etc'
+
+  # Check that files under `~/.config/etc/` are in sync with their counterparts under `/etc/`.{{{
+  #
+  # `diff(1)` will only output a message if the files differ:
+  #
+  #     Files /home/lgc/.bashrc and /home/lgc/.zshrc differ
+  #
+  # Thanks to `--brief`.
+  #
+  # We don't synchronize the files:
+  #
+  #     ✘
+  #     $ sudo cp "$file" "$etc_counterpart"
+  #
+  # Because  that might  make us  lose  valuable data  in an  edited file  under
+  # `/etc/`.  If  the files differ,  we don't  know which one  contains valuable
+  # data (in fact, both  of them might contain some code we want  to keep in our
+  # final version).
+  #
+  # Instead, we just send a mail containing `diff(1)`'s output.
+  #}}}
+  local file
+  find "$HOME/.config/etc/" -type f -print0 \
+    | while IFS= read -r -d '' file; do
+        local etc_counterpart="${file#"$HOME/.config"}"
+        [[ -f "$etc_counterpart" ]] \
+          && sudo diff --brief "$file" "$etc_counterpart"
+      done \
+    | ifne mail --subject='/etc/ and ~/.config/etc not in sync' "$USER@localhost"
+}
+
+function Clean { #{{{2
+  Print_Title 'clean miscellaneous system files'
+
+  # NOTE: Here, only clean *system* files.
+  # For user files, use `~/bin/timers/clean-system`.
+
+  # Clear out the local repository of retrieved `.deb` files.{{{
+  #
+  # This removes everything but the lock file from these directories:
+  #
+  #    - `/var/cache/apt/archives/`
+  #    - `/var/cache/apt/archives/partial/`
+  #}}}
+  # Forget about `apt-get autoclean`; it only  removes `.deb` files which can no
+  # longer be downloaded.
+  sudo apt-get clean
+
+  # Purge packages that were automatically installed to satisfy dependencies for
+  # other packages and are now no longer needed.
+  # This includes old versions of `linux-headers-*` and `linux-image-*`.{{{
+  #
+  # It's also smart about this process,  leaving one spare version of the kernel
+  # around as a fallback.
+  #
+  # For more info, read this:
+  # https://askubuntu.com/a/100953/867754
+  #}}}
+  sudo apt-get autoremove --assume-yes --purge
+
+  # Reduce size of systemd journal files; keep only the ones newer than given age.
+  # If you also want to rotate them, use `--rotate`.{{{
+  #
+  # The latter marks all currently active journal files as archived and renamed,
+  # so that they are never written to  in future.  New (empty) journal files are
+  # then created in their place.
+  #}}}
+  sudo journalctl --vacuum-time="$JOURNAL_FILES_MAX_AGE"
+  # To print the current size of the journal:
+  #
+  #     $ journalctl --disk-usage
+
+  # delete dumped `core` files{{{
+  #
+  # Rationale:  a `core`  file  should only  be kept  temporarily  to extract  a
+  # backtrace from it.  Besides, it might take a lot of space.
+  #}}}
+  sudo find / -depth -type f -name core -delete 2>/dev/null
+  #                                             ^---------^
+  # To suppress this error: "find: ‘/run/user/1000/doc’: Permission denied"
+}
+
+# }}}1
+# Util {{{1
+function Tmp { #{{{2
+  cd "$tmp_dir" || return
+  "$@"
+}
+
+function Print_Title { #{{{2
+  local -i width=${#1}
+
+  # How to repeat a string (like in VimL: `repeat('foo', 3)`)? {{{
+  #
+  # Contrary to Vim's `printf()`, you  can give more expressions than `%s` items
+  # in the format:
+  #
+  #     " ✘
+  #     :echo printf('%s', 'a', 'b', 'c')
+  #
+  #         → E767: Too many arguments to printf()
+  #
+  #     # ✔
+  #     $ printf '%s' 'a' 'b' 'c'
+  #
+  #         → abc
+  #
+  # `printf` repeats the format as many times as necessary.
+  # So:
+  #
+  #     $ printf -- '-%s' {1..5}
+  #
+  #         → -1-2-3-4-5
+  #
+  #     $ printf -- '-%.0s' {1..5}
+  #
+  #         → -----
+  #         (no numbers because the precision flag `.0` asks for 0 characters)
+  #
+  # Source: https://stackoverflow.com/a/5349842/9780968
+  #}}}
+  local dashes
+  printf -v dashes -- '-%.0s' $(seq 1 "$width")
+
+  tee <<EOF
+
+$1
+$dashes
+
+EOF
+}
+# }}}1
+# Execution {{{1
+
+tmp_dir="$(mktemp --directory)"
+trap 'rm -rf "$tmp_dir"' ABRT EXIT HUP INT QUIT TERM
+cd "$tmp_dir" || exit 1
+
+sudo --validate || exit 1
+
+Main
+tput bel
+
+# shellcheck disable=SC1091
+source "$HOME/bin/util/lib"
+_Update_Timestamp_File

@@ -1,0 +1,100 @@
+#!/bin/bash -
+
+# TODO: Try to replace the `trash-cli` python package with `gio(1)`.{{{
+#
+#     $ gio trash file
+#     $ gio trash --empty
+#     $ gio list trash://
+#
+# Issue: It's tricky to restore a file from the trashcan.
+# Our current  Ubuntu 20.04 is  too old,  but once you  upgrade to a  newer LTS,
+# `$ gio trash` should support a `--restore` option:
+# https://gitlab.gnome.org/GNOME/glib/-/commit/aa1e91e838243a1bd7fb0c4fd5313582613fd804
+# https://manpages.ubuntu.com/manpages/jammy/man1/gio.1.html
+#
+# Untested Alternative:
+#
+#     $ gio move trash://... file://...
+#     $ gio info --attributes "trash::orig-path" trash://....
+#                                                ^----------^
+#                                                gio --print-uris list trash://
+#                                                    ^----------^
+#
+# https://gitlab.gnome.org/GNOME/glib/-/issues/2098#note_791419
+# https://gitlab.gnome.org/GNOME/glib/-/issues/2098#note_791424
+#}}}
+
+readonly SCRIPT="${0##*/}"
+
+if (( $# == 0 )); then
+  tee >&2 <<EOF
+Usage:
+  # empty trashcan
+  $SCRIPT empty
+
+  # print contents of trashcan
+  $SCRIPT list
+
+  # put file in trashcan
+  $SCRIPT put
+
+  # restore file from trashcan
+  $SCRIPT restore
+EOF
+  exit 1
+fi
+
+readonly SUBCMD="$1"
+shift
+
+case $SUBCMD in
+empty)
+  # remove only the files that have been deleted more than 7 days ago
+  trash-empty -f 7
+;;
+
+list) trash-list ;;
+put) trash-put "$@" ;;
+
+restore)
+  # Enable (set) `lastpipe` option:{{{
+  #
+  #    > If  set,  and  job control is not active, the shell runs
+  #    > the last command of a pipeline not executed in the background
+  #    > in the current shell environment.
+  #
+  # Source: `man bash /SHELL BUILTIN COMMANDS/;/shopt/;/lastpipe`
+  #}}}
+  # Rationale: `read` is executed in a subshell (because it's inside a pipeline).
+  # And variables set in subshells are not available outside the subshell.
+  # https://github.com/koalaman/shellcheck/wiki/SC2031
+  shopt -s lastpipe
+  # There is no easy way to fuzzy search the file(s) we want to restore.{{{
+  #
+  # https://github.com/andreafrancia/trash-cli/issues/175
+  #
+  # Workaround: Invoke `trash-restore` twice.
+  # The first time, to  get the list of files and their indexes;  but give it an
+  # invalid index, so that it doesn't restore anything.
+  # The second time, use the index chosen previously.
+  #}}}
+  printf 'invalid' \
+      | trash-restore 2>/dev/null \
+      | sed -n 's@^\s*\([[:digit:]]\+\)[^/]*\(.*\)@\1 \2@p' \
+      | fzf --scheme=path \
+      | read -r index filepath
+  shopt -u lastpipe
+
+  if [[ -z "$index" ]] || [[ -z "$filepath" ]]; then
+    exit
+  fi
+
+  printf '%s\n' "$index" | trash-restore >/dev/null 2>&1
+  printf 'restored file: %s\n' "$filepath" >&2
+;;
+
+*)
+  printf '%s: "%s" is not a valid subcommand\n' "$SCRIPT" "$SUBCMD" >&2
+  exit 1
+;;
+esac

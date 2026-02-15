@@ -1,0 +1,32 @@
+#!/bin/bash -
+
+readonly CONFIG_FILE="$HOME/.config/weechat/config"
+
+# The code is a little complex because it tries to support multiline commands:
+#
+#     /some \
+#       long \
+#       command
+#
+# As well as comments inside:
+#
+#     /some \
+#       # comment
+#       command
+#
+# First, let's delete comments.{{{
+#
+# Note that right after  the comment leader, there might be  nothing, a Vim fold
+# marker, a space, or some exotic space (like a no-break space).
+#}}}
+sed '/^\s*\(#\?$\|#\W\)/ d' "$CONFIG_FILE" \
+  | sed '/^\//! d; :loop; N; s/\\\n\s*//; t loop; P; D'
+  # Then, join backslash-continued lines.{{{
+  #
+  # Here, we need `P; D` because `N`  might have loaded a different command, and
+  # not the continuation of the current one.
+  #
+  # Alternative:
+  #
+  #     | sed '/^\//! d; :loop; /\\$/ { N; s/\\\n\s*//; t loop }'
+  #}}}

@@ -1,0 +1,89 @@
+Configuration {{{1
+
+log output in given file                set logging on
+disable built-in pager                  set pagination off
+# useful to avoid hit-enter prompt
+
+Stepping through {{{1
+
+set breakpoint on main function         break *main
+
+set breakpoint on given address         break *0x‹address›
+# only works as expected if executed after run (not before)
+# Alternative:{{{
+#
+#     break *main+123
+#                ^--^
+# byte offset  from start  of main  function, which  you can  find in  output of
+# `(gdb) disassemble main`
+#}}}
+
+set breakpoint at function or line      break [file:][function|line]
+
+delete all breakpoints                  delete breakpoints
+run program                             run
+run program with argument               run ‹arg›
+
+step over next source line              next
+step into next source line              step
+# What's the difference with `ni` and `si`?{{{
+#
+# Different granularity.
+# A single  source line can  contain multiple  instructions (in C,  separated by
+# semicolons).
+#}}}
+
+step over next instruction              ni
+step into next instruction              si
+# `ni` and `si` are shorthands for `nexti` and `stepi`
+
+skip code until next breakpoint         continue
+
+Instrospection {{{1
+
+attach to running process               attach ‹PID›
+detach from attached process            detach
+
+print status of breakpoints             info breakpoints
+print status of watchpoints             info watchpoints
+
+list next ten lines of source code      list
+list previous ten lines of source code  list -
+list lines at current location          list .
+
+print help about given command          help ‹cmd›
+inspect values held by registers        info registers
+
+inspect value of given register         x/s $rax
+# `/s` is a format which prints the value as a string
+
+print disassembly of main function      disassemble main
+
+print value of expression               print ‹expr›
+
+apply given command to all threads      thread apply all ‹cmd›
+print full backtrace                    bt full
+# can be prefixed with `thread apply all`
+
+Misc {{{1
+
+change working directory                cd ‹dir›
+print working directory                 pwd
+
+empty register rax                      set $rax = 0
+
+start a shell                           shell
+
+enable tui                              tui enable
+# useful to follow relevant C source code during debugging session
+# Requirement: {{{
+# The binary must have been compiled with debugging information:
+#
+#     $ gcc -g ...
+#           ^^
+#}}}
+# Alternative: {{{
+#
+#     $ gdb -tui ...
+#           ^--^
+#}}}

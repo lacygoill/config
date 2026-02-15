@@ -1,0 +1,61 @@
+#!/bin/bash -
+
+readonly DIR="${0%/*}"
+source "$DIR/lib"
+
+pre_cursor="${query:0:curpos}"
+char_after_cursor="${query:curpos:1}"
+# Special Case:  We're  before or inside the first word.   Don't transpose words
+# (to correctly emulate readline).
+if [[ "${pre_cursor}${char_after_cursor}" =~ ^[^[:alnum:]]*[[:alnum:]][[:alnum:]]*$ ]]; then
+  printf '%s' "$query"
+
+  _Set_Cursor_Position "$curpos"
+  exit
+fi
+
+post_cursor="${query:curpos}"
+
+# Special Case: We're on a non-alphanumeric character after the last word.
+#
+#     # cursor is somewhere here
+#              vvv
+#     foo+++bar---
+#     →
+#     bar---+++foo
+#     # `bar---` has been exchanged with `foo`
+if ! [[ "${post_cursor}" =~ [[:alnum:]] ]]; then
+  sed '
+    s/\(.*\)\b\([[:alnum:]]\+\)\([^[:alnum:]]\+\)\([[:alnum:]]\+[^[:alnum:]]*\)/\1\4\3\2/
+    ' <<<"$query"
+  exit
+fi
+
+# General Case: We're in-between  the first and last words (the  first one being
+# excluded, but not the last one: `]first, last]`).
+shopt -s lastpipe
+# shellcheck disable=SC2001,SC2016
+sed '
+  N
+
+  # The newline represents the cursor position.  Move it at the end of the
+  # current word (if the cursor is on a word character), or at the end of the
+  # next word.
+  s/\n\([^[:alnum:]]*[[:alnum:]]*\)/\1\n/
+  h
+
+  # Exchange the last 2 whole words before the cursor to get the new query.
+  s/\b\([[:alnum:]]*\)\([^[:alnum:]]*\)\([[:alnum:]]*\)\n/\3\2\1/
+
+  x
+  # Only keep the new `pre_cursor` (remove whatever comes afterward).
+  s/\n.*//
+
+  # Retrieve the new query.
+  G
+  ' <<<"$pre_cursor"$'\n'"$post_cursor" \
+    | IFS=$'\n' read -d '' -r pre_cursor query
+shopt -u lastpipe
+printf '%s' "$query"
+
+_Set_Cursor_Position ${#pre_cursor}

@@ -1,0 +1,34 @@
+#!/bin/bash -
+
+# https://feh.finalrewind.org/
+readonly -a DEPENDENCIES=(
+  'libcurl4-openssl-dev'
+  'libimlib2-dev'
+  'libxinerama-dev'
+  'libxt-dev'
+)
+
+source "${0%/*}/_lib"
+_Extract_Archive 'feh' 'https://github.com/derf/feh/tags'
+_Install_Dependencies "${DEPENDENCIES[@]}"
+
+# Need to set `PREFIX` in the first `make(1)` command to prevent an error at runtime.{{{
+#
+# When pressing `F` (which we've bound to the `toggle_filenames` command):
+#
+#     feh WARNING: couldn't load font yudit/11, attempting to fall back to fixed.
+#     feh WARNING: failed to even load fixed! Attempting to find any font.
+#     feh ERROR: Couldn't load font to draw a message
+#
+# The issue is that `feh(1)` needs to find the `yudit.ttf` font which we install in:
+#
+#     ~/.local/share/feh/fonts/
+#
+# But if we don't set `PREFIX` now, at runtime, `feh(1)` will look here instead:
+#
+#     /usr/local/share/feh/fonts/
+#}}}
+# Need to set `PREFIX` in the second `make(1)` command to install the files in our home.
+PREFIX="$HOME/.local" make \
+  && PREFIX="$HOME/.local" make install \
+  && _Set_App_As_Mimetype_Handler 'feh'

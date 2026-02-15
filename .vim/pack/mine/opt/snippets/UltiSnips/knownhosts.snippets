@@ -1,0 +1,55 @@
+snippet t01 "revoke key" Am
+# Prefix the key you want to revoke with the marker \`@revoked\`.
+#
+# ---
+#
+# As a sysadmin, you  need to do this if an intruder broke  into your server and
+# copied its private key,  which they can now use to spoof  the server.  If that
+# happens:
+#
+#    1. find all of the server's host key entries in your own \`known_hosts\`
+#       (the one you build with \`ssh-keyscan(1)\`)
+#
+#    2. add the string \`@revoked\` in front of all of them
+#    3. generate new host keys for the server
+#    4. restart \`sshd(8)\`
+#    5. add the new host keys to your \`known_hosts\`
+#    6. distribute your updated \`known_hosts\` to all your users
+#
+# This way, if a user tries to connect to a spoof server, they'll get a warning:
+#
+#     @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#     @ WARNING: REVOKED HOST KEY DETECTED! @
+#     @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+#     The ECDSA host key for ❬host❭ is marked as revoked.
+#     This could mean that a stolen key is being used to
+#     impersonate this host.
+#     ECDSA host key for ❬host❭ was revoked and you have requested strict
+#     checking.
+#     Host key verification failed.
+#
+# And the  connection will fail.   Unless they set  \`StrictHostKeyChecking\` to
+# \`no\`.  But  in the latter  case, some  authentication methods will  still be
+# disabled:
+#
+#     Password authentication is disabled to avoid man-in-the-middle attacks.
+#     Keyboard-interactive authentication is disabled to avoid man-in-the-middle attacks.
+#
+# ---
+#
+# If you need a command to automate steps \`1.\` and \`2.\`:
+#
+#     $ cp /path/to/known_hosts{,.old} \
+#         && sed -i "\,$KEY, s/^/@revoked /" /path/to/known_hosts
+#                    ^^    ^
+#                    can't use \`/\` as a delimiter
+#                    because \`KEY\`'s value might already contain a slash character
+#
+# \`/path/to/known_hosts\`  is  not   \`~/.ssh/known_hosts\`.   Remember,  we're
+# talking  about a  sysadmin who  maintain a  centralized \`known_hosts\`  file,
+# which they distribute to their users once it has been created, and again every
+# time it has to be updated.  \`~/.ssh/known_hosts\` is where it will be finally
+# deployed on these users' machines.
+#
+# \`KEY\` should be set to the base64-encoded public key.
+endsnippet

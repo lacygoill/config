@@ -1,0 +1,1718 @@
+# control flow {{{1
+# selection statements {{{2
+
+snippet t01 "if block" Am
+if [[ $1 ]]; then
+	$2
+elif [[ $3 ]]; then
+	$4
+else
+	$5
+fi
+$0
+endsnippet
+
+snippet t02 "case block" Am
+case $${1:var} in
+${2:pat1})
+	${3:cmd 1}
+# If you don't want  to exit the block immediately, and  execute the next clause
+# whose pattern matches,  replace \`;;\` with \`;;&\`. And if  you want the next
+# clause to be executed unconditionally  (i.e. regardless of whether its pattern
+# matches), replace \`;;\` with \`;&\`. As an example:
+#
+#     case $filename in
+#     ./*) echo -n 'local '       # $filename starts with ./
+#     ;&                          # fall through
+#     [^/]*) echo -n 'relative '  # it starts with anything but a slash
+#     ;;&                         # look for other matches
+#     /*) echo -n 'absolute '     # it starts with a slash
+#     ;&                          # fall through
+#     */*) echo 'pathname'        # it contains a slash
+#     ;;                          # done
+#     *) echo 'filename'          # default case
+#     ;;                          # done
+#     esac
+;;
+
+${4:pat2})
+	${5:cmd 2}
+;;
+
+*)
+	${6:default cmd}
+;;
+esac
+$0
+endsnippet
+
+snippet t03 "match variable against space-separated list of values" Am
+# Notice how we write our values on the left-hand side.{{{
+#
+# An alternative would be:
+#
+#     [[ "$var" =~ ^(val1|val2|...)$ ]]
+#
+# But that  would require transforming  \`$values\` into  a regex, which  is not
+# easy:
+#
+#     $values
+#     →
+#     ^(val1|val2|...)$
+#
+# OTOH, if we move the values on the  left, then it's \`$var\` which needs to be
+# turned into a regex; that's easier.
+#
+#     $var
+#     →
+#     [[:blank:]]$var[[:blank:]]
+#
+# Also, notice that we need to surround \`$values\` with spaces:
+#
+#     " $values "
+#      ^       ^
+#
+# Without, the first and last values could not match.
+#}}}
+if [[ " $values " =~ [[:blank:]]${var}[[:blank:]] ]]; then
+#                                ^   ^
+#                                to quiet shellcheck
+	$0
+fi
+endsnippet
+
+# loop statements {{{2
+
+snippet t04 "for loop (C-style)" Am
+declare -i $1
+for (( ${1:i} = ${2:init}; $1 < ${3:stop}; $1++ )); do
+	$0
+done
+endsnippet
+
+snippet t05 "for loop: floating point arithmetic" Am
+# bash doesn't do floating point arithmetic.{{{
+#
+# Which is why you can't use a C-style loop to generate floats.
+# Instead, you must use \`seq(1)\` with this syntax:
+#
+#     seq FIRST INCREMENT LAST
+#}}}
+for ${1:float} in $(seq ${2:1.2} ${3:0.3} ${4:4.5}); do
+	$0
+done
+endsnippet
+
+snippet t06 "execute block until given command succeeds" Am
+# \`until\` is equivalent to \`while !\`.
+#
+# ---
+#
+# Usage example:
+#
+#     declare -i ready="$(( SECONDS + 10 ))"
+#     until (( SECONDS >= ready )); do
+#       printf 'Not ready yet!  Wait %d more seconds...\n' "$(( ready - SECONDS ))"
+#       sleep 2
+#     done
+#     echo 'READY!'
+until ${1:cmd}; do
+	$0
+done
+endsnippet
+
+snippet t07 "iterate over script/function parameters" Am
+# \`$1\` will be assigned \`\$1\`, then \`\$2\`, ...
+#
+# ---
+#
+# \`in "$@"\` can be omitted but it makes the code harder to read.
+for ${1:param} in "$@"; do
+	$0
+done
+endsnippet
+
+snippet t08 "iterate over values of given array" Am
+for ${1:val} in "\${${2:array}[@]}"; do
+	$0
+done
+endsnippet
+
+snippet t09 "iterate over key/value pairs of given array" Am
+for ${1:key} in "${!${2:array}[@]}"; do
+	# If the array is not associative, you can drop the dollar sigil in \`[$$1]\`.
+	# The subscript of a non-associative array is interpreted as an arithmetic
+	# expression to evaluate (like inside \`(( ... ))\`).
+	printf 'key: %s, val: %s\n' "$$1" "${$2[$$1]}"
+	$0
+done
+endsnippet
+
+snippet t10 "iterate over words" Am
+${1:cmd} \
+	| while read -r ${2:word}; do
+			echo "$$2"
+		done
+$0
+endsnippet
+
+snippet t11 "iterate over words from file" Am
+for word in $(< ${1:file}); do
+	echo "$word"
+done
+endsnippet
+
+snippet t12 "iterate over lines" Am
+# \`IFS=\` prevents the splitting on spaces and tab characters.{{{
+#
+#     $ printf 'a b\nc d\n' \
+#         | while read -r $2 _; do
+#             printf '|%s|\n' "$$2"
+#           done
+#
+#       |a|
+#       |c|
+#
+# Although, since you only have 1 \`$2\` variable here, it doesn't matter:
+#
+#     $ printf 'a b\nc d\n' \
+#         | while read -r $2; do
+#             printf '|%s|\n' "$$2"
+#           done
+#
+#     |a b|
+#     |c d|
+#
+# *Unless* your input can start with whitespace, and you need to preserve it:
+#
+#     $ printf '  a b\n  c d\n' \
+#         | while IFS= read -r $2; do
+#             printf '|%s|\n' "$$2"
+#           done
+#
+#     |  a b|
+#     |  c d|
+#}}}
+${1:cmd} \
+	| while IFS= read -r ${2:line}; do
+			echo "$$2"
+		done
+$0
+endsnippet
+
+snippet t13 "iterate over filenames" Am
+# Make  sure \`$1\`  separates filenames  with  NULLs; not  with newlines.   For
+# example, see  the \`-print0\` option of  \`find(1)\`, or the \`-z\`  option of
+# \`git-ls-tree(1)\`.
+${1:cmd} \
+	| while IFS= read -r -d '' file; do
+			${2:echo "$file"}
+		done
+$0
+endsnippet
+
+snippet t14 "iterate over characters in given string" Am
+${1:var}='${2:str}'
+declare -i i
+for (( i = 0; i < ${#$1}; i++ )); do
+	echo "${$1:i:1}"
+done
+$0
+endsnippet
+# }}}1
+# data types {{{1
+# string {{{2
+
+snippet t15 "get string length" Am
+${#${1:var}}
+endsnippet
+
+snippet t16 "extract N-th character from string" Am
+${${1:var}:${2:N}:1}
+endsnippet
+
+snippet t17 "get uppercased/lowercased string expression" Am
+# Alternatives:
+#
+#     # uppercase
+#     ${$3^^}
+#     ${$3@U}
+#
+#     # lowercase
+#     ${$3,,}
+#     ${$3@L}
+${1:declare|local} -${2:u|l} ${3:var}=${4:val}
+$0
+endsnippet
+
+# array {{{2
+
+snippet t18 "get array length (i.e. element count)" Am
+${#${1:array}[@]}
+endsnippet
+
+snippet t19 "get length of given array's element" Am
+${#${1:array}[${2:key}]}
+endsnippet
+
+snippet t20 "assign filenames matching glob to array" Am
+${1:array}=(${2:glob})
+endsnippet
+
+snippet t21 "assign value to array variable" Am
+# Do  *not*  write   a  dollar  sigil  before  \`$1\`.   We're   not  trying  to
+# read/dereference a variable; we want to  write/assign a value.  OTOH, a dollar
+# sigil  is  allowed before  \`$2\`,  but  it's only  required  if  \`$1\` is  a
+# non-associative array.
+${1:array}[${2:key}]=${3:val}
+$0
+endsnippet
+
+snippet t22 "array slice" Am
+# \`:$3\` is optional.  If omitted, the slice goes till the last element.
+${${1:array}[@]:${2:start}:${3:length}}
+endsnippet
+
+snippet t23 "join array's values into string separated with given delimiter" Am
+function Join { local IFS="\$1"; shift; echo "$*"; }
+Join '${1:delim}' "${${2:array}[@]}"
+# \`$1\` must be a 1-character delimiter.
+# If you need a multi-character delimiter, try this function instead:
+#
+#     local delimiter="\$1"
+#     local first_element="\$2"
+#     shift 2
+#     printf '%s' "$first_element" "${@/#/$delimiter}"
+#                                      ^-----------^
+#                                      equivalent to \`s/^/\=delimiter/\` in Vim
+#
+# It prints  the first element, then  re-use the \`'%s'\` format  to display the
+# rest of the elements, prefixing each of them with \`$delimiter\`.
+$0
+endsnippet
+
+snippet t24 "get keys from array" Am
+# \`man bash /EXPANSION/;/Parameter Expansion/;/keys\`
+"${!${1:array}[@]}"
+endsnippet
+
+snippet t25 "append value to array" Am
+${1:array}+=(${2:val})
+endsnippet
+
+snippet t26 "remove element from associative array by its key" Am
+for key in "${!${1:array}[@]}"; do
+	# test element whose key is \`key\` satisfies given condition
+	if ${2:condition}; then
+		# remove element whose key is \`key\` from array
+		unset -v "$1[$key]"
+	fi
+done
+$0
+endsnippet
+
+snippet t27 "remove element from non-associative array by its index" Am
+declare -i i=0
+for element in "${${1:array}[@]}"; do
+	# test element whose index is \`i\` satisfies given condition
+	if ${2:test}; then
+		# remove element whose index is \`i\` from array
+		# (\`i\` can be negative; e.g. \`-1\` is for the last element)
+		unset -v "$1[$i]"
+	fi
+	(( i++ ))
+done
+$0
+endsnippet
+
+snippet t28 "remove entire array" Am
+unset -v ${1:array}
+endsnippet
+
+snippet t29 "remove array's element" Am
+unset -v ${1:array}[${2:element}]
+endsnippet
+
+snippet t30 "read at most N lines out of file into array" Am
+# \`&& (( ${#$2[@]} ))\`: \`while readarray\` will continue  to read nothing, so
+# you have to check to see if it actually got data.
+while readarray -t -n ${1:N} ${2:array} && (( ${#$2[@]} )); do
+	for elem in "${$2[@]}"; do
+		echo "$elem"
+	done
+done <${3:file}
+endsnippet
+
+snippet t31 "assign output of command to array variable" Am
+# \`-t\` removes a trailing delimiter (default newline, unless changed with \`-d\`)
+# from each line read.
+readarray -t ${1:var} < <(${2:cmd})
+$0
+endsnippet
+
+snippet t32 "turn string variable into array variable" Am
+# Split on newlines.
+# \`-t\` removes a trailing newline from each line read.
+readarray -t ${1:var} <<<"$$1"
+
+# Split on spaces.
+# \`-t\` removes a trailing space from each word read.
+readarray -t -d ' ' $1 < <(printf '%s' "$$1")
+
+# Split on \`IFS\` whitespace characters:
+$1=($$1)
+# Example:
+#
+#     #               v--------v
+#     $ var='a b c' ; var=($var) ; echo "${var[@]@A}"
+#     declare -a var=([0]="a" [1]="b" [2]="c")
+$0
+endsnippet
+
+snippet t33 "sort array elements by frequency" Am
+declare -A freq
+for elem in "${${1:array}[@]}"; do
+	# Notice how we don't need to initialize \`freq\` to increment its
+	# \`$elem\` key.  Bash behaves as if it was implicitly initialized with 0
+	# (like awk).  Although, the command does return a non-zero status (which
+	# would prevent the code from running if you \`set -e\`).
+	(( freq["$elem"]++ ))
+done
+for elem in "${!freq[@]}"; do
+	printf '%s\t%d\n' "$elem" "${freq["$elem"]}"
+done | sort --key=2bn,2
+$0
+endsnippet
+
+snippet t34 "get frequencies of lines from file into array" Am
+declare -A ${1:array}
+while IFS= read -r line; do
+	(( $1["$line"]++ ))
+done <${2:file}
+endsnippet
+
+# float {{{2
+
+snippet t35 "floating-point arithmetic" Am
+# bash does not support floats.
+# But you can delegate floating-point arithmetic to awk (faster than python).
+# Example:
+#
+#     $ awk 'BEGIN { print 1.2 + 3.4 }'
+#     4.6
+#
+#     $ f='1.2'; g='3.4'; awk "BEGIN { print $f + $g }"
+#     4.6
+awk 'BEGIN { print ${1:expr} }'
+endsnippet
+
+# here document {{{2
+
+snippet t36 "here document" Am
+tee ${1: >&2} <<'EOF'
+$0
+EOF
+endsnippet
+
+snippet t37 "assign heredoc to variable" Am
+IFS= read -r -d '' ${1:VAR} <<'EOS'
+some
+multi
+line
+string
+EOS
+
+$1="${$1/%$'\n'/}"
+
+$0
+endsnippet
+# }}}1
+# parameter expansions {{{1
+
+snippet t38 "print attributes and value of given variable(s)" Am
+declare -p ${1:var ...}
+$0
+endsnippet
+
+snippet t39 "remove attribute from parameter" Am
+declare +${1:attribute} ${2:param}
+endsnippet
+
+snippet t40 "last parameter" Am
+# \`!#\` is an  indirect expansion.  That is, \`$#\` is  first expanded into the
+# number of parameters  (let's call it \`N\`); then \`$N\`  is expanded into the
+# value of the last parameter.
+# For more info: \`man bash /EXPANSION/;/Parameter Expansion/;/indirect\`.
+"${!#}"
+endsnippet
+
+snippet t41 "PID of job most recenly placed into background" Am
+"$!"
+endsnippet
+
+snippet t42 "PID of current shell parent process" Am
+"$PPID"
+endsnippet
+
+snippet t43 "expand tilde" Am
+# \`~/file\` → \`/home/user/file\`
+${1:file}=${$1/#~\//"$HOME"/}
+$0
+endsnippet
+
+snippet t44 "parameter value quoted in format that can be re-used as input" Am
+#                      v               vv
+#     $ bash -c 'var="a b"; echo "${var@Q}"'
+#     'a b'
+#     ^   ^
+#
+# \`man bash /${parameter@operator}\`
+#
+# ---
+#
+# Alternative:
+#
+#     $(printf '%q' "$$1")
+#
+# Example:
+#
+#                      v                   vv
+#     $ bash -c 'var="a b"; echo $(printf "%q" "$var")'
+#     a\ b
+#      ^
+#
+# See: \`man bash /SHELL BUILTIN COMMANDS/;/printf/;/%q\`.
+${${1:var}@Q}
+endsnippet
+
+snippet t45 "parameter value with backslash escape sequences expanded as with $'...'" Am
+#                      vv               vv
+#     $ bash -c 'var="a\tb"; echo "${var@E}"'
+#     a       b
+#      ^-----^
+#      literal tab
+#
+# \`man bash /${parameter@operator}\`
+${${1:var}@E}
+endsnippet
+
+snippet t46 "parameter expansion: if null/unset, use/assign default value, or give error" Am
+# use \`$2\` if \`$1\` is null (i.e. empty) or unset
+${${1:var}:-${2:default}}
+
+# Assign \`$2\`  if \`$1\`  is null or  unset.  \`${$1:=}\` is  useful to  fix a
+# shellcheck warning: "$1 is referenced but not assigned.":
+${$1:=$2}
+
+# write \`$2\` on STDERR (and exit if non-interactive) if \`$1\` is null or unset
+${$1:?$2}
+
+# In all these syntaxes, the colon can be omitted:
+#
+#     ${$1-$2}
+#     ${$1=$2}
+#     ${$1?$2}
+#
+# In that case, bash only tests whether the parameter is unset (but not null).
+endsnippet
+
+snippet t47 "prepend/append delimiter to string if not empty" Am
+#     for file in *; do
+#       files+="${files:+,}${file}"
+#     done
+#     echo "$files"
+#
+# This leverages the \`${var:+alternate}\` syntax:
+#
+#     ${files:+,}
+#       ^---^  ^
+#        var   alternate
+#
+# Which  substitutes \`var\`  with \`alternate\`  if \`var\`  is set  (otherwise
+# \`var\` is simply substituted with its expansion).
+#
+# Without, here, you would need a nested \`if\` block:
+#
+#     for file in *; do
+#       if [[ -n "$files" ]]; then
+#         delim=','
+#       fi
+#       files+="${delim}${file}"
+#     done
+#     echo "$files"
+#
+# But that's more verbose and increases the code's indentation.
+$0
+endsnippet
+
+# test {{{1
+
+snippet t48 "test given process is running" Am
+if pidof -s ${1:program} >/dev/null; then
+	$0
+fi
+endsnippet
+
+snippet t49 "test array contains given element" Am
+# https://stackoverflow.com/a/15394738
+# https://github.com/koalaman/shellcheck/wiki/SC2076#exceptions
+[[ " ${${1:array}[*]} " == *' ${2:element} '* ]]
+
+# \`sh(1)\` doesn't  support arrays, \`[[\` (only  \`[\`/\`test\`), \`==\` (only
+# \`=\`), nor  can \`[\`/\`test\` compare  a string to  a shell pattern  (if you
+# write \`*\`, it will be expanded  using pathname expansion).  That being said,
+# you can still test whether a \`sh(1)\` script was passed a given value:
+#
+#     case " $* " in
+#       *' $2 '*) echo 'positional parameters contain: $2' ;;
+#       *) : ;;
+#     esac
+endsnippet
+
+snippet t50 "test array is not empty" Am
+# for a non-associative array
+[[ -n "${${1:array}[0]}" ]]
+
+# for an associative array
+[[ -n "${!$1[*]}" ]]
+endsnippet
+
+snippet t51 "test given command exists" Am
+# https://stackoverflow.com/a/677212
+if ! command -v ${1:some command} >/dev/null; then
+	echo 'missing dependency: $1' >&2
+	exit 1
+fi
+$0
+endsnippet
+
+snippet t52 "test directory is empty" Am
+# https://unix.stackexchange.com/a/204572
+find -- ${1:dir} -prune -type d -empty | grep --quiet '^'
+endsnippet
+
+snippet t53 "test given directory contains file matching given glob pattern" Am
+# https://github.com/koalaman/shellcheck/wiki/SC2144
+for file in ${1:dir}/${2:glob; e.g. *.mp3 or 123_*}; do
+	if [[ -e "$file" ]]; then
+		echo 'test succeeds'
+		break
+	fi
+done
+$0
+endsnippet
+
+snippet t54 "test file size is too big" Am
+if (( $(stat --format=%s ${1:file}) > ${2:size} )); then
+	$0
+fi
+endsnippet
+
+snippet t55 "test directory size is too big" Am
+# The implied unit for \`$1\` is mebibytes.
+declare -i -r MAX_SIZE=${1:123}
+declare -i size
+size="$(du --summarize --bytes ${2:/some/dir} | awk '{ print \$1 }')"
+if (( size > MAX_SIZE * 1024 * 1024 )); then
+	$0
+	exit 1
+fi
+endsnippet
+
+snippet t56 "test two files have same contents" Am
+cmp --quiet ${1:file1} ${2:file2}
+endsnippet
+
+snippet t57 "test package is not installed" Am
+! dpkg-query --show --showformat='${Status}' ${1:package} 2>/dev/null \
+		| grep --quiet 'ok installed'
+endsnippet
+
+snippet t58 "test we are root" Am
+# \`PATH=$PATH\`: make sure that \`~/bin\` is in root's PATH.
+#
+# ---
+#
+# If you  have a \`main\` function  and you redirect  its output in a  log file,
+# don't run this code directly from it; run it before:
+#
+#     # code asserting we are root
+#     main 2>&1 | tee --append "$LOGFILE"
+#
+# Rationale: Suppose the script process has no root privileges, but the log file
+# is owned by root.  If you write this:
+#
+#     function main() {
+#       # code asserting we are root
+#       ...
+#     }
+#     main 2>&1 | tee --append "$LOGFILE"
+#
+# \`tee(1)\` will report  an error *before* your assertion tells  you to restart
+# the script as root; that's noise.
+#
+# ---
+#
+# https://stackoverflow.com/a/18216122/8243465
+if (( EUID != 0 )); then
+	tee >&2 <<EOF
+Please run as root${2::
+sudo --preserve-env PATH="\\$PATH" bash -c '$1'}
+EOF
+	exit 1
+fi
+$0
+endsnippet
+
+snippet t59 "test display server is Xorg/Wayland" Am
+# The variable might also be empty if the terminal is not a child of the current
+# session process (e.g. \`xfce4-session\`).
+[[ "$XDG_SESSION_TYPE" == '${1:x11 | wayland}' ]]
+endsnippet
+
+snippet t60 "test we are in console" Am
+# Alternatives:
+#     [[ "$(tty)" == *pts* ]]
+#     [[ "$TERM" == linux* ]]
+[[ -z "$DISPLAY" ]]
+endsnippet
+
+snippet t61 "test option is enabled or variable is set" Am
+# assuming \`$1\` is a \`set\` option
+[[ -o ${1:option} ]]
+
+# assuming \`$1\` is a \`shopt\` option
+shopt -q $1
+
+[[ -v ${2:variable} ]]
+endsnippet
+
+snippet t62 "test we waited given time since last script execution" Am
+declare -i -r MIN_DAYS=${1:7}
+# shellcheck disable=SC1091
+source "$HOME/bin/util/lib"
+if ! _Did_Wait_Enough "$MIN_DAYS"; then
+	exit 1
+fi
+$0
+_Update_Timestamp_File
+endsnippet
+
+snippet t63 "test when script should remind us to be run interactively" Am
+# You probably want to run your script daily via a systemd timer:
+#
+#     $ my_script --reminder
+
+# Assign one more day than the default interval.  For example, if your script is
+# meant to be run weekly, assign \`8\`, not \`7\`.
+declare -i -r MIN_DAYS=${1:8}
+
+if [[ "\$1" == '--reminder' ]]; then
+	# shellcheck disable=SC1091
+	source "$HOME/bin/util/lib"
+	if ! _Did_Wait_Enough "$MIN_DAYS"; then
+		exit
+	fi
+
+	IFS= read -r -d '' msg <<EOS
+	${2:some message}
+EOS
+	printf '%s' "$msg" | mail --subject='${3:some subject}' "$USER@localhost"
+
+	# Update the timestamp file so that you don't get a reminder too often.
+	#
+	# This way, you can run your script once per day via a timer and be warned
+	# the next day after you forgot to run it interactively.  But after that,
+	# you won't be spammed every day (only once per default interval; e.g. if
+	# your script is meant to be run weekly, you'll be reminded once per week).
+	_Update_Timestamp_File
+	exit
+fi
+$0
+endsnippet
+
+snippet t64 "test the shell is interactive" Am
+case "$-" in
+	*i*) echo 'This shell is interactive' ;;
+	*) echo 'This shell is not interactive' ;;
+esac
+$0
+
+# Alternative:
+if [ -z "$PS1" ]; then
+	echo 'This shell is not interactive'
+else
+	echo 'This shell is interactive'
+fi
+# Note  that we  deliberately use  \`[]\` (\`test\`)  instead of  \`[[]]\` (bash
+# conditional)  because  part of  the  point  is that  this  code  might run  on
+# something that is not bash and thus does not support \`[[]]\` (e.g., dash).
+endsnippet
+
+snippet t65 "test if bash runs in a terminal" Am
+if [ -t 1 -a -n "$BASH_VERSION" ]; then
+	echo 'bash in a terminal'
+else
+	echo 'NOT bash in a terminal'
+fi
+$0
+
+# Alternative (to also test interactivity):
+if [ -t 1 -a -n "$PS1" -a -n "$BASH_VERSION" ]; then
+	echo 'Interactive bash in a terminal'
+else
+	echo 'NOT interactive bash in a terminal'
+fi
+endsnippet
+
+# function {{{1
+
+snippet t66 "redirect function's STDOUT to STDERR" Am
+function ${1:Myfunc} {
+	$0
+} >&2
+# ^^^
+# Make all  commands run  from inside  this function write  their output  on the
+# script's STDERR.  Useful if the purpose of the function is to write some error
+# message(s); if you refactor the function's body, you won't need to remember to
+# redirect each command.
+endsnippet
+
+snippet t67 "chr()/nr2char()-like function" Am
+# \`nr2char()\`
+function Chr {
+	(( \$1 < 256 )) || return 1
+	local octal
+	printf -v octal '%o' "\$1"
+	printf '%b' \\\"$octal"
+}
+$0
+endsnippet
+
+snippet t68 "ord()/char2nr()-like function" Am
+function Ord {
+	#    ^^^
+	# "ordinal".  See \`pydoc ord\`.
+
+	LC_ALL=C printf '%d' "'\$1"
+	#                     ^
+	# \`printf\` supports all the standard format specifications:
+	#
+	#    > In addition to the standard printf(1) format specifications, printf
+	#    > interprets the following extensions: [...]
+	#
+	# Source: \`man bash /SHELL BUILTIN COMMANDS/;/printf\`
+	#
+	# Those standard formats are documented at \`info printf\`.
+	# In particular:
+	#
+	#    > • If the leading character of a numeric argument is ‘"’ or ‘'’ then
+	#    >   its value is the numeric value of the immediately following character.
+	#    >   [...]
+	#    >   For example, ‘printf "%d" "'a"’ outputs ‘97’ on hosts that use the
+	#    >   ASCII character set, since ‘a’ has the numeric value 97 in ASCII.
+}
+$0
+endsnippet
+
+# getters {{{1
+
+snippet t69 "get name of current script/directory" Am
+# Alternative:
+#
+#     # shellcheck disable=SC2155
+#     readonly SCRIPT="$(basename "\$0")"
+#     readonly DIR="$(dirname "\$0")"
+#
+# Warning: \`"\${0%/*}"\`  is  wrong  if  the  script is  at  the  root  of  the
+# filesystem  (e.g.  \`/script\`).  In  that  case,  prefer \`dirname(1)\`;  the
+# latter will correctly return \`/\` instead of an empty string.
+readonly SCRIPT="\${0##*/}"
+readonly DIR="\${0%/*}"
+$0
+endsnippet
+
+snippet t70 "get path to given command" Am
+# Prefer \`type\` over  \`which\` because – as a builtin  – it's faster, and
+# it can tell you whether \`$1\` is also a builtin.
+type --path ${1:cmd}
+endsnippet
+
+snippet t71 "get CPU architecture" Am
+# On a standard PC, \`dpkg(1)\` outputs \`amd64\`.
+# Alternatively, \`${MACHTYPE%%-*}\` evaluates to \`x86_64\`.
+dpkg --print-architecture
+endsnippet
+
+# message {{{1
+
+snippet t72 "print usage message" Am
+readonly SCRIPT="${0##*/}"
+
+if (( $# == 0 )); then
+	tee >&2 <<EOF
+Usage: $SCRIPT ${1:command arguments}
+EOF
+	exit 1
+fi
+$0
+endsnippet
+
+snippet t73 "send desktop notification to the user" Am
+# shellcheck disable=SC2181
+notify-send \
+	--expire-time=${1:duration in milliseconds} \
+	--icon="$( (( $? == 0 )) && echo 'terminal' || echo 'error')" \
+	--urgency=low \
+	'${2:summary}' '${3:body}'
+# To find more icons:
+#     $ find /usr/{local/,}share/icons \( -name '*.png' -o -name '*.svg' \) -printf '%f\n' \
+#         | LC_ALL=C sort --unique
+$0
+endsnippet
+
+snippet t74 "send output of given command as mail to local user" Am
+# You can also ask \`mail(1)\` to \`--attach\` a file which will be encoded with
+# \`base64(1)\`.
+'${1:cmd}' \
+	| ifne mail --subject='${2:some subject}' "$USER@localhost"
+$0
+endsnippet
+
+# prompt {{{1
+
+snippet t75 "prompt for data, provide prefilled default value, allow using Readline features" Am
+read -r -e -i 'default value' -p 'Enter something: '
+echo "$REPLY"
+$0
+endsnippet
+
+snippet t76 "prompt for password without showing it" Am
+read -r -s -p 'Enter the secret password: '
+echo "$REPLY"
+$0
+endsnippet
+
+snippet t77 "prompt for input with a timeout" Am
+read -r -t ${1:3} -p 'Are you there?'
+echo "$REPLY"
+$0
+endsnippet
+
+snippet t78 "pause script until user presses a key" Am
+read -r -n1 -p 'Press any key to continue...'
+$0
+endsnippet
+
+snippet t79 "prompt user with yes/no question" Am
+PS3='Do you want to ...? '
+readonly -a answers=('yes' 'no')
+select answer in "${answers[@]}"; do
+	case $answer in
+	yes)
+		echo 'you chose yes'
+		break
+	;;
+	no)
+		echo 'you chose no'
+		break
+	;;
+	*)
+		printf 'expected an integer from 1 to %d\n' ${#answers[@]}
+	;;
+	esac
+done
+$0
+endsnippet
+
+# log {{{1
+
+snippet t80 "write given message in systemd journal using systemd-cat" Am
+# For the priority see our \`syslog(3)\` resource.
+systemd-cat --identifier=${1:script} --priority=${2:priority} echo '${3:msg}'
+
+# \`systemd-cat(1)\`  can also  read its  STDIN,  so you  can call  it inside  a
+# pipeline:
+#
+#     $ command | systemd-cat --identifier=$1 --priority=$2
+$0
+endsnippet
+
+snippet t81 "write given message in systemd journal using logger" Am
+# By default, the tag is \`$USER[PID]\` (but SCRIPT[PID] seems more useful).
+# Also, the syntax of \`--priority\` is \`facility.level\`.
+# The values for \`facility\` and \`level\` can be found at:
+# \`man 3 syslog /DESCRIPTION/;/Values for facility\`
+# \`man 3 syslog /DESCRIPTION/;/Values for level\`
+logger --tag="${0##*/}[$$]" --priority=user.notice ${1:msg}
+
+# Later, you can filter out messages with given tag with:
+#
+#     $ journalctl --identifier=TAG
+endsnippet
+
+snippet t82 "log output of command/function" Am
+${1:command or function} 2>&1 | tee --append ${2:log file}
+endsnippet
+
+# debug {{{1
+
+snippet t83 "debug with printf" Am
+# \`%q\` is useful to see hidden or control characters.
+printf '%s:%d:%s%s=%q\n' "$BASH_SOURCE" "$LINENO" "${FUNCNAME:+$FUNCNAME():}" '${1:var}' "$$1"
+$0
+endsnippet
+
+snippet t84 "measure how much time takes given code" Am
+start="$EPOCHREALTIME"
+$0
+stop="$EPOCHREALTIME"
+awk "BEGIN { print $stop - $start }"
+endsnippet
+
+snippet t85 "get trace to debug issue" Am
+# open file descriptor 5 for the current shell process
+exec 5>${1:/tmp/trace.log}
+# write trace to file descriptor 5 (\`man bash /PARAMETERS/;/Shell Variables/;/BASH_XTRACEFD\`)
+BASH_XTRACEFD=5
+
+# Print script name, line number, and function name before each executed command. {{{
+#
+# Warning: Do *not* start with the name of a variable.  For example:
+#
+#     PS4='$LINENO: '
+#          ^-----^
+#             ✘
+#
+# The first  character of \`PS4\` is  repeated multiple times, as  necessary, to
+# indicate multiple levels of indirection.  If  you start with a variable, there
+# might be ambiguity  about where its value really starts.   For example, in the
+# trace, if you read:
+#
+#     1123: echo
+#     ^^
+#     is \`1\` repeated because of there is one level of indirection?
+#
+# You don't  know whether  the command  was executed on  line \`1123\`  (with no
+# indirection), or on line \`123\` (with  one level of indirection).  That's why
+# you want a  literal character at the  start (the default uses  \`+\`), so that
+# the line  number is *un*ambiguous.  For  example, in the previous  example, if
+# the line number is really \`1123\`, you'll read:
+#
+#     + 1123: echo
+#     ^
+#     no level of indirection
+#
+# But if it's actually \`123\`, you'll read:
+#
+#     ++ 123: echo
+#     ^^
+#     one level of indirection
+#}}}
+# Note that \`BASH_SOURCE\` and \`FUNCNAME\` are actually arrays.{{{
+#
+# But we  don't need to  specify an index, because  when the latter  is omitted,
+# bash returns the first  element, which here is what we  want (i.e. the current
+# script/function).
+#
+# For more info:
+#
+#    - \`man bash /PARAMETERS/;/Shell Variables/;/PS4\`
+#    - \`man bash /PARAMETERS/;/Shell Variables/;/^\s*BASH_SOURCE\`
+#    - \`man bash /PARAMETERS/;/Shell Variables/;/^\s*LINENO\`
+#    - \`man bash /PARAMETERS/;/Shell Variables/;/^\s*FUNCNAME\`
+#}}}
+${2:PS4='+ $BASH_SOURCE:$LINENO:${FUNCNAME:+$FUNCNAME():} '}
+
+set -v -x
+# Alternative: append \` -vx\` to the shebang line (or run \`bash -vx SCRIPT\`).
+#
+#    - \`-v\`: print commands as they were read initially.
+#    - \`-x\`: print commands as they're executed (i.e. after all expansions/substitutions).
+#
+# Note: you can turn on xtrace in  the middle of your code with \`set -x\`, then
+# later turn it off with \`set +x\`.
+$0
+
+# Other interesting \`set\` options:
+#
+#    - \`-e\`: exit the entire script at the first error.
+#
+#    - \`-u\`: give an error (and exit) if we try to expand an unset parameter.
+#      Useful to spot a misspelled variable name.
+#
+#    - \`-o pipefail\`: make  a pipeline fail  if any of its commands, not just
+#      the last one, exits with a non-zero status.
+#
+# See: http://redsymbol.net/articles/unofficial-bash-strict-mode
+#
+# Warning: \`set -e\` is not reliable: http://mywiki.wooledge.org/BashFAQ/105
+# Also, you might want to systematically pass \`-f\` to \`rm(1)\`, and \`-p\` to
+# \`mkdir(1)\`, to suppress errors (\`2>/dev/null\` only suppresses messages).
+endsnippet
+
+snippet t86 "print backtrace" Am
+local -i i
+# \`- 2\` (!= \`- 1\`): Ignore the bottom-most frame in the stack; it's meaningless.
+for (( i = 0; i <= ${#FUNCNAME[@]} - 2; i++ )); do
+	# The \`i\`-th function  in \`FUNCNAME\` is *defined* in the  \`i\`-th script in
+	# \`BASH_SOURCE\`, but *called* from the \`i+1\`-th script of that same array.
+	printf '#%d %s() at %s:%d\n' \
+		"$i" "${FUNCNAME[i]}" "${BASH_SOURCE[i+1]}" "${BASH_LINENO[i]}"
+done >&2
+$0
+endsnippet
+
+# options {{{1
+
+snippet t87 "glob options" Am
+# If a glob matches no file, it's still kept around:
+#
+#     $ echo *.nothing
+#     *.nothing
+#
+# To prevent that, set \`nullglob\`:
+#
+#     $ shopt -s nullglob
+#     $ printf '|%s|\n' *.nothing
+#     ||
+#
+# ---
+#
+# If, on the contrary, you want an error to be given, set \`failglob\`:
+#
+#     $ shopt -s failglob
+#     $ printf '|%s|\n' *.nothing
+#     ||
+#
+# In that case, the command is not executed:
+#
+#    > If the failglob shell option is set, and no matches are found,
+#    > an error message is printed and **the command is not executed**.
+#
+# Source: \`man bash /EXPANSION/;/Pathname Expansion/;/failglob\`
+#
+# As a consequence, if it's part of a list, the rest is not executed either:
+#
+#     $ shopt -s failglob
+#     $ echo before; echo *.foo; echo after
+#     before
+#     bash: line 2: no match: *.foo
+#
+# Notice that "after" is not echo'ed.
+#
+#     $ printf 'shopt -s failglob; echo before; echo *.foo \n echo after' | bash
+#     before
+#     bash: line 1: no match: *.foo
+#     after
+#
+# This time,  "after" *is*  echo'ed because  it's inside  a different  list; the
+# previous list \`echo *.foo\` stops at the newline:
+#
+#    > A list is a sequence of one or more pipelines [...] optionally **terminated**
+#    > by [...] <newline>.
+#
+# Source: \`man bash /SHELL GRAMMAR/;/Lists\`.
+#
+# Actually, in some syntaxes, a list can contain a newline:
+#
+#    > A sequence of one or more newlines **may** appear in a list instead of
+#    > a semicolon to delimit commands.
+#
+# Those syntaxes are:
+#
+#    - subshell \`()\`
+#    - group command \`{}\`
+#    - body of logical block (\`for\`, \`select\`, \`case\`, \`if\`, \`while\`, \`until\`)
+endsnippet
+
+snippet t88 "parse script options with getopts" Am
+# \`while\`: we want to call \`getopts\` repeatedly until it fails to find an option.
+# In this example, the supported short options are \`-a\`, \`-o\`, and \`-v\`.
+# \`VAL\` is the variable in which \`getopts\` will put an option whenever it finds one.
+#
+# ---
+#
+# In \`:ao:v\`, the leading colon tells \`getopts\` not to report error messages
+# (we'll  handle them  ourselves).   The  colon after  \`o\`  means that  \`-o\`
+# expects an argument.
+#
+# There are 2 possible errors: \`-o\` was  not passed an argument, or we used an
+# unknown \`-x\`  option.  In the  first case, \`VAL\` is  set to \`:\`;  in the
+# second one, \`VAL\` is set to \`?\`  (which we handle with the \`*\` pattern).
+# In both cases, \`OPTARG\` is set to the relevant option (e.g. \`o\` or \`x\`);
+# otherwise, \`OPTARG\` is set to the  argument supplied to an option (e.g. with
+# \`-o file\`, \`OPTARG\` would be set to \`file\`).
+#
+# ---
+#
+# Tips: Try to separate the argument parsing code from the core function.  To do
+# that, simply  set flags in the  \`case\` block.  Later, you  can inspect those
+# flags to decide what the core function should do.
+#
+# Also, try to wrap the parsing of arguments inside a dedicated function:
+#     function parseargs {
+#       ...
+#     }
+#
+# Then, call it with \`parseargs "$@"\`.
+while getopts ':ao:v' VAL; do
+	case $VAL in
+	a) ...  ;;
+	o) echo "$OPTARG" ;;
+	v) ... ;;
+	:) echo "error: no argument supplied to $OPTARG option" ;;
+	*)
+		echo "error: unknown option $OPTARG"
+		echo 'valid options are: aov'
+	;;
+	esac
+done
+# remove all option-related arguments from further consideration
+shift $(( OPTIND - 1 ))
+
+# Q: How to support long options too (like \`--outfile\`)?
+# A: In the first argument, include \`-:\` (e.g. \`:-:ao:v\`).
+# Then, in the  \`case\` block, include the \`-\` pattern.   In that new clause,
+# write a nested \`case\` comparing \`OPTARG\` to your long options:
+
+	...
+	-)
+		case $OPTARG in
+		...
+		outfile=*) echo "${OPTARG#*=}" ;;
+
+		# \`$OPTIND\` is the index of the next argument.
+		# \`${!OPTIND}\` is the next argument itself (i.e. a file name).
+		outfile) echo "${!OPTIND}"; (( OPTIND++ )) ;;
+		...
+		*)
+			echo "unknown long argument: $OPTARG"
+			exit
+		;;
+		esac
+	;;
+$0
+endsnippet
+
+snippet t89 "parse script options with getopt" Am
+# Warning: According to  this page,  you should  prefer the  builtin \`getopts\`
+# over the external \`getopt\`:
+# https://mywiki.wooledge.org/BashFAQ/035#Overview
+
+readonly SCRIPT="\${0##*/}"
+
+# \`$1\` is  a list of short  options.  If one  of them accepts an  argument, it
+# should be suffixed with a colon.  Same  thing for \`$2\`, except it deals with
+# long options.
+#
+# \`getopt(1)\` parses command-line arguments and  options and returns them as a
+# single string.  For example:
+#
+#     $ getopt --options='s:' --long='foo:' -- -s a --foo bbb
+#     -s 'a' --foo 'bbb' --
+#
+# \`getopt(1)\` provides several benefits:
+#
+#    - Standardization: it follows a  well-defined standard for command-line
+#      option parsing, which  makes it easy  for users to  understand how to  use
+#      command-line arguments consistently.
+#
+#    - Flexibility: it  can handle both short  and long options, and  also
+#      supports grouping of short options together (like -a -b -c).
+#
+#    - Error  handling:  it can  detect  errors  like  invalid options  or
+#      missing arguments and provide clear messages to the user.  This makes
+#      debugging easier.
+#
+#    - Code simplification: it  can condense a lot of option  parsing into
+#      a single line of code,  which is easier to  maintain than the longer, more
+#      complex logic often required by manual parsing.
+#
+# Warning: Do *not* omit \`--options\`, even if your command doesn't support any
+# short option (in which case, just specify \`--options=\`).
+if ! opts="$(getopt \
+		--options=${1:ab:c} \
+		--long=${2:foo,bar:,baz} \
+		--name="$SCRIPT" \
+		-- "$@")"; then
+	exit 1
+fi
+
+# This sets the  positional parameters of the script (\`\$1\`,  \`\$2\`, ...) to
+# the individual  options/arguments it was  passed.  Without, you would  need to
+# parse the \`$opts\` string.
+eval set -- "$opts"
+
+# Now we can reliably parse the options/arguments.
+while true; do
+	case \$1 in
+	-*)
+		shift
+	;;&
+
+	--long)
+		# ...
+		#
+		# At the end of every clause, you can execute \`exit\` or \`return\` if
+		# there is nothing more to be done after the clause.
+		#
+		# And if an option expects an argument, you need to shift one more time
+		# to get rid of the latter.  And you probably want to shift at the end
+		# instead of the start, if you need to assign the argument to a variable:
+		#
+		#     shift
+	;;
+
+	-s)
+		# ...
+	;;
+
+	--)
+		# the non-optional arguments can be accessed via \`$*\`
+		local args="$*"
+		break
+	;;
+
+	*)
+		printf 'invalid option: %s\n' "\$1" >&2
+		exit 1
+	;;
+	esac
+done
+$0
+endsnippet
+
+snippet t90 "conditional debugging / verbose messages" Am
+# Purpose:   print  a   verbose  or   debugging   message,  but   only  if   the
+# script  was  supplied  the  appropriate option  (e.g.  \`-d\`/\`--debug\`,  or
+# \`-v\`/\`--version\`).
+#
+# ---
+#
+# This idiom lets you avoid \`if\` blocks later:
+#
+#     if [[ -n "$DEBUG" ]]
+#       ...
+#     fi
+#
+# This makes your code easier to read.
+DEBUG=':'
+VERBOSE=':'
+while getopts ':-:dv' VAL; do
+	case $VAL in
+	d) DEBUG='echo' ;;
+	v) VERBOSE='echo' ;;
+	-)
+		case $OPTARG in
+		debug) DEBUG='echo' ;;
+		verbose) VERBOSE='echo' ;;
+		*)
+			echo "unknown long argument: $OPTARG"
+			exit
+		;;
+		esac
+	;;
+	:) echo "error: no argument supplied to $OPTARG option" ;;
+	*)
+	echo "error: unknown option $OPTARG"
+	echo 'valid options are: dv'
+	;;
+	esac
+done
+
+shift $(( OPTIND - 1 ))
+
+$DEBUG 'debugging message'
+$VERBOSE 'verbose message'
+$0
+endsnippet
+
+# Debian packages {{{1
+
+snippet t91 "install Debian package dependency" Am
+for dependency in "${DEPENDENCIES[@]}"; do
+	if ! dpkg-query --show --showformat='${Status}' "$dependency" 2>/dev/null \
+			| grep --quiet 'ok installed' \
+			&& ! sudo apt-get --assume-yes install "$dependency"; then
+		printf '%s: failed to install Debian package: %s\n' "\$0" "$dependency" 2>&1
+	exit 1
+	fi
+done
+$0
+endsnippet
+
+snippet t92 "remove Debian package" Am
+sudo apt-get --assume-yes purge --autoremove \
+	$(aptitude search '?installed ?name(${1:package})' --display-format='%p')
+endsnippet
+
+# miscellaneous {{{1
+
+snippet t93 "** glob" Am
+shopt -s globstar
+**/${1:glob}
+shopt -u globstar
+# This is useful to match files anywhere below a given directory:
+#
+#     $ printf '%s\n' /usr/share/doc/**/*.[ch]
+#
+# If \`globstar\` remains disabled, \`**\` can only match a single directory (as
+# if you wrote \`*\`).
+#
+# Alternative:
+#
+#     $ find /usr/share/doc/ -name '*.[ch]' -print
+endsnippet
+
+snippet t94 "brace expansion" Am
+# Basic syntax whose argument is a comma-separated list of strings.
+#
+# ---
+#
+# A brace expansion  can be preceded by an optional  *preamble*, and followed by
+# an  optional *postscript*.   Each expanded  term  will be  prepended with  the
+# preamble, and appended with the postscript.  For example:
+#
+#            preamble    postscript
+#            vvv         vvv
+#     $ echo foo{+,-,*,/}bar
+#     foo+bar foo-bar foo*bar foo/bar
+#
+# ---
+#
+# Brace expansions can be nested:
+#
+#               v---v  v---v
+#     $ echo a{b{c,d},e{f,g}}
+#             ^-------------^
+#     abc abd aef aeg
+#
+# ---
+#
+# The  only characters  which are  special to  a brace  expansion are  the curly
+# brackets  (only  an opening  one  followed  by a  closing  one,  with a  comma
+# in-between).  As  a result, it can  contain any character which  is special to
+# another expansion (e.g.  pattern characters \`*\` and \`?\`)  without the need
+# to protect/quote it:
+#
+#     $ echo /usr/{bin,lib*}
+#     /usr/bin /usr/lib /usr/lib64 /usr/libexec /usr/libx32
+#
+# That's because brace expansion if performed *before* any other expansion.
+{string1,string2,...}
+
+# Alternative syntax whose argument is a sequence expression.
+# It expands into a range of characters or integers from \`$1\` to \`$2\`.
+#
+# ---
+#
+# The default increment is \`1\`, but can be reset:
+#
+#     {$1..$2..incr}
+#              ^--^
+#
+# In  particular, if  you want  to iterate  in reverse  order, set  the optional
+# increment to \`-1\`.
+#
+# ---
+#
+# If \`$1\` and \`$2\` are integers, any of them can be prepended with a padding
+# of \`0\`s to force  all terms to have the same number  of digits.  This number
+# of digits is \`max([len($1), len($2)])\`.
+#
+# ---
+#
+# This syntax is more limited than a C-style \`for\` loop.  It requires that the
+# start, end, and optional increment, are all constants/literals.  They can't be
+# expressions which  need to be evaluated  (because – when brace  expansion is
+# performed – parameter expansion hasn't been performed yet).
+#
+# For example, you can't write any of these:
+#
+#     for i in {1..MAX}
+#     for j in {2*i+3..4*i+5}
+#         ^       ^      ^
+#         different variables
+#
+# But you *can* write this:
+#
+#     for (( i = 1; i <= MAX; i++ ))
+#     for (( j = 2*i+3; i <= 4*i+5; j++ ))
+{${1:x}..${2:y}}
+endsnippet
+
+snippet t95 "process substitution >()" Am
+# Example:
+#
+#     $ vim -c 'q' --startuptime >(tail --lines=1)
+#
+# Is equivalent to one of these:
+#
+#     $ vim -c 'q' --startuptime /dev/stdout | tail --lines=1
+#     $ vim -c 'q' --startuptime /tmp/vim.log && tail --lines=1 $_
+#
+# ---
+#
+# This is similar to \`<()\`.  Both are replaced with the name of a pseudo-file.
+# The difference comes from  the mode in which that file is  opened by the outer
+# command:
+#
+#    - \`<()\` is read from
+#    - \`>()\` is written to
+#
+# And from who writes its contents:
+#
+#    - \`<()\` is written to by the inner command
+#    - \`>()\` is written to by the outer command
+#
+# And from how it's further used:
+#
+#    - \`<()\` is not used in any special way
+#    - \`>()\` is also connected to the input of the inner command (in addition
+#      to being passed as an argument of the outer command)
+#
+# ---
+#
+# The STDOUT of the inner process is still connected to the terminal, and can be
+# re-connected to the next outer pipe.  For example (from \`info tee\`):
+#
+#     tardir=your-pkg-M.N
+#     tar chof - "$tardir" \
+#     | tee >(md5sum --tag) > >(sha256sum --tag) \
+#     | sort | gpg --clearsign > your-pkg-M.N.tar.sig
+#
+# Here,  \`md5sum(1)\`  and \`sha256sum(1)\`  write  on  their STDOUT  which  is
+# connected to the next outer pipe, which \`sort(1)\` reads.
+${1:cmd1} >(${2:cmd2})
+$0
+endsnippet
+
+snippet t96 "split given string and assign resulting fields to given variables" Am
+# Invoking  \`awk(1)\`  *once* seems  more  efficient  than invoking  \`cut(1)\`
+# *multiple* times.
+shopt -s lastpipe
+# Obviously, you can print any fields you want; not necessarily the fields 1, 2, 3.
+# And you can re-name the variables \`x\`, \`y\`, \`z\` however you like.
+awk -F${1:delim} '{ print \$1, \$2, \$3 }' <<<"$${2:var}" \
+	| read -r x y z
+shopt -u lastpipe
+
+Alternatives:
+IFS='$1' read -r x y z <<<"$$2"; echo "$x" "$y" "$z"
+${3:cmd} | { IFS='$1' read -r x y z; echo "$x" "$y" "$z" ;}
+$0
+endsnippet
+
+snippet t97 "suppress error given when glob matches no file" Am
+# By default, if a glob matches no file, it expands to itself, which can give an
+# error:
+#
+#     $ for file in /tmp/*.foo; do rm -- "$file"; done
+#     rm: cannot remove '/tmp/*.foo': No such file or directory
+#
+# But when \`nullglob\`  is set, the glob  expands to a null  string; that might
+# suppress the error:
+#
+#     $ shopt -s nullglob
+#     $ for file in /tmp/*.foo; do rm -- "$file"; done
+shopt -s nullglob
+$0
+shopt -u nullglob
+endsnippet
+
+snippet t98 "process output of given command with multiple commands in parallel" Am
+# Alternative:
+#
+#     $ $1 | tee >($2) >($3)
+#
+# \`tee(1)\` accepts several  file arguments, so you can repeat  \`>()\` to pass
+# the output of \`$1\` to as many commands as you want.
+#
+# ---
+#
+# As  an example,  this can  be useful  to download  a file,  and simultaneously
+# compute its fingerprint(s):
+#
+#     $ wget --output-document=- URL \
+#       | tee >(md5sum >FILE.md5) >(sha1sum >FILE.sha1) >FILE
+#
+# Here, note that we redirect \`tee(1)\`'s STDOUT to \`FILE\` so that it doesn't
+# write  the downloaded  file to  the terminal  (otherwise, it's  not necessary;
+# \`tee(1)\` is perfectly able to write into \`FILE\` without \`>\`).
+#
+# As another  example, you  can compress  files from  a directory  with multiple
+# algorithms simultaneously:
+#
+#     $ tar --create --file=- DIR \
+#       | tee >(gzip --stdout >ARCHIVE.tar.gz) \
+#       | bzip2 --stdout >ARCHIVE.tar.bz2
+${1:cmd1} | tee >(${2:cmd2}) | ${3:cmd3}
+$0
+endsnippet
+
+snippet t99 "lock script" Am
+# This ensures that only one instance of the script runs at any given time.
+#
+# The \`flock(1)\` command is used with this syntax:
+#
+#     flock [options] file|directory command [arguments]
+#
+# In our command:
+#
+#    - \`[options]\` is \`--exclusive --nonblock\`
+#    - \`file|directory\` is \`"\$0"\`
+#    - \`command\` is \`"\$0"\`
+#    - \`[arguments]\` is \`"$@"\`
+#
+# If \`FLOCKER\`  is not set  to the script's  path (\`\$0\`), the  current bash
+# process  (the one  executing  the  script) is  entirely  replaced  with a  new
+# \`env(1)\` process (via  \`exec(1)\`), which sets \`FLOCKER\`  to the script's
+# path.  In turn, the \`env(1)\` process is replaced with a \`flock(1)\` process
+# which tries to acquire an \`--exclusive\`  lock on the script file itself (its
+# first \`\$0\` argument) without waiting (\`--nonblock\`).
+#
+# If \`flock(1)\` succeeds  in acquiring a lock, it re-executes  the script (its
+# second \`\$0\`  argument), passing it  its original arguments  (\`"$@"\`). But
+# this time, since  \`FLOCKER\` is set, \`&& exec ...\` is  skipped allowing the
+# rest of the script to be executed.
+#
+# If \`flock(1)\`  fails to  acquire a  lock, it means  another instance  of the
+# script is already  running, and the script will not  be re-executed.
+#
+# \`||  :\` prevents  the script  from exiting  prematurely in  case \`exec(1)\`
+# fails.   It's  useful  only  if  the  script was  set  up  to  exit  on  error
+# (\`set -e\`).
+#
+# Copied from: \`man flock /EXAMPLES/;/FLOCKER\`
+
+[[ "$FLOCKER" != "\$0" ]] && exec env FLOCKER="\$0" flock --exclusive --nonblock "\$0" "\$0" "$@" || :
+$0
+endsnippet
+
+snippet t100 "download file with curl" Am
+curl --fail --location --show-error --silent${1: --remote-name}${2: --output <filepath>} '${3:<URL>}'
+$0
+endsnippet
+
+snippet t101 "shellcheck directive" Am
+# Scope of a shellcheck directive: {{{
+#    - before first command = whole script
+#    - afterward = immediately following simple command
+#                  (or compound command, function, subshell block, loop...)
+#}}}
+# To apply a shellcheck directive to several commands, group them: {{{
+#     # shellcheck directive
+#     {
+#        command1
+#        command2
+#        ...
+#     }
+#}}}
+# Warning: ShellCheck  directives are only  valid in front of  complete compound
+# commands, like if, not e.g. individual elif branches.
+
+# shellcheck disable=${1:SC1234,SC4567,SC5000-SC6000}
+${2:command}
+$0
+endsnippet
+
+snippet t102 "empty file's contents" Am
+true >${1:file}
+endsnippet
+
+snippet t103 "list all signals supported by your system" Am
+trap -l
+endsnippet
+
+snippet t104 "show trap commands associated with given signal" Am
+trap -p ${1:signal}
+endsnippet
+
+snippet t105 "set a trap" Am
+trap '${1:cmd | function}' ${2:SIGNALS (e.g. ABRT EXIT HUP INT QUIT TERM)}
+endsnippet
+
+snippet t106 "create temporary file" Am
+# Warning: For \`trap\`  to work as  expected, \`tmp_file\` needs to  be global.
+# So, if you assign  it from a function, you still want  to \`declare -g\` it at
+# the script level.
+tmp_file="$(mktemp)"
+trap 'rm -f "$tmp_file"' ABRT EXIT HUP INT QUIT TERM
+
+$0
+endsnippet
+
+snippet t107 "cd into temporary directory" Am
+# Warning: For \`trap\`  to work  as expected, \`tmp_dir\`  needs to  be global.
+# So, if you assign  it from a function, you still want  to \`declare -g\` it at
+# the script level.
+tmp_dir="$(mktemp --directory)"
+trap 'rm -rf "$tmp_dir"' ABRT EXIT HUP INT QUIT TERM
+cd "$tmp_dir" || ${1:exit 1 or return}
+
+$0
+endsnippet
+
+snippet t108 "change CWD of piped command" Am
+(cd ${1:dir} ; ${2:cmd1}) | ${3:cmd2}
+# Or:
+$2 | (cd $1 ; $3)
+# In both cases, \`cd\` only affects the subshell's CWD.
+$0
+endsnippet
+
+snippet t109 "print ruler" Am
+# The \`.0\` precision flag discards the number generated by \`seq(1)\`.
+# The latter is only used to generate an arbitrary number of arguments.
+# ---
+# Don't quote the \`$(seq ...)\` command substitution.
+${1:msg}='${2:hello world}'
+width=${#$1}
+printf -v ${3:ruler} -- '${4:single character}%.0s' $(seq 1 "$width")
+printf '%s\n%s\n' "$$1" "$$3"
+$0
+endsnippet
+
+snippet t110 "open tmux popup" Am
+# \`-E\`: exit once \`$1\` terminates
+# \`-xC -yC\`: center the popup
+# \`-w75% -h75%\`: occupy 3/4 of the screen in width and height
+# \`-d '#{pane_current_path}'\`: same working directory for popup and current pane
+tmux display-popup \
+	-E \
+	-xC -yC \
+	-w75% -h75% \
+	-d '#{pane_current_path}' \
+	${1:cmd}
+$0
+endsnippet
+
+snippet t111 "generate random number between 1 and 100" Am
+(( rand = RANDOM % 100 + 1 ))
+$0
+endsnippet
+
+snippet t112 "generate random character between A and Z" Am
+# This requires that you define the \`ord\` and \`chr\` functions.
+A_code="$(ord 'A')"
+(( rand = RANDOM % 26 + A_code ))
+rand_char="$(chr "$rand")"
+$0
+endsnippet
+
+snippet t113 "execute all scripts in given directory" Am
+# Use  \`--regex\`  to  run  scripts  whose name  include  a  dot  (by  default,
+# \`run-parts(8)\` doesn't execute those):
+#
+#     $ run-parts --regex='^[-._[:alnum:]]+$' $1
+#                             ^
+run-parts ${1:dir}
+$0
+endsnippet
+
+snippet t114 "print a list of random words" Am
+# Tip: to capitalize the words, include \`sed 's/^\(.\)/\u\1/'\` in the pipeline.
+shuf --head-count=${1:123} /usr/share/dict/words | column
+$0
+endsnippet

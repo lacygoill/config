@@ -1,0 +1,1063 @@
+Arglist {{{1
+
+add current buffer to arglist           «SPC»aa                                N
+copy global arglist into local one      «SPC»al                                N
+delete current entry in arglist         «SPC»ad                                N
+edit current entry in arglist           «SPC»ac                                N
+set local arglist to current buffer     «SPC»an                                N
+set arglist to visually selected paths  «SPC»a                                 V
+
+load first argument                     [A                                     N
+load last argument                      ]A                                     N
+load previous argument                  [a                                     N
+load next argument                      ]a                                     N
+
+Changes {{{1
+
+put contents of previous pane           «M-p»                                  N
+
+toggle token under cursor               «C-a»                                  *
+                                        «C-x»
+
+dictionary completion                   «C-x»«C-k»                             I
+tag completion                          «C-x»«C-]»                             I
+keyword completion                      «C-x»«C-n»                             I
+                                        «C-x»«C-p»
+
+put ruler above                         +[-                                    N
+put ruler below                         +]-                                    N
+
+center text below/above comment pointer +c                                     V
+
+emphasize current word                  +e                                     N
+expand short options in shell command   +E                                     NV
+
+put ✘ error sign above                  +V                                     N
+put ✘ error sign below                  +v                                     N
+
+put comment pointer above               +V                                     V
+put comment pointer below               +v                                     V
+
+create box                              >b                                     N
+destroy box                             <b                                     N
+
+fix indentation of last changed lines   =«C-P»                                 N
+
+put register above                      <P or >P or [p or =P                   N
+# `<`: decrease original indentation
+# `>`: increase original indentation
+# `[`: copy indentation from below
+# `=`: re-indent line
+put register below                      <p or >p or or ]p or =p                N
+
+put commented register above            cP or <cP or >cP or =cP                N
+# `<`: decrease indentation by 1
+# `>`: increase indentation by 1 *after* comment leader
+# (so that the text is highlighted as a codeblock)
+# `=`: re-indent
+put commented register below            cp or <cp or >cp or =cp                N
+
+put empty line above                    [«SPC»                                 N
+put empty line below                    ]«SPC»                                 N
+put empty lines around                  =«SPC»                                 N
+
+exchange current line with above one    [e                                     N
+exchange current line with below one    ]e                                     N
+
+obtain difference from diff'ed buffer   do                                     N
+put difference to diff'ed buffer        dp                                     N
+
+delete empty lines                      dg«SPC»                                N
+delete lines matching @/                dg/                                    N
+delete lines NOT matching @/            dv/                                    N
+delete commented lines                  dg#                                    N
+delete UNcommented lines                dv#                                    N
+
+comment bottom half of block            gcb                                    N
+comment top half of block               gct                                    N
+
+join line without adding spaces         gJ                                     N
+break line on current character         g«SPC»                                 N
+remove duplicate spaces                 gqs                                    N
+
+select last changed text linewise       gV                                     N
+select last changed text characterwise  g«C-V»                                 N
+
+duplicate selection up                  mdk                                    V
+duplicate selection down                mdj                                    V
+duplicate block to the right            mdl                                    V
+duplicate block to the left             mdh                                    V
+
+delete empty lines                      mg«SPC»                                V
+delete lines matching @/                mg/                                    V
+delete lines NOT matching @/            mv/                                    V
+delete commented lines                  mg#                                    V
+delete UNcommented lines                mv#                                    V
+
+clear undo history                      Uc                                     N
+undo all changes during current session US                                     N
+
+Debug {{{1
+
+capture local variable into global one  !c                                     N
+capture local variable as a list        !C                                     N
+# useful to see all values taken by the variable,
+# not just the last one
+
+display captured variables              !d                                     N
+
+open help tags relevant wrt last errors !e                                     N
+
+display last pressed keys               !K                                     N
+
+display :messages                       !m                                     N
+clear :messages                         !M                                     N
+
+dump output of last Ex command          !o                                     N
+display options's values                !O                                     N
+
+print syntax items under the cursor     !s
+# support a count to print the rule which defines a given item in the stack
+
+debug syntax highlighting               !S                                     N
+# Splits  the window.   In the  bottom one, write  a minimal  amount of  code to
+# reproduce the issue.  Whenever you move the cursor in the top window, the
+# stack of syntax items is printed.
+
+print info about all running timers     !t                                     N
+measure how much time a task needs      !T
+# press once to start the stopwatch, press a second time to stop it
+
+open most recent error in qf window     !w                                     N
+open all errors in qf window            !W                                     N
+
+log events                              :LogEvents EVENTS                      C
+display termcap database                :DebugTermcap                          C
+
+Fuzzy Search {{{1
+
+recent files                            «SPC»fr                                N
+config files                            «SPC»fC                                N
+files in CWD                            «SPC»ff                                N
+files found by locate(1)                «SPC»fl                                N
+
+entries in current file                 «SPC»fe                                N
+# useful in snippets files
+
+Vim search history                      «SPC»f/                                N
+Vim commands                            «SPC»fc                                N
+Vim help tags                           «SPC»fh                                N
+cheat keys                              «SPC»fk                                N
+
+mappings in visual mode                 «SPC»fmx                               N
+mappings in operator-pending mode       «SPC»fmo                               N
+mappings in normal mode                 «SPC»fmn                               N
+mappings in insert                      «SPC»fmi                               N
+mappings in command-line mode           «SPC»fmc                               N
+
+notes about topic of current file       «SPC»fn                                N
+all notes                               «SPC»fN                                N
+
+Vim registers                           " «C-f»                                N
+insert Vim register                     «C-r»«C-f»                             I
+insert snippet                          «C-g»«C-g»                             I
+
+Folds {{{1
+
+close all folds                         H                                      N
+open all folds                          L                                      N
+close all folds except current one      M                                      N
+
+adhoc folding                           za                                     N
+# useful for example, for `ps --forest`, `systemd-cgls` and `journalctl`
+
+fold comment                            zfic                                   N
+
+toggle folds under cursor recursively   zA                                     N
+close one fold under cursor             zc                                     N
+close all folds under cursor            zC                                     N
+close all folds                         zM                                     N
+open one fold under cursor              zo                                     N
+open all folds under cursor             zO                                     N
+open all folds                          zR                                     N
+update folds then do `zv`               zx                                     N
+update folds                            zX                                     N
+open just enough folds to view line     zv                                     N
+
+Get Info {{{1
+
+print character bytes in hex            -8                                     N
+print character bytes in octal and hex  g8                                     N
+print indent settings                   -i                                     N
+
+print math stats about text-object      -m                                     N
+print math stats about numbers on line  -mm                                    N
+print math stats about selected numbers -m                                     V
+
+get link current location (man page)    -d                                     N
+print filetype                          -f                                     N
+print CWD                               -P                                     N
+edit relevant README                    -r                                     N
+
+Help {{{1
+
+List of digraphs                        :digraphs                              N
+List all syntax items                   :syn                                   N
+
+Misc {{{1
+
+# the line must start with `$ `
+display table of contents               «SPC»o                                 N
+
+start goyo mode w/o syntax highlighting «SPC»gg                                N
+start goyo mode w   syntax highlighting «SPC»gG                                N
+
+surround word                           «SPC»s                                *N
+surround WORD                           «SPC»S                                *N
+
+duplicate character above               «C-X»k                                 I
+duplicate character below               «C-X»j                                 I
+decrease current's line indentation     «C-G»<                                 I
+increase current's line indentation     «C-G»>                                 I
+
+display search matches with context     «C-G»z                                 N
+
+insert codespan on command-line         «C-R»`                                *C
+insert current line on command-line     «C-R»«C-L»                            *C
+
+suspend Vim                             «C-z»«C-z»                             N
+
+force abbreviation expansion            «C-]»                                  I
+
+send current file to Vim server         [«C-s»                                 N
+
+run compiler                            |c                                     N
+dump output of commented shell command  |s                                     N
+
+execute current file                    ||                                     NV
+
+open file browser in CWD                -t                                     N
+open file browser in current's file dir -T                                     N
+
+source text-object                      +s                                     N
+source current line                     +ss                                    N
+source selection                        +s                                     V
+source current file                     +S                                     N
+
+fix corrupt display                     =d                                     N
+fix macro                               =m                                     N
+fix misconfigured options               =o                                     N
+
+see last page of last command output    g!
+
+unbounded search                        g*                                    *NV
+
+count lines in current function         gl                                     N
+count lines in current selection        g«C-l»                                 V
+count lines in current file             g«C-l»                                 N
+
+open link in Firefox                    gx                                     NV
+open link in w3m                        gX                                     NV
+
+count lines of code in file             :Cloc                                  C
+open config of given program            :Cfg PROGRAM                           C
+grep given pattern                      :Grep PATTERN                          C
+grep config files                       :ConfigGrep                            C
+share selection or file                 :Share                                 C
+
+close session                           :SClose                                C
+delete session                          :SDelete! [SESSION]                    C
+load session                            :SLoad SESSION                         C
+rename session                          :SRename SESSION                       C
+track session                           :STrack[!] [SESSION]                   C
+
+Motion {{{1
+
+go to next blank line                   }                                      N
+go to prev blank line                   {                                      N
+go to begin of block                    [{                                     N
+go to end of block                      ]}                                     N
+
+go to next unmatched group              ]%                                     NVO
+go to previous unmatched group          [%                                     NVO
+# as specified by `b:match_words`.  Similar to `[{`.
+
+go to previous line with lowercase mark ['                                     NV
+go to next line with lowercase mark     ]'                                     NV
+go to previous start of codespan        [`                                     NVO
+go to next start of codespan            ]`                                     NVO
+go to previous unmatched '('            [(                                     N
+go to next unmatched '('                ](                                     N
+go to specified tag                     :tag …                                 N
+go to tag definition                    «C-]»                                 *N
+show tag choices                        g]                                    *N
+jump or show choices                    g«C-]»                                *N
+jump to first character on line         g«Bar»                                 N
+go to local declaration                 gd                                    *N
+go to global declaration                gD                                    *N
+to next matching tag                    :tn                                    N
+to prev matching tag                    :tp                                    N
+view all marks                          :marks                                 N
+remove marks                            :delmarks …                            N
+
+jump to next quickhl                    «M-m»j                                 N
+jump to previous quickhl                «M-m»k                                 N
+
+jump to previous 2-pair of characters   SS                                     NVO
+jump to next 2-pair of characters       ss                                     NVO
+
+jump to next token which can be toggled s«C-a»                                 NV
+jump to prev token which can be toggled s«C-x»                                 NV
+# only works on the current line
+
+jump to first macro definition          [«C-d»                                *N
+jump to next macro definition           ]«C-d»                                *N
+jump to first line containing curword   [«C-i»                                *N
+jump to next line containing curword    ]«C-i»                                *N
+# Comments are  ignored.  If  a count  is given, the  count'th matching  line is
+# jumped to, and comment lines are not ignored.
+
+jump to previous comment                ["                                     NVO
+jump to next comment                    ]"                                     NVO
+
+jump to next #if or #else               ]#                                     NV
+jump to previous #if or #else           [#                                     NV
+
+jump to previous ruler                  [-                                     NVO
+jump to next ruler                      ]-                                     NVO
+
+jump to previous start of a C comment   [/                                     N
+jump to next end of a C comment         ]/                                     N
+# only works for `/* */` old-style
+
+jump to previous marked location        [;                                     NV
+jump to next marked location            ];                                     NV
+mark current location                   m;                                     N
+clear all marked locations              m,                                     N
+
+jump to previous change in diff mode    [c                                     NV
+jump to next change in diff mode        ]c                                     NV
+
+jump to previous file                   [f                                     N
+jump to next file                       ]f                                     N
+
+jump to previous file path              ]h                                     NVO
+jump to next file path                  ]h                                     NVO
+
+jump to previous markdown reference     [r                                     NVO
+jump to next markdown reference         ]r                                     NVO
+
+jump to previous function start         [m                                     NVO
+jump to next function start             ]m                                     NVO
+
+jump to previous function end           [M                                     NVO
+jump to next function end               ]M                                     NVO
+
+scroll horizontally to the left         [S                                     N
+scroll horizontally to the right        ]S                                     N
+
+jump to previous wrongly spelled word   [s                                     NV
+jump to next wrongly spelled word       ]s                                     NV
+
+jump to previous URL                    [u                                     NVO
+jump to next URL                        ]u                                     NVO
+jump to previous concealed URL          [U                                     NVO
+jump to next concealed URL              ]U                                     NVO
+
+jump to previous fold                   [z                                     NVO
+jump to next fold                       ]z                                     NVO
+
+go to older location list               <l                                     N
+go to newer location list               >l                                     N
+go to older quickfix list               <q                                     N
+go to newer quickfix list               >q                                     N
+
+jump to next change                     g;                                     N
+jump to previous change                 g,                                     N
+
+Operators {{{1
+
+repeat last edit on last changed text   «SPC».                                 N
+
+move selection one line up              «M-k»                                  V
+move selection one line down            «M-j»                                  V
+move selection one column left          «M-h»                                  V
+move selection one column right         «M-l»                                  V
+
+highlight current line                  «M-m»«M-m»                             N
+highlight text-object                   «M-m»                                  N
+highlight bounded word under cursor     «M-m»*                                 N
+highlight unbounded word under cursor   «M-m»g*                                N
+print help about quick highlights       «M-m»?                                 N
+clear quick highlight under cursor      «M-m»c                                 N
+clear all quick highlights              «M-m»C                                 N
+
+grep text-object                        |g                                     NV
+
+:Limelight text-object                  ++                                     N
+:Limelight current line                 +++                                    N
+:Limelight selection                    ++                                     N
+stop :Limelight                         +-                                     N
+
+join multiline data                     +<                                     NV
+split long data                         +>                                     N
+
+remove escape codes from text-object    +a                                     N
+remove escape codes from current line   +aa                                    N
+remove escape codes from selection      +a                                     V
+
+comment and duplicate text-object       +d                                     N
+comment and duplicate current line      +dd                                    N
+comment and duplicate visual selection  +d                                     V
+
+decode base64 text-object               +D                                     N
+decode base64 current line              +DD                                    N
+decode base64 selection                 +D                                     V
+
+change last search pattern              c*                                     N
+change last unbounded search pattern    cg*                                    N
+# both are dot repeatable
+
+trim whitespace at end of text-object   +t                                     N
+trim whitespace at end of current line  +tt                                    N
+trim whitespace at end of selection     +t                                     V
+trim whitespace at end of line range    :<RANGE>TrimWhitespace                 C
+
+exchange text-objects                   cx                                     N
+exchange line                           cxx                                    N
+exchange selection                      X                                      V
+clear exchange                          cxc                                    N
+
+replace text-object without yank        dr                                     N
+replace line without yank               drr                                    N
+
+toggle comment on given lines           gc                                     NV
+toggle comment on current line          gcc                                    N
+uncomment current block                 gcu                                    N
+
+reverse text-object                     gr                                     N
+reverse lines                           grr                                    N
+reverse selection                       gr                                     V
+
+sort text-object                        gs                                     N
+sort line(s)                            gss                                    N
+sort selection                          gs                                     V
+
+shuffle text-object                     gS                                     N
+shuffle line                            gSS                                    N
+shuffle selection                       gS                                     V
+
+turn paragraph into numbered list       m#                                     NV
+turn line into numbered list            m##                                    N
+turn paragraph into unordered list      m*                                     NV
+turn line into unordered list           m**                                    N
+
+yank lines NOT matching @/              myM                                    V
+yank lines matching @/                  mym                                    V
+yank lines matching comments            myC                                    V
+yank lines matching code                myc                                    V
+
+yank lines NOT matching @/              yM                                     N
+yank lines matching @/                  ym                                     N
+yank lines matching comments            yC                                     N
+yank lines matching code                yc                                     N
+
+Options {{{1
+
+toggle 'nrformats'                      coa                                    N
+# for C-A / C-X to operate on alphabetical characters
+
+toggle 'conceallevel'                   coc                                    N
+toggle compiler                         coC                                    N
+
+toggle diff for current window          cod                                    N
+toggle diff for all windows in tabpage  coD                                    N
+toggle editable help file               coe                                    N
+toggle 'hlsearch'                       coh                                    N
+
+toggle 'list'                           coi                                    N
+# to display invisible characters
+
+toggle 'cursorline'                     coL                                    N
+toggle 'synmaxcol'                      com                                    N
+toggle 'number'                         con                                    N
+toggle Matchparen                       cop                                    N
+toggle 'previewwindow'                  coP                                    N
+
+toggle 'scrollbind'                     cor                                    N
+# Useful for viewing the differences between two versions of a file, see 'diff'.
+
+toggle spell checking                   cos                                    N
+toggle auto save                        co«C-S»                                N
+toggle rich fold titles                 cot                                    N
+toggle 'virtualedit'                    cov                                    N
+toggle verbose errors                   coV                                    N
+toggle wrapped lines                    cow                                    N
+toggle 'wrapscan'                       coW                                    N
+toggle auto opening folds               coz                                    N
+
+toggle 'diffopt'                        co«SPC»                                N
+# to ignore all white space changes
+
+increase colorscheme brightness         ]ol                                    N
+decrease colorscheme brightness         [ol                                    N
+
+Quickfix List {{{1
+
+jump to first location list             [L                                     N
+jump to last location list              ]L                                     N
+jump to previous location list          [l                                     N
+jump to next location list              ]l                                     N
+
+jump to first quickfix list             [Q                                     N
+jump to last quickfix list              ]Q                                     N
+jump to previous quickfix list          [q                                     N
+jump to next quickfix list              ]q                                     N
+
+set QFL with TODOs/FIXMEs in buffer     «C-Q»t
+set QFL with TODOs/FIXMEs in CWD        «C-Q»T
+
+set QFL with registers                  g:r                                    N
+set QFL with :oldfiles                  g:o                                    N
+set QFL with arglist                    g:a                                    N
+set QFL with matches of last search     g::                                    N
+
+set QFL to visually selected lines      mq                                     V
+
+Tab Page {{{1
+
+open new tab                            «SPC»t                                 N
+move window to new tab                  «C-w» T                                N
+
+focus next tab                          «C-n»                                  N
+focus previous tab                      «C-p»                                  N
+
+focus last focused tab                  g‹tab›                                 N
+focus first tab                         g^                                     N
+focus last tab                          g$                                     N
+move tab after next one                 gt                                     N
+move tab before previous one            gT                                     N
+
+close all other tabs                    :tabo                                  N
+list tabs                               :tabs                                  N
+open one tab per buffer                 :tab ball                              N
+
+Text-Objects {{{1
+
+inside (XML) tags                       it                                     T
+around (XML) tags                       at                                     T
+inside < and >                          i<                                     T
+around < and >                          a<                                     T
+inside backticks                        i`                                     T
+around backticks                        a`                                     T
+inside --- rule                         i-                                     T
+around --- rule                         a-                                     T
+inside comment                          ic                                     T
+around comment                          ac                                     T
+inside class                            iC                                     T
+around class                            aC                                     T
+entire buffer                           iE                                     T
+inside function                         if                                     T
+around function                         af                                     T
+inside fenced code block                iF                                     T
+around fenced code block                aF                                     T
+inside number                           in                                     T
+around number                           an                                     T
+inside column (iw)                      io                                     T
+inside column (iW)                      iO                                     T
+around column (aw)                      ao                                     T
+around column (aW)                      aO                                     T
+up to previous ruler                    [-                                     T
+down to next ruler                      ]-                                     T
+
+View {{{1
+Scrolling {{{2
+
+Scroll » half a screen                  zL                                     N
+Scroll « half a screen                  zH                                     N
+}}}2
+Edit buffer ‹n›                         ‹n›«C-^»                               N
+Line/word/char count                    g«C-g»                                VN
+
+Window {{{1
+
+focus top window                        «C-k»                                  N
+focus bottom window                     «C-j»                                  N
+focus left window                       «C-h»                                  N
+focus right window                      «C-l»                                  N
+
+toggle popup terminal                   «C-g»«C-j»                             N
+
+New horizontal split                    :new                                   N
+New horizontal split                    «C-w» «C-n»                            N
+Edit top window                         «C-w» «C-t»                            N
+Edit bottom window                      «C-w» «C-b»                            N
+rotate windows                          «C-W»r or «C-W»R                       N
+
+move window to the right                «C-W»gl                                N
+move window to the left                 «C-W»gh                                N
+move window to the top                  «C-W»gk                                N
+move window to the bottom               «C-W»gj                                N
+
+toggle window's fullscreen mode         «SPC»z                                 N
+undo window's closure                   «SPC»U                                 N
+close window                            «SPC»q                                 N
+
+split to the top                        zk                                     N
+split to the bottom                     zj                                     N
+split to the left                       zh                                     N
+split to the right                      zl                                     N
+
+resize to the top                       z«C-k»                                 N
+resize to the bottom                    z«C-j»                                 N
+resize to the left                      z«C-h»                                 N
+resize to the right                     z«C-l»                                 N
+
+close all popup windows                 z"                                     N
+
+scroll last tmux pane to the top        «M-g»                                  N
+scroll last tmux pane to the bottom     «M-S-g»                                N
+scroll last tmux pane half page up      «M-u»                                  N
+scroll last tmux pane half page down    «M-d»                                  N
+scroll last tmux pane one line up       «M-k»                                  N
+scroll last tmux pane one line down     «M-j»                                  N
+scroll last tmux pane to the left       «M-h»                                  N
+scroll last tmux pane to the right      «M-l»                                  N
+
+close all windows except current one    Zo                                     N
+move current window to given tab page   Zs                                     N
+
+open preview window                     z{                                     N
+close preview window                    z}                                     N
+open location list window               z[                                     N
+close location list window              z]                                     N
+open quickfix window                    z(                                     N
+close quickfix window                   z)                                     N
+open terminal window                    z<                                     N
+close terminal window                   z>                                     N
+
+TODO {{{1
+
+n  <Space>y    * y:SendToClipboard(@0)
+n  [oq           :Formatprg("local")
+os [r            <Plug>(prev-reference-link)
+os [h            <Plug>(prev-path)
+n  [T          * :tfirst
+n  [t            :move.Tnext('[t')
+n  [<C-L>        :move.Cnext('[ C-l')
+n  [<C-Q>        :move.Cnext('[ C-q')
+n  [oM         * :completion.EnableAuto()
+os [;            <Plug>(prev-location)
+n  ]oq           :Formatprg("global")
+os ]r            <Plug>(next-reference-link)
+os ]h            <Plug>(next-path)
+n  ]T          * :tlast
+n  ]t            :move.Tnext(']t')
+n  ]<C-L>        :move.Cnext('] C-l')
+n  ]<C-Q>        :move.Cnext('] C-q')
+n  ]oM         * :completion.DisableAuto()
+os ];            <Plug>(next-location)
+x  a%            <Plug>(MatchitVisualTextObject)
+x  as            <Plug>(textobj-sandwich-query-a)
+o  as            <Plug>(textobj-sandwich-query-a)
+x  ab            <Plug>(textobj-sandwich-auto-a)
+x  ac            <Plug>(comment-text-object-outer)
+o  ac            <Plug>(comment-text-object-outer)
+x  aS          * as
+o  aS          * as
+o  al          * _
+x  al          * V
+n  coq           <Plug>(coq)
+n  coM         * :completion.ToggleAuto()
+n  co<M-m>     * :quickhl.LockToggle()
+n  cou         * :ToggleAutotrigger()
+n  cr          * Coerce()
+n  dg<C-L>     * :dbg.CleanLog()
+o  g%            <Plug>(MatchitOperationBackward)
+x  g%            <Plug>(MatchitVisualBackward)
+n  g%            <Plug>(MatchitNormalBackward)
+x  ga            <Plug>(EasyAlign)
+n  ga            <Plug>(EasyAlign)
+n  go          * :Go()
+os gk            <Plug>(vertical-jump-bwd)
+os gj            <Plug>(vertical-jump-fwd)
+x  is            <Plug>(textobj-sandwich-query-i)
+o  is            <Plug>(textobj-sandwich-query-i)
+x  ib            <Plug>(textobj-sandwich-auto-i)
+x  iS          * is
+o  iS          * is
+o  il          * :normal vil
+x  il          * _og_
+n  m|          * :draw.Stop()
+n  m<Space>    * :draw.ChangeState(true)
+n  m_          * :draw.ChangeState(false)
+x  m<M-m>      * <C-\><C-N>:quickhl.ClearThis("v")
+n  srb           <Plug>(sandwich-replace-auto)
+x  sr            <Plug>(sandwich-replace)
+n  sr            <Plug>(sandwich-replace)
+n  sdb           <Plug>(sandwich-delete-auto)
+x  sd            <Plug>(sandwich-delete)
+n  sd            <Plug>(sandwich-delete)
+o  sa            <Plug>(sandwich-add)
+x  sa            <Plug>(sandwich-add)
+n  sa            <Plug>(sandwich-add)
+os s<C-X>        <Plug>(prev-switchable-token)
+os s<C-A>        <Plug>(next-switchable-token)
+n  zE          * Zd('zE')
+n  zD          * Zd('zD')
+n  zd          * Zd('zd')
+n  z=          * ZEqual()
+n  z.          * zszH
+n  <M-M>k        :quickhl.Prev('s')
+n  <M-M>j        :quickhl.Next('s')
+s  <C-Tab>     * <Esc>:call UltiSnips#ListSnippets()
+v  <F4>          <Plug>(MakeDigraph)
+n  <F4>          <Plug>(MakeDigraph)
+n  <C-G>v      * :cmdline#cycle#generic#SetSeq('v')<CR>:VimGrep //gj ./**/*.<C-R>=expand("%:e")<CR><C-R>=!!setcmdpos(10) ? "" : ""
+n  <C-G>u      * :cmdline#cycle#generic#SetSeq('u')<CR>:bo new | exe $'.!comm -23 <(sort #{winbufnr(1)}) <(sort #{winbufnr(2)})'<C-R>=!!setcmdpos(25) ? "" : ""
+n  <C-G>s      * :cmdline#cycle#generic#SetSeq('s')<CR>:%s///g<C-R>=!!setcmdpos(4) ? "" : ""
+n  <C-G>r      * :cmdline#cycle#generic#SetSeq('r')<CR>:execute 'read !curl -s ' .. shellescape('', v:true)<C-R>=!!setcmdpos(42) ? "" : ""
+n  <C-G>p      * :cmdline#cycle#generic#SetSeq('p')<CR>:new | :0 put =execute('')<C-R>=!!setcmdpos(24) ? "" : ""
+n  <C-G>f      * :cmdline#cycle#generic#SetSeq('f')<CR>:Verb Filter /\c/ <C-R>=!!setcmdpos(16) ? "" : ""
+n  <C-G>et     * :cmdline#cycle#generic#SetSeq('et')<CR>:tabf ~/.vim/**/*<C-R>=!!setcmdpos(17) ? "" : ""
+n  <C-G>ev     * :cmdline#cycle#generic#SetSeq('ev')<CR>:vert sf ~/.vim/**/*<C-R>=!!setcmdpos(20) ? "" : ""
+n  <C-G>es     * :cmdline#cycle#generic#SetSeq('es')<CR>:sf ~/.vim/**/*<C-R>=!!setcmdpos(15) ? "" : ""
+n  <C-G>ef     * :cmdline#cycle#generic#SetSeq('ef')<CR>:fin ~/.vim/**/*<C-R>=!!setcmdpos(16) ? "" : ""
+n  <C-G>em     * :cmdline#cycle#generic#SetSeq('em')<CR>:tabe /tmp/vimrc<C-R>=!!setcmdpos(16) ? "" : ""
+n  <C-G>ee     * :cmdline#cycle#generic#SetSeq('ee')<CR>:tabe $MYVIMRC<C-R>=!!setcmdpos(14) ? "" : ""
+n  <C-G>d      * :cmdline#cycle#generic#SetSeq('d')<CR>:Verb nno <C-R>=!!setcmdpos(10) ? "" : ""
+n  <C-G>a      * :cmdline#cycle#generic#SetSeq('a')<CR>:sp | args `=glob('./**/*', 0, 1)->filter({_, v -> filereadable(v)})`<C-R>=!!setcmdpos(19) ? "" : ""
+x  <C-G>s      * :s///g<Left><Left><Left>
+n  <C-G><C-L>  * :links.Fz()
+n  <C-W>L      * :window.DisableWrapWhenMovingToVertSplit('L')
+n  <C-W>H      * :window.DisableWrapWhenMovingToVertSplit('H')
+n  <C-W>K      * :wincmd K | do <nomodeline> WinEnter
+n  <C-W>J      * :wincmd J | do <nomodeline> WinEnter
+n  <C-G>t      * Ltag()
+x  <C-G>g      * <C-\><C-N>:* g/\%V/#<Left><Left>
+n  <C-G>n      * :% normal!<Space>
+n  <C-]>       * :JumpToDefinition()
+x  <C-S>       * <C-\><C-N>:if &buftype == '' | silent update | endif
+n  <C-W>d      * <C-W>dzMzvzz
+n  <C-W>i      * <C-W>izMzvzz
+i  <C-Tab>     * <C-R>=UltiSnips#ListSnippets()
+i  <C-G><C-F>    <Plug>(UnicodeFuzzy)
+i  <C-X><C-B>    <Plug>(HTMLEntityComplete)
+i  <C-X><C-G>    <Plug>(DigraphComplete)
+i  <Plug>(UnicodeFuzzy) & <C-\><C-O>:call unicode#Fuzzy()
+i  <Plug>(HTMLEntityComplete) & <C-R>=unicode#CompleteHTMLEntity()
+i  <Plug>(UnicodeComplete) & <C-R>=unicode#CompleteUnicode()
+i  <Plug>(DigraphComplete) & <C-R>=unicode#CompleteDigraph()
+i  <Plug>(operator-sandwich-gv) * <C-O>gv
+i  <Plug>(operator-sandwich-g@) * <C-O>g@
+i  <C-L>       * pumvisible() ? '<C-L>' : capslock.Toggle('i')
+i  <C-Z>       * :custom.EasyCXCP()<CR><C-X><C-P>
+i  <C-X>s      * :mode()->custom.Signature()
+i  <C-X><C-S>  * spell.Fix()
+i  <C-O>         pumvisible() ? completion.Cycle(-1) : '<Plug>(MC_c-o)'
+i  <C-J>         pumvisible() ? completion.Cycle(1) : '<Plug>(MC_cr)'
+i  <C-Q>       * <C-E>:completion.RestoreBase()
+i  <C-G><Tab>    completion.TabComplete(1)
+i  <Plug>(MC_stab_complete)   completion.TabComplete(-1)
+i  <Plug>(MC_tab_complete)   completion.TabComplete(1)
+i  <S-Tab>     * :completion.SnippetOrComplete(-1)
+i  <C-G><C-D>  * <C-K>
+!  <C-X><C-A>  * readline.CxCa()
+i  <C-G><C-U>  * :complete.Fuzzy()
+i  <C-G><S-Tab> * :silent! py3 UltiSnips_Manager._current_snippet_is_done()
+i  <M-E>       * :normal! )
+i  <M-A>       * :normal! (
+i  <C-R><C-R>  * <C-R><C-R>
+i  <C-R><C-O>  * <C-R><C-O>
+i  <C-R><C-P>  * <C-R><C-P>
+i  <C-R>       * getregtype(v:register) =~ '<C-V>' ? '<C-R>' : '<C-R><C-O>'
+i  <C-P>       * :myfuncs.TogglePunctuation()
+i  <C-G><C-H>  * :CompactWhitespace()
+c  <C-X>l      * <C-\>e capslock#Toggle('c')
+c  <F18>       * <C-\>e cmdline#cycle#generic#Move(v:false)
+c  <C-G>       * <C-\>e cmdline#cycle#generic#Move()
+c  <C-S>       * transform.Main()
+c  <C-L>       * cL.Main()
+c  <C-X>s      * <C-\>e completion#custom#Signature(mode())
+c  <C-X><C-V>  * <C-\>e dbg#cmdline#EvalVarUnderCursor()
+c  <M-N>       * wildmenumode() ? "<Left>" : "<Up>"
+c  <M-P>       * wildmenumode() ? "<Right>" : "<Down>"
+c  <C-X><C-E>  * :readline.EditAndExecuteCommand()
+c  <C-O>       * OperateAndGetNext.Main()
+c  <C-E>       * wildmenumode() ? '<C-Y><C-E>' : '<C-E>'
+c  <C-X><C-D>  * <C-A>:setreg('"', [getcmdline()], 'l')<CR><C-C>
+!  <C-X><C-A>  * readline.CxCa()
+|   BoxPrettify       0    %                   draw.BoxPrettify(<line1>, <line2>)
+|   CFreeStack        0                        qf.CfreeStack()
+|   CartesianProduct  0    %                   CartesianProduct(<line1>, <line2>)
+|   Chmod             1                        unix.Chmod(<q-args>)
+|   CommentToggle     0    .                   toggle.Main('line', <line1>, <line2>)
+!   Cp                1                        unix.Cp(<q-args>, <bang>0)
+|   CtlSeqs           0                        cmd.CtlSeqs()
+|   DebugLocalPlugin  *            custom      {<NL>    localPlugin.Main(<q-args>)<NL>}
+|   DebugMappingsFunctionKeys 0                mappings.UsingFunctionKeys()
+|   DebugUnusedFunctions 0                     dbg.UnusedFunctions()
+|   Def               ?            customlist  Def(<q-args>)
+!|  DiffLines         ?    .                   myfuncs.DiffLines(<bang>0, <line1>, <line2>, <q-args>)
+|   DiffOrig          0                        echo DiffOrig()
+DigraphNew        1                        call unicode#MkDigraphNew(<f-args>)
+!   Digraphs          ?                        call unicode#PrintDigraphs(<q-args>, <q-bang>)
+|   Dirvish           ?            dir         dirvish.Open(<q-args>)
+|   Disassemble       *            customlist  {<NL>    vim9asm.Disassemble(<q-args>, <q-mods>)<NL>}
+!   Dlist             1                        brackets.IList('d', false, false, <bang>0, <q-args>)
+|   DoMatchParen      0                        MatchParen on
+|   Doc               *                        cmd.Doc(<f-args>)
+DownloadUnicode   0                        call unicode#Download(1)
+|   DumpWiki          ?                        myfuncs.DumpWiki(<q-args>)
+!   EasyAlign         *    .                   easy_align.Align(<bang>0, 0, 'command', <q-args>, <line1>, <line2>)
+|   ExplainShell      1                        cmd.ExplainShell(<q-args>)
+FZ                *            dir         find.Files(<f-args>)
+!   Filter            +            custom      _filter.Main(<q-args>, <bang>0)
+!|  FoldAutoOpen      0                        g:ToggleSettingsAutoOpenFold(<bang>0 ? false : true)
+|   FoldInfo          0                        cmd.FoldInfo()
+FzGrep           1            custom      fzgrep.Main(<q-args>)
+FzLocate         1                        locate.Files(<q-args>)
+|   GoToChar          1                        search('\%^\_.\{<args>}', 'es')
+!|  Goyo              ?                        goyo.Execute(<bang>0, <q-args>)
+|   HiTest            0                        vimhighlight.HighlightTest()
+!   HighlightColorValues 0 %                   {<NL>    myfuncs.HighlightColorValues('#\zs\%(\x\{6}\|\x\{3}\)\ze\%([ [
+|   HlWeirdWhitespace 0    %                   HlWeirdWhitespace()
+!   Ilist             1                        brackets.IList('i', false, false, <bang>0, <q-args>)
+|   Info              ?            shellcmd    cmd.Info(<q-args>)
+|   LFreeStack        0                        qf.CfreeStack(true)
+Launch            1            shellcmd    vim9.Launch(trim(<f-args>))
+!   LiveEasyAlign     *    .                   easy_align.Align(<bang>0, 1, 'command', <q-args>, <line1>, <line2>)
+ManGrep           ?            custom      mangrep.Main(<q-args>)
+MatchDebug        0                        call matchit#Match_debug()
+MatchDisable      0                        :call MatchDisable()
+MatchEnable       0                        :call MatchEnable()
+|   MatchParen        ?            custom      Toggle(<q-args>)
+|   McAutoDisable     0                        completion.DisableAuto()
+|   McAutoEnable      0                        completion.EnableAuto()
+|   McAutoToggle      0                        completion.ToggleAuto()
+!   Mkdir             ?                        unix.Mkdir(<q-args>, <bang>0)
+!   Mv                1            file        unix.Move(<q-args>, <bang>0)
+|   NoMatchParen      0                        MatchParen off
+|   OnlySelection     0    %                   myfuncs.OnlySelection(<line1>, <line2>)
+Open              *            file        vim9.Open(trim(<f-args>))
+PP                ?    .       expression  scriptease.PPI(<q-args>, <count>)
+PPmsg             ?    0       expression  scriptease.PPmsg(<q-args>, <count>)
+|   PluginGlobalVariables ?                    myfuncs.PluginGlobalVariables(<q-args>)
+!|  Prof              ?            customlist  prof.Wrapper(<q-bang>, <q-args>)
+!   QuickhlManualAdd  1                        quickhl.Add(<q-args>, <bang>0)
+|   QuickhlManualColors 0                      quickhl.Colors()
+!   QuickhlManualDelete *                      quickhl.Del(<q-args>, <bang>0)
+|   QuickhlManualDisable 0                     quickhl.Disable()
+|   QuickhlManualEnable 0                      quickhl.Enable()
+|   QuickhlManualList 0                        quickhl.List()
+|   QuickhlManualLock 0                        quickhl.Lock()
+|   QuickhlManualLockToggle 0                  quickhl.LockToggle()
+|   QuickhlManualLockWindow 0                  quickhl.LockWindow()
+|   QuickhlManualLockWindowToggle 0            quickhl.LockWindowToggle()
+|   QuickhlManualNext ?                        quickhl.Next(<f-args>)
+|   QuickhlManualPrev ?                        quickhl.Prev(<f-args>)
+|   QuickhlManualReset 0                       quickhl.Reset()
+|   QuickhlManualUnlock 0                      quickhl.Unlock()
+|   QuickhlManualUnlockWindow 0                quickhl.UnlockWindow()
+|   RemoveSwapFiles   0                        RemoveSwapFiles()
+|   RemoveTabs        0    %                   myfuncs.RemoveTabs(<line1>, <line2>)
+!   Rename            1            custom      unix.Rename(<q-args>, <bang>0)
+!|  Retab             0    %                   Retab(<line1>, <line2>, <bang>0)
+|   ReverseEveryNLines 1   %                   ReverseEveryNLines(<args>, <line1>, <line2>)
+|   Scriptnames       0                        scriptnames.Main()
+SearchUnicode     1                        call unicode#PrintUnicode(<q-args>, '')
+!   Shdo              *    .       file        dirvish.Shdo(<bang>0 ? argv() : getline(<line1>, <line2>), <q-args>)
+|   SourceRange       ?    .                   {<NL>    setpos("'[", [0, <line1>, 1, 0])<NL>    setpos("']", [0, <line
+|   StatusLineFlags   ?    %       custom      DisplayFlags(<q-args>)
+!   SudoEdit          ?            file        sudo.Edit(<q-args>, <bang>0)
+|   SudoWrite         0                        expand('%:p')->sudo.Setup() | write!
+Time              +    1  ?    command     dbg.Time(<q-args>, <count>)
+|   Tl                0                        trash.List()
+TmuxRunThis       1                        run.Command(<q-args>)
+!|  Tp                0                        trash.Put(<bang>0)
+|   TradewindsMove    1                        tradewinds.SoftMove(<q-args>)
+!   Tree              ?            file        tree.Open(<q-args>, <bang>0)
+|   Trr               0                        trash.Restore()
+|   UndotreeFocus     0                        :call undotree#UndotreeFocus()
+|   UndotreeHide      0                        :call undotree#UndotreeHide()
+|   UndotreePersistUndo 0                      :call undotree#UndotreePersistUndo(1)
+|   UndotreeShow      0                        :call undotree#UndotreeShow()
+|   UndotreeToggle    0                        :call undotree#UndotreeToggle()
+|   UnicharToggle     0    %                   toggle.Main(<line1>, <line2>)
+UnicodeCache      0                        call unicode#MkCache()
+!   UnicodeDownload   0                        call unicode#Download(1, <q-bang>=='!')
+UnicodeName       *            customlist  call unicode#GetUniChar(<f-args>)
+!   UnicodeSearch     1                        call unicode#PrintUnicode(<q-args>, <q-bang>=='!')
+!|  UnicodeTable      0                        call unicode#PrintUnicodeTable(<q-bang>=='!')
+|   Uniq              0    %                   silent :<line1>,<line2> !awk '\!seen_lines[$0] { print $0; seen_lines[$
+Verbose           1    1  ?    command     {<NL>    log.Output({level: <count>, excmd: <q-args>})<NL>}
+VimGrep           *                        _vimgrep.Main(<q-args>)
+Vimuntar          ?            file        call tar#Vimuntar(<q-args>)
+|   Vo                1            option      verbose.Option(<q-args>)
+|   W                 0                        execute 'write !sudo tee >/dev/null ' .. expand('%:p')->shellescape(tru
+|   WTF               ?                        stacktrace.Main(<q-args> != '' ? <q-args> : 5)
+|   Wall              0                        unix.Wall()
+
+
+
+dirvish:
+
+    n  <CR>        *@<ScriptCmd>dirvish.Open('edit', false)<CR>
+    n  (           *@k<ScriptCmd>fex.Preview()<CR>
+    n  )           *@j<ScriptCmd>fex.Preview()<CR>
+    n  -M          *@<ScriptCmd>fex.PrintMetadata(true)<CR>
+    n  -m          *@<ScriptCmd>fex.PrintMetadata()<CR>
+    n  .           *@:<C-U><C-R>=v:count != 0 ? 'Shdo' .. (v:count != 0 ? '!' : '') .. ' {}' : ('! ' .. getline('.')->fname modify(':.')->shellescape(v:true))<CR><Home><C-Right>
+    n  K            @<Plug>(dirvish_K)
+    n  R           *@:<C-U><C-R>=v:count != 0 ? ':let g:dirvish_mode=' .. v:count .. '|' : ''<CR>Dirvish %<CR>
+    n  a           *@<ScriptCmd>dirvish.Open('vsplit', true)<CR>
+    n  cd          *@:<C-U><C-R>=(v:count != 0 ? 'cd' : 'lcd')<CR> % | pwd<CR>
+    n  dax         *@<ScriptCmd>arglocal|silent! argdelete *|echo 'arglist: cleared'|Dirvish %<CR>
+    n  gh          *@<ScriptCmd>fex.ToggleDotEntries()<CR>
+    n  g?          *@<ScriptCmd>help dirvish-mappings<CR>
+    n  h           *@<ScriptCmd>execute 'Dirvish %:h' .. repeat(':h', v:count1)<CR>
+    n  i           *@<ScriptCmd>dirvish.Open('edit', false)<CR>
+    n  l            @<CR>
+    n  o           *@<ScriptCmd>dirvish.Open('split', true)<CR>
+    n  p           *@<ScriptCmd>fex.Preview()<CR>
+    n  q            @<Plug>(dirvish_quit)
+    n  tp          *@<ScriptCmd>fex.TrashPut()<CR>
+    n  x            @<Plug>(dirvish_arg)
+    n  ~           *@<ScriptCmd>Dirvish ~<CR>
+
+fex:
+
+    n  (           *@k<ScriptCmd>tree.Preview()<CR>
+    n  )           *@j<ScriptCmd>tree.Preview()<CR>
+    n  -m          *@<ScriptCmd>fex.PrintMetadata()<CR>
+    n  -M          *@<ScriptCmd>fex.PrintMetadata(true)<CR>
+    n  R           *@<ScriptCmd>tree.Reload()<CR>
+    n  [[          *@<ScriptCmd>tree.RelativeDir('parent')<CR>
+    n  ]]          *@<ScriptCmd>tree.RelativeDir('child')<CR>
+    n  gh          *@<ScriptCmd>tree.ToggleDotEntries()<CR>
+    n  g?          *@<ScriptCmd>tree.DisplayHelp()<CR>
+    n  p           *@<ScriptCmd>tree.Preview()<CR>
+    n  q           *@<ScriptCmd>tree.Close()<CR>
+    n  <C-W>gf     *@<ScriptCmd>tree.Split(true)<CR>
+    n  <C-W>f      *@<ScriptCmd>tree.Split()<CR>
+    n  <C-W>F      *@<ScriptCmd>tree.Split()<CR>
+    n  <C-S>       *@<ScriptCmd>tree.Edit()<CR>
+
+markdown:
+
+    n  +h     markdown.ConvertToHelpLink()
+    n  +]#    :put.Main()
+    n  +[#    :put.Main(false)
+    n  =r--   markdown.Hyphens2hashes() .. '_'
+    n  =r-    markdown.Hyphens2hashes()
+    n  =rb    bash.BreakLongCmd()
+    n  [of    :option.FoldLevel('less')
+    n  ]of    :option.FoldLevel('more')
+    n  cof    :foldexpr.Toggle()
+    n  gl     :howMany.Print()
+    n  gd     :getDefinition.Main()
+    n  |p     :preview.Main()
+    x  =r-    markdown.Hyphens2hashes()
+    x  H      promote.Main('less')
+    x  L      promote.Main('more')
+    x  gd     :getDefinition.Main()
+    b|  CheckPunctuation  1    %       custom      {<NL>    # `:echo` is useful to erase the command from the command-line
+    b|  CommitHash2Link   ?    %       custom      {<NL>    commitHash2link.Main(<line1>, <line2>, <q-args>)<NL>}
+    b|  FixFormatting     0                        markdown.FixFormatting()
+    b|  FoldSortBySize    0    %                   reorder.BySize(<line1>, <line2>)
+    b|  LinkInline2Ref    0    %                   linkInline2ref.Main()
+
+vim:
+
+    n  -h          *@:vim.GetHelpUrl()
+    x  =rt         *@:* RefTernary
+    x  =rq         *@:* RefQuote
+    n  =rq         *@:RefQuote
+    n  =r-         *@splitjoin.Main()
+    n  =rL         *@lambda.New()
+    n  =rl         *@lambda.Main()
+    n  =ri         *@import.Main()
+    n  =rh         *@heredoc.Main()
+    x  =rd         *@:* RefDot
+    n  =rd         *@:RefDot
+    n  =rb         *@bar.Main()
+    !b| RefBar            ?            custom      {<NL>    bar.Main('line', <q-args>, <bang>0)<NL>}
+    !b| RefDot            0    %                   dot.Main(<bang>0, <line1>, <line2>)
+    !b| RefHeredoc        *            custom      {<NL>    heredoc.Main('line', <q-args>, <bang>0)<NL>}
+    !b| RefLambda         0                        {<NL>    lambda.Main('line', <bang>0)<NL>}
+    b|  RefQuote          0    %                   :<line1>,<line2> substitute/"\(.\{-}\)"/'\1'/gce
+    b|  RefTernary        0    .                   ternary.Main(<line1>, <line2>)
+
+bash:
+
+    n  =rb         *@bash.BreakLongCmd()
+
+Annex {{{1
+Abbreviations used in descriptions {{{2
+
+#    ┌──────┬──────────────────────┐
+#    │ »    │ Forwards/rightwards  │
+#    ├──────┼──────────────────────┤
+#    │ «    │ Backwards/leftwards  │
+#    ├──────┼──────────────────────┤
+#    │ WORD │ Space-delimited word │
+#    └──────┴──────────────────────┘
+
+Notations used in key commands {{{2
+
+#    ┌────────┬───────────────────────────────────┐
+#    │ ‹r›    │ A register (", *, 0, 1, …)        │
+#    │        │ See `registers`                   │
+#    ├────────┼───────────────────────────────────┤
+#    │ ‹Move› │ A motion or a text object         │
+#    │        │ See `$VIMRUNTIME/doc/motion.txt`  │
+#    │        │ See `text-objects`                │
+#    ├────────┼───────────────────────────────────┤
+#    │ ‹P›    │ A regular expression (pattern)    │
+#    │        │ See `$VIMRUNTIME/doc/pattern.txt` │
+#    ├────────┼───────────────────────────────────┤
+#    │ ‹Cmd›  │ An Ex command                     │
+#    │        │ See `$VIMRUNTIME/doc/cmdline.txt` │
+#    ├────────┼───────────────────────────────────┤
+#    │ ‹Var›  │ A variable or option name         │
+#    │        │ See `variables`                   │
+#    │        │ See `$VIMRUNTIME/doc/options.txt` │
+#    ├────────┼───────────────────────────────────┤
+#    │ ‹n›    │ A (possibly optional) number      │
+#    ├────────┼───────────────────────────────────┤
+#    │ ‹c›    │ A single character                │
+#    ├────────┼───────────────────────────────────┤
+#    │ …      │ Any text                          │
+#    ├────────┼───────────────────────────────────┤
+#    │ «C-…»  │ Press ctrl and … together         │
+#    ├────────┼───────────────────────────────────┤
+#    │ «Spc»  │ Press space bar                   │
+#    ├────────┼───────────────────────────────────┤
+#    │ «CR»   │ Press Enter                       │
+#    └────────┴───────────────────────────────────┘
+
+# Similarly, other special keys are written between « and ».
+# All other characters are meant to be typed literally.
+#
+# Note that spaces  are made explicit only  when it is not obvious  that a space
+# must be used (e.g., \«Spc», that is, leader followed by space).  Ditto for «CR».
+
+Labels used in modes {{{2
+
+#    ┌───┬───────────────────────────────────┐
+#    │ N │ Type in Normal mode               │
+#    ├───┼───────────────────────────────────┤
+#    │ C │ Type in Command mode              │
+#    ├───┼───────────────────────────────────┤
+#    │ I │ Type in Insert mode               │
+#    ├───┼───────────────────────────────────┤
+#    │ V │ Type in Visual mode               │
+#    ├───┼───────────────────────────────────┤
+#    │ T │ Text object (use in Visual mode   │
+#    │   │ or after an operator)             │
+#    ├───┼───────────────────────────────────┤
+#    │ O │ Operator (use in Visual mode, or  │
+#    │   │ before a motion or a text object) │
+#    ├───┼───────────────────────────────────┤
+#    │ * │ Acts on text under/after cursor   │
+#    └───┴───────────────────────────────────┘

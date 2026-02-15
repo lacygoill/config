@@ -1,0 +1,33 @@
+toggle branch                           «Enter»
+open branch recursively                 [
+close branch recursively                ]
+
+filter list of packages                 l
+# `l` as in **l**imit.
+#
+# The input field expects a search pattern (`man 7 apt-patterns`).  For example,
+# to only show manually installed packages, use the pattern `~i !~M`.
+
+move selection to first package         «C-a»
+move selection to last package          «C-e»
+
+mark package for installation           +
+mark package for purge                  _
+
+mark package as manual                  m
+mark package as automatic               M
+
+summary view of requested changes       g
+# pressing `g` again will apply the changes
+
+quit current view                       q
+# If you are in the initial view, this will effectively close aptitude.
+
+update list of available packages       u
+prepare global system  upgrade          U
+
+navigate to broken packages             b
+# When the  currently selected actions would  lead to an incoherent  system, the
+# upper part of the screen indicates broken packages.  From there, try to select
+# package versions  which solve problems.   When you  no longer have  any broken
+# package, go to the summary screen of pending actions and apply them.

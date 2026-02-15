@@ -1,0 +1,55 @@
+#!/bin/bash -
+
+readonly SCRIPT="${0##*/}"
+readonly LOGFILE="$TMPDIR/$SCRIPT.log"
+
+if (( $# == 0 )); then
+  tee >&2 <<EOF
+Log output of given command in $LOGFILE.
+Regularly re-run the command; if its output changes, append it to the log.
+
+Usage:
+Monitor changes in output of given command every 2 seconds:
+  $ $SCRIPT <some command>
+
+Same, but every 5 seconds:
+  $ $SCRIPT 5 <some command>
+EOF
+  exit 1
+fi
+
+if [[ "$1" =~ ^[[:digit:]]+$ ]]; then
+  declare -i -r INTERVAL=$1
+  shift 1
+else
+  # 2 seconds is the default interval of `watch(1)`
+  declare -i -r INTERVAL=2
+fi
+
+readonly CMD="$*"
+
+if [[ "$1" == 'sudo' ]]; then
+  sudo --validate || exit 1
+fi
+
+printf '%(%H:%M:%S)T\n' -1 >"$LOGFILE"
+$CMD >>"$LOGFILE"
+
+if [[ -n "$TMUX" ]]; then
+  tmux rename-window "$SCRIPT"
+  tmux split-window -d \
+    tail --follow=name --retry "$LOGFILE" \
+      | bat --language=syslog --paging=never
+fi
+
+# let us interrupt the script by pressing `C-c`
+trap 'exit' SIGINT
+while true; do
+  # Don't quote `$CMD`.  The command would need  to be parsed by a shell, but it
+  # won't be because of `--exec` (which we use for better performance).
+  #
+  # shellcheck disable=SC2086
+  watch --interval="$INTERVAL" --chgexit --exec --no-title $CMD
+  { echo ; printf '%(%H:%M:%S)T\n' -1 ;} >>"$LOGFILE"
+  $CMD >>"$LOGFILE"
+done

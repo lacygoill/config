@@ -1,0 +1,84 @@
+UI {{{1
+
+zoom in                                 «C-+»
+zoom out                                «C--»
+reset zoom level to default             «C-0»
+
+resize columns                          «C-S-r»
+# resize packet list columns to fit contents; useful after changing zoom level
+
+change layout                           «C-S-p»
+                                        > Appearance
+                                        > Layout
+
+Capture {{{1
+
+# Warning: These key bindings  might not work if you focus  an input field (e.g.
+# the display filter  area), or some others  elements of the UI.  In  case of an
+# issue, press Tab to focus a different element.
+
+start/stop capture                      «C-e»
+# To limit the capture to a specific interface, select it in the welcome screen.
+# "any" means all interfaces simultaneously.
+
+restart capture                         «C-r»
+
+close capture file                      «C-w»
+
+Filter {{{1
+
+# to type in the capture filter to filter out packets based on given:
+port                                    tcp.port == ‹port›
+IPv4                                    ip.addr == ‹IPv4›
+IPv6                                    ipv6.addr == ‹IPv6›
+
+filter out given protocol               not ‹protocol›
+filter out packets sent to given IP     ip.dst != ‹IP›
+
+connect filters with logical AND        ‹filter1› and ‹filter2›
+
+# to press to follow:
+HTTP stream                             «C-M-S-h»
+TCP stream                              «C-M-S-t»
+TLS stream                              «C-M-S-s»
+UDP stream                              «C-M-S-u»
+
+filter out noise                        not arp and not bt-dht and not dns and not icmp and not igmp and not mdns and not nbns and not uaudp and ip.dst != 91.121.58.181 and ip.dst != 87.98.149.171
+# I think the IP addresses are our current DNS servers.
+# Also, `uaudp` is for "Universal  Alcatel/UDP Encapsulation Protocol"; it seems
+# to be used by `transmission-daemon(1)`.
+
+Packet {{{1
+
+go to given packet                      «C-g»
+# then type packet number in new input field
+
+expand packet details                   «C-Right»
+# only works if you focus the packet details pane
+
+Misc {{{1
+
+list of keyboard shortcuts              Help
+                                        > About Wireshark
+                                        > Keyboard Shortcuts
+
+expert system                           «M-a»
+                                        > Expert information
+# Alternatively, click on the colored disk icon in the bottom-left corner.
+
+add comment for single packet           «C-M-c»
+# Alternative:
+                                        Edit
+                                        > Packet Comments
+                                        > Add New Comment…
+
+add comment for whole capture           «C-M-S-c»
+# Alternative:
+                                        Statistics
+                                        > Capture File Properties
+
+open flow graph window                  Statistics
+                                        > Flow Graph
+# Also,  set  the "Limit  to  display  filter"  checkbox, to  remove  irrelevant
+# packets.  And  select the desired flow  type in the "Flow  type" dropdown menu
+# (e.g. "TCP flows"), to remove some overwhelming details about each packet.

@@ -1,0 +1,51 @@
+% sudo
+
+# edit sudoers file
+sudo visudo --file=/etc/sudoers.d/99-local
+    # `$ sudo visudo`  would edit  `/etc/sudoers` directly,  but isolating  your
+    # changes to a separate file is more reliable.
+
+# give sudo privileges to given user
+sudo adduser <user> sudo
+    # If you're not in the `sudo` group, log  as root in a console, then run the
+    # same command.
+    #
+    # ---
+    #
+    # You need to log out for the command to take effect.
+    # It takes effect when `(sudo)` is printed in the output of:  `$ id`
+    #
+    # ---
+    #
+    # Alternative:
+    #
+    #     # add given user to sudoers file
+    #     $ sudo visudo --file=/etc/sudoers.d/99-local
+    #
+    # Then, add a new line for the user you want to add to the sudoers list.
+    # The line should follow the format:
+    #
+    #     username ALL=(ALL) ALL
+    #
+    # Replace "username" with the actual username of the user you want to add.
+    # Save the file and exit the text editor.
+
+# list sudo commands executed during last hour
+journalctl --identifier=sudo --since='1 hour ago'
+
+# list variables which are preserved in the environment of a command run by sudo
+sudo --login
+    # Then: `$ sudo --version | sed -n '/preserve/,/^\S/ p'`
+
+# run command preserving current environment
+sudo --preserve-env env "PATH=$PATH" <cmd>
+    # `--preserve-env` preserves most variables, except `PATH`.
+    # The latter is overridden by the secure_path option in `/etc/sudoers`.
+    # To  preserve it,  we  invoke `env(1)`  to run  `❬cmd❭`  in a  modified
+    # environment where root's PATH is the same as ours.
+
+# start a login shell as the root user
+sudo --login
+
+# start a login shell as a given user
+sudo --login --user=<user>

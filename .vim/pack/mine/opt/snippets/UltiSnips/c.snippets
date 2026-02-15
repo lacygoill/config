@@ -1,0 +1,1142 @@
+# control flow {{{1
+# selection statements {{{2
+
+snippet t01 "if statement" Am
+if (${1:condition})
+	${2:statement}
+else if (${3:condition})
+	${4:statement}
+else
+	${5:statement}
+$0
+endsnippet
+
+snippet t02 "switch/case statement" Am
+switch (${1:integer expression; including char})
+{
+	// several consecutive labels are allowed
+	//     case 1: case 2: case 3: statement
+	// OR
+	//     case 1:
+	//     case 2:
+	//     case 3: statement
+	case ${2:integer expression (formed solely from constants); including char}:
+		${3:statements};
+		// Without \`break\`, every  statement from the matched label to  the end
+		// of the switch would be processed (regardless of whether the labels match).
+		//
+		// ---
+		//
+		// If you need to remove \`break\`, replace it with a FALLTHROUGH comment,
+		// to make sure you don't think about "fixing" the code in the future.
+		break;
+	// more \`case\`s
+	$0
+	// default \`case\` if no \`case\` label matches the expression value; optional
+	default:
+		${4:statements};
+		// not necessary but useful in case we move \`default\` before, or add
+		// another \`case\` after it
+		break;
+}
+endsnippet
+
+snippet t03 "jump to arbitrary location" Am
+// Useful to get out of a nested set of loops.
+// \`break\` only gets you out of the innermost loop.
+//
+// ---
+//
+// \`$2\` can actually be anywhere; including before \`goto\`.
+goto ${1:label};
+...
+$1: ${2:statement};
+$0
+endsnippet
+
+# loop statements {{{2
+
+snippet t04 "for statement" Am
+// \`$1\`, \`$2\` and \`$3\` can be any expression.
+// And each of them can be omitted (but don't omit the semicolon(s)).
+// If \`$2\` is omitted, it's considered to be true.
+//
+// ---
+//
+// \`$1\` is evaluated only once, at the start, no matter how many iterations.
+// \`$3\` is evaluated at the *end* of each iteration; not at the start.
+//
+// ---
+//
+// You  can have  multiple inits  and multiple  updates separated  by the  comma
+// operator.  For example:
+//
+//     for (ounces=1, cost=FIRST_OZ; ounces <= 16; ounces++, cost += NEXT_OZ)
+//                  ^                                      ^
+// Note that the comma operator is a  sequence point, so all side effects to the
+// left of  the comma take place  before the program  moves to the right  of the
+// comma.
+//
+// ---
+//
+// The value of the whole comma expression is the value of the right-hand member.
+// For example:
+//
+//     x = (y = 3, z = ++y);
+//                 ^-----^
+//                   RHS
+//
+// assigns 4 to \`x\`, not \`3\`.
+for (${1:init}; ${2:test}; ${3:update})
+{
+	$0
+}
+endsnippet
+
+snippet t05 "while statement" Am
+while (${1:condition})
+{
+	$0
+}
+endsnippet
+
+snippet t06 "do statement" Am
+// always put braces around the body, so that a careless reader does not mistake
+// the \`while\` word for the start of a \`while\` statement (instead of the end
+// of a \`do\` one)
+do
+{
+	$0
+} while (${1:condition});
+//                      ^
+// The \`do while\` loop itself counts as a statement and, therefore, requires a
+// terminating semicolon.
+
+// A \`do while\` loop is always executed at least once because the test is made
+// after the body of the loop has been executed.
+// A \`for\` loop or  a \`while\` loop, on the other hand,  can be executed zero
+// times because the test is made before execution
+endsnippet
+# }}}1
+# data types {{{1
+# arrays {{{2
+
+snippet t07 "declare an array of integers" Am
+// \`$2\` must be a positive constant integer expression like:
+//
+//    - \`5 * 2 + 1\`
+//    - \`sizeof(int) + 1\`
+//    - \`(int)2.5\`
+//
+// Since C99, it can even be an integer variable.
+// The array is then a VLA (variable-length array).
+int ${1:variable name}[${2:array size}];
+
+// You can't *assign* (but you can *init*) one array to another as a unit:
+//
+//     int array[3];
+//     array = {1, 2, 3};
+//     ✘
+//     array = another_array;
+//     ✘
+//
+// Use  a \`for\`  loop  to  initialize the  array's  elements  after it's  been
+// declared:
+int i;
+for (i = 0; i < $2; ++i)
+	$1[i] = 0;
+$0
+
+// Alternatively,  when   declaring  the  array,   you  can  init  it   using  a
+// comma-separated list of values enclosed in braces:
+int $1[] = {12, 34, ...};
+// In  that case,  you can  use  empty brackets  to initialize  the array.   The
+// compiler counts the number of elements and makes the array that large.
+// Exception: For a 2-dimensional array, only the first brackets can be empty:
+//
+//     int array[][2] = {{1, 2}, {3, 4}};
+//              ^^
+endsnippet
+
+snippet t08 "get number of elements in array" Am
+sizeof(${1:array}) / sizeof($1[0])
+endsnippet
+
+snippet t09 "initialize given element of array (aka designated initializer)" Am
+${1:type} ${2:array}[${3:size}] = {[${4:index}] = ${5:value}};
+$0
+// As with  regular initialization, after  you initialize at least  one element,
+// the uninitialized elements are set to 0  (at least for arrays which belong to
+// the automatic storage class).
+//
+// ---
+//
+// Note that elements right after $5 are  not indexed as usual; they are indexed
+// with \`$4\` + 1, \`$4\` + 2, ...
+//
+// ---
+//
+// If the code initializes  a particular element to a value  more than once, the
+// last  initialization is  the  one that  takes effect.   For  example, if  you
+// initialize the first element to some value A, then later write \`[0] = B\`, B
+// wins over A.
+//
+// ---
+//
+// If  you  omit  \`$3\`,  the  compiler  will make  the  array  big  enough  to
+// accommodate the initialization values.
+endsnippet
+
+snippet t10 "declare a multidimensional array" Am
+${1:type} ${2:variable name}[${3:size of master array; or rows}][${4:size of subarrays; or columns}] = ${5:value};
+$0
+// You can initialize it like this:
+//
+//     int sq[2][3] = {{1, 2, 3}, {4, 5, 6}};
+//
+// Or like this (i.e. you can drop the inner braces):
+//
+//     int sq[2][3] = {1, 2, 3, 4, 5, 6};
+//
+// Warning: If you initialize fewer elements than  the size of the inner arrays,
+// the two syntaxes don't give the same results:
+//
+//     int sq[2][3] = {{1, 2}, {3, 4}};
+//     1 2 0
+//     3 4 0
+//
+//     int sq[2][3] = {1, 2, 3, 4};
+//     1 2 3
+//     4 0 0
+//
+// Note that C fills in the missing values with 0s.
+endsnippet
+
+snippet t11 "assign array to pointer variable" Am
+${1:type} * ${2:pointer};
+$2 = ${3:array};
+$0
+// Or: \`$2 = &$3[0]\`
+endsnippet
+
+snippet t12 "assign 2-dimensional array to pointer variable" Am
+${1:type} (*${2:pointer})[${3:size of subarray}];
+$2 = ${3:array};
+$0
+endsnippet
+
+snippet t13 "use pointer arithmetic to express address of array's element" Am
+${1:pointer} + ${2:N}
+$0
+// For example:
+//
+//     dates + 2 == &dates[2]
+//     *(dates + 2) == dates[2]
+endsnippet
+
+snippet t14 "retrieve j-th element out of i-th subarray" Am
+${1:array}[i][j]
+// or
+*(*($1 + i) + j)
+$0
+endsnippet
+
+snippet t15 "address of N-th element out of array of arrays (across subarrays)" Am
+*${1:array} + N - 1
+endsnippet
+
+snippet t16 "declare function accepting array as argument" Am
+${1:return type} ${2:function name}(${3:type of array's elements} * ${4:array}, int ${5:array size})
+$0
+// In  the  context of  a  function  prototype  or function  definition  header,
+// and  only   in  that  context,   you  can  substitute   \`type array[]\`  for
+// \`type * array\`.  For example:
+//
+//				v---------v
+//		int sum(int * array, int n);
+//		⇔
+//		int sum(int array[], int n);
+//				^---------^
+//
+// The  idea is  that the  second form  reminds the  reader that  not only  does
+// \`array\` point to an  \`int\`, it points to an \`int\`  that's an element of
+// an array.
+//
+// ---
+//
+// Because  prototypes allow  you to  omit  a name,  all four  of the  following
+// prototypes are equivalent:
+//
+//		int sum(int *array, int n);
+//					^----^
+//		int sum(int *, int);
+//					^
+//		int sum(int array[], int n);
+//					^-----^
+//		int sum(int [], int);
+//					^^
+//
+// You can't omit  names in function definitions, so, for  definitions, only the
+// following two forms are equivalent:
+//
+//		int sum(int *array, int n)
+//					^----^
+//		{
+//			// code goes here
+//		}
+//
+//		int sum(int array[], int n);
+//					^-----^
+//		{
+//			// code goes here
+//		}
+endsnippet
+
+snippet t17 "declare function accepting two-dimensional array as argument" Am
+${1:return type} ${2:func}(${3:type of array's elements} (*${4:pointer})[${5:size of subarrays}], int rows)${6:;}
+$0
+// In the context of a function declaration or prototype, you can also write:
+//
+//     $1 $2($3 $4[][$5], int rows)
+//
+// The empty brackets identify \`$4\` as being a pointer.
+// And as usual, in a prototype, \`$4\` can be omitted.
+endsnippet
+
+snippet t18 "declare function accepting N-dimensional array as argument" Am
+func(${1:type} (*${2:pointer})[${3:size of sub-arrays}][${4:size of sub-sub-arrays}]..., int rows);
+$0
+// You must supply values for all but the leftmost set of brackets:
+//
+//     $1 $2[][12][34][56]
+//     ⇔
+//     $1 (*$2)[12][34][56]
+//
+// That's because  the first set  of brackets  indicates a pointer,  whereas the
+// rest of the brackets describe the type of data object being pointed to.
+endsnippet
+
+snippet t19 "prevent function from modifying array" Am
+// Use \`const\` both in the prototype *and* in the definition / header.
+//
+// ---
+//
+// This does not require that the original  array be constant; it just says that
+// the function has to treat the array as though it were constant.
+//
+// ---
+//
+// This is  useful because C  – for efficiency  – passes arrays  by pointer,
+// rather than by value.   As a result, the function can  alter the array.  That
+// might not be what you want.
+//
+// ---
+//
+// At runtime, the \`$4\` argument can be either a constant array *or* a regular
+// array.   OTOH,  you should  never  pass  a  constant  array for  a  non-const
+// parameter (it results in UB).  IOW, if  you declare a constant array, and you
+// want to pass it as an argument to a function, make sure to also use \`const\`
+// in the function's definition and prototype.
+${1:return type} ${2:function name}(..., const ${3:type} * ${4:array}, ...)${5:;}
+$0
+endsnippet
+
+snippet t20 "declare pointer to constant array" Am
+// This disallows changing elements of \`$3\`  via \`$2\`, no matter how you try
+// (either via pointer notation or array notation):
+//
+//     *$2 = 123;
+//     ✘
+//     $2[0] = 123;
+//     ✘
+//
+// But you can still make \`$2\` point to a new address:
+//
+//     $2++;
+//     ✔
+const ${1:type} * ${2:pointer} = ${3:array}
+// \`$2\` is  said to be a  pointer-to-constant.  You can assign  the address of
+// either constant data *or* non-constant  data to a pointer-to-constant such as
+// \`$2\`.  However,  if \`$2\` was  a regular pointer (non-constant),  it could
+// only be assigned  the address of non-constant data (otherwise,  you could use
+// the pointer to change data that was supposed to be constant).
+//
+// ---
+//
+// Note that you  can't change any element  from \`$3\` via \`$2\`,  but you can
+// still re-assign the  address of \`$2\` to another one,  meaning its value can
+// still change.
+$0
+endsnippet
+
+snippet t21 "declare a constant pointer" Am
+// A constant pointer always holds the same address.
+// A pointer-to-constant always holds an immutable value (which can still change
+// if you assign a different address to the pointer).
+${1:type} * const ${2:pointer} = ${3:array}
+$0
+endsnippet
+
+snippet t22 "declare a constant pointer-to-constant" Am
+// \`$2\` can neither change where it's  pointing, nor mutate the value to which
+// it points.
+const ${1:type} * const ${2:pointer} = ${3:array}
+$0
+endsnippet
+
+snippet t23 "declare pointer variable pointing to array of given size" Am
+${1:type} (*${2:pointer})[${3:size}];
+$0
+// This statement says  that \`$2\` is a  pointer to an array  of \`$3\` \`$1\`.
+// We need  the parentheses because \`[]\`  has a higher precedence  than \`*\`.
+// Therefore, with a declaration such as:
+//
+//     $1 * $2[$3];
+//
+// You apply  the brackets first, making  \`$2\` an array of  \`$3\` somethings.
+// Next,  you apply  the  \`*\`,  making \`$2\`  an  array  of \`$3\`  pointers.
+// Finally, use the \`$1\`, making \`$2\` an array of \`$3\` pointers to \`$1\`.
+// This declaration creates  \`$3\` pointers to single \`$1\`,  but the original
+// version uses parentheses to apply the \`*\` first, creating one pointer to an
+// array of \`$3\` \`$1\`.
+//
+// ---
+//
+// \`$2\`  can be  assigned  a  2-dimensional array  whose  subarrays have  \`$3\`
+// elements.  For example:
+//
+//     int zippo[4][2] = {{2, 4}, {6, 8}, {1, 3}, {5, 7}};
+//     int (*pz)[2];
+//     pz = zippo;
+//
+// You can use  notation such as \`pz[2][1]\`, even though  \`pz\` is a pointer,
+// not an array name.  More generally,  you can represent individual elements by
+// using  array notation  or pointer  notation with  either an  array name  or a
+// pointer:
+//
+//     zippo[m][n] == *(*(zippo + m) + n)
+//     pz[m][n] == *(*(pz + m) + n)
+endsnippet
+
+snippet t24 "declare a VLA (variable-length array)" Am
+int rows = 12;
+int cols = 34;
+${1:type} ${2:vla}[rows][cols];
+
+// The  term *variable*  in variable-length  array does  not mean  that you  can
+// modify the  length of  the array after  you create it.   Once created,  a VLA
+// keeps  the same  size.  What  *variable*  does mean  is  that you  can use  a
+// variable when specifying the array dimensions when first creating the array.
+//
+// ---
+//
+// VLAs need  to have the  automatic storage class;  i.e. they're declared  in a
+// function without using the \`static\`  or \`extern\` storage class modifiers.
+// Or they're declared as function parameters.
+//
+// Also, you  can't initialize them in  a declaration (use a  \`for\` loop after
+// the declaration).
+//
+//     ✘
+//     int vla[rows][cols] = ...;
+//
+//     ✔
+//     int vla[rows][cols];
+//     for (r = 0; r < rows; rows++)
+//         for (c = 0; c < cols; cols++)
+//             vla[r][c] = ...;
+endsnippet
+
+snippet t25 "pass a VLA (variable-length array) as a function's argument" Am
+// The  parameters'  order  is  important. \`rows\`  and  \`cols\`  must  appear
+// *before* \`$4\`:
+//
+//     ✘
+//     $3 $4[rows][cols], int rows, int cols
+//
+//     ✔
+//     int rows, int cols, $3 $4[rows][cols]
+//
+// ---
+//
+// In the context of a prototype, you can  omit the names; but in that case, you
+// need to replace the omitted dimensions with asterisks:
+//
+//     int, int, $3 [*][*]
+${1:return type} ${2:function name}(int rows, int cols, ${3:array's elements type} ${4:array}[rows][cols])${5:;}
+$0
+endsnippet
+
+snippet t26 "compound literal" Am
+(${1:type} [${2:array size}]){${3:comma-separated list of values}}
+$0
+// You can omit \`$2\`; the compiler will count how many elements are present.
+//
+// ---
+//
+// A compound literal is meant to be assigned to a pointer variable or passed as
+// an actual argument to a function with a matching formal parameter.
+//
+// ---
+//
+// A compound  literal has block  scope.  Its  existence is not  guaranteed once
+// program execution leaves the block in  which the compound literal is defined;
+// that is, the innermost pair of braces containing the definition.
+//
+// ---
+//
+// You  can extend  the technique  to two-dimensional  arrays, and  beyond.  For
+// example, here is how to create  a two-dimensional array of \`int\`s and store
+// the address:
+//
+//     int (*ptr)[4];     // declare a pointer to an array of 4-int arrays
+//     ptr = (int [2][4]) {{1, 2, 3, -9}, {4, 5, 6, -8}};
+endsnippet
+
+# strings {{{2
+snippet t27 "get length of string" Am
+// the trailing NULL is not counted
+strlen(${1:string})
+$0
+endsnippet
+
+snippet t28 "read one character from input" Am
+// It's equivalent to \`scanf("%c", &$1);\` but faster and more compact.
+int ${1:ch} = getchar();
+$0
+endsnippet
+
+snippet t29 "print one character" Am
+// It's equivalent to \`printf("%c", $1);\` but faster and more compact.
+putchar(${1:ch});
+$0
+endsnippet
+
+snippet t30 "declare a string" Am
+char ${1:string}[] = ${2:"some string"};
+// OR
+const char * ${3:ptr} = $2;
+$0
+// The array is less memory efficient, but the string can be changed.
+// The pointer is more memory efficient, but the string *can't* be changed.
+//
+// ---
+//
+// Both syntaxes can use array notation and pointer addition.
+// But only the pointer version can use the increment operator.
+//
+// ---
+//
+// You can *only* use the array syntax to change a character of the string:
+//
+//     char string[] = "Xello";
+//     string[0] = 'H';
+//     ✔
+//
+//     char * ptr = "Xello";
+//     ptr[0] = 'H';
+//     ✘
+//
+// IOW, don't use a pointer to a string literal if you plan to alter the string.
+// BTW, that's  why it's  recommended to  use the  \`const\` qualifier  with the
+// pointer syntax.
+//
+// ---
+//
+// You *can* declare:
+//
+//     char * $3 = $2;
+//
+// *Without* \`const\`.  But  only if \`$2\` is a non-constant  array, and not a
+// literal string or a pointer to a literal string.
+endsnippet
+
+snippet t31 "declare an array of strings" Am
+const char *${1:array}[${2:size of array}] = {
+	"some string",
+	...
+};
+// OR
+char ${3:other array}[$2][${4:length of longest string}] = {
+	"some string",
+	...
+}
+$0
+// The pointers in \`$1\` point to the locations of the string literals used for
+// initialization, which  are stored  in static memory.   The arrays  in \`$3\`,
+// however, contain  copies of  the string  literals, so  each string  is stored
+// twice.  Furthermore, the  allocation of memory in the  arrays is inefficient,
+// for each element of  \`$3\` has to be the same size, and  that size has to be
+// at least  large enough to hold  the longest string.  IOW,  some strings might
+// end up with multiple meaningless NULLs.
+//
+// ---
+//
+// If  you  want  to use  an  array  to  represent  a  bunch of  strings  to  be
+// displayed, an array of pointers is  more efficient than an array of character
+// arrays.  There is, however, a catch.  Because the pointers in \`$1\` point to
+// string literals, these strings shouldn't be altered.  The contents of \`$3\`,
+// however, can be changed.  So if you  want to alter strings or set aside space
+// for string input, don't use pointers to string literals.
+endsnippet
+
+snippet t32 "print string" Am
+puts(${1:"string"});
+$0
+// \`puts()\` accepts:
+//
+//    - a string literal constant (e.g. \`"I am a string"\`)
+//    - a string symbolic constant (e.g. \`#define MSG "I am a string"\`)
+//    - a string in an array (e.g. \`char string[15] = "I am a string."\`)
+//    - a pointer to a string (e.g. \`const char * string = "I am a string."\`)
+//    - the address of a string character (e.g. \`&string[3]\`)
+//    - pointer arithmetic with a string (e.g. \`string + 3\`)
+//
+// In the last 2 cases, \`puts()\` starts from the given character.
+//
+// ---
+//
+// No need to append a trailing newline, \`puts()\` does it automatically for you.
+//
+// ---
+//
+// If \`puts()\` is passed a pointer, it prints up to the next null.
+endsnippet
+
+snippet t33 "read a word" Am
+char word[${1:123}];
+scanf("%s", word);
+$0
+// Warning: \`scanf()\` can create an overflow if the input word doesn't fit the
+// destination.  But you can use the  field-width option in the \`%s\` specifier
+// to prevent overflow.  For example:
+//
+//     char word[10];
+//     scanf("%10s", word);
+endsnippet
+
+snippet t34 "read input up to N-1 characters or newline whichever comes first" Am
+fgets(${1:array of chars}, ${2:N}, stdin);
+$0
+// \`fgets()\` returns a pointer to \`char\`.  If all goes well, it just returns
+// the same  address that was  passed to  it as the  first argument.  But  if it
+// encounters end-of-file, it returns a  special pointer called the null pointer
+// (macro NULL).
+endsnippet
+
+snippet t35 "put contents of array" Am
+fputs(${1:array of chars}, stdout);
+// Contrary to \`puts()\`, \`fputs()\` doesn't add an extra newline.
+$0
+endsnippet
+
+snippet t36 "put a string (DIY)" Am
+void put1(const char * string);
+
+	void
+put1(const char * string)
+{
+	// Short for \`*string != '\0'\`.  When \`string\` points to the null character,
+	// \`*string\` has the value 0, which terminates the loop.
+	while (*string)
+		putchar(*string++);
+}
+$0
+endsnippet
+
+snippet t37 "skip over input to the first character that isn't whitespace or digit" Am
+while (scanf("%d", &${1:var}) == 1)
+	// \`continue\` is optional (the \`;\` null statement would be enough), but
+	// it makes the code more readable
+	continue;
+$0
+endsnippet
+
+snippet t38 "skip over input until newline, included (aka flush stdin)" Am
+// This can be useful after a \`scanf()\` (or a \`getchar()\`).
+// When you press Enter, a newline is added to the input.
+// That newline can interfere with a subsequent \`getchar()\`.
+while (getchar() != '\n')
+	continue;
+$0
+endsnippet
+
+snippet t39 "skip over non-whitespace" Am
+// useful after  something like  \`if (scanf("%d", &num) != 1)\` to  discard bad
+// input
+scanf("%*s")
+$0
+endsnippet
+
+snippet t40 "concatenate 2 strings" Am
+// With \`strcat()\` you have to make  sure that you allocated enough memory for
+// \`string1\`;  otherwise,  you'll  run  into  problems  as  excess  characters
+// overflow into adjacent memory locations.
+char string1[${1:size}];
+char string2[] = "...";
+...
+if ((strlen(string1) + strlen(string2) + 1) <= $1)
+	strcat(string1, string2);
+$0
+// OR
+strncat(string1, string2, ${2:max number of characters to add});
+// \`$2\` should be: \`$1\` - strlen(string1) - 1.
+//
+// ---
+//
+// The null  character and any  characters following  it in \`string2\`  are not
+// copied, and a null character is appended to the result.
+//
+// ---
+//
+// In both cases:
+//
+//    - \`$2\` remains unchanged (only \`$1\` is changed: it's being appended \`$2\`)
+//    - the return value is \`string1\` (the address of its first character)
+//    - the first character of \`string2\` is copied over the null character of \`string1\`
+endsnippet
+
+snippet t41 "compare if 2 strings are the same" Am
+if (strcmp(string1, string2) == 0)
+	$0
+// \`strcmp()\`  returns   a  negative   number  if  \`string1\`   comes  before
+// \`string2\` alphabetically,  returns 0 if  they are  the same, and  returns a
+// positive number if \`string1\` follows \`string2\` alphabetically.
+//
+// ---
+//
+// \`strcmp()\` compares all characters, not  just letters, so instead of saying
+// the comparison  is alphabetic, we  should say  that \`strcmp()\` goes  by the
+// machine collating sequence.  That means  characters are compared according to
+// their  numeric representation,  typically the  ASCII values.   In ASCII,  the
+// codes for uppercase letters precede  those for lowercase letters.  Therefore,
+// \`strcmp("Z", "a")\` is negative.
+endsnippet
+
+snippet t42 "compare strings until they differ or until a given number of characters" Am
+if (strncmp(string1, string2, ${1:N}) == 0)
+	printf("%s and %s start with the same %d characters",
+		string1, string2, $1);
+$0
+endsnippet
+
+snippet t43 "copy a source string to a target string" Am
+strcpy(destination, source);
+$0
+// \`strcpy()\` takes  two string  pointers as  arguments.  The  second pointer,
+// which points  to the  original string,  can be a  declared pointer,  an array
+// name, or  a string constant.   The first pointer,  which points to  the copy,
+// should point  to a data object,  such as an  array, roomy enough to  hold the
+// string.
+//
+// ---
+//
+// It is your responsibility to make  sure the destination array has enough room
+// to copy the source.
+//
+// ---
+//
+// \`strcpy()\`'s return type is \`char *\`.   It returns the first character of
+// \`destination\`.
+endsnippet
+
+snippet t44 "replace part of string, from N-th character till the end" Am
+strcpy(destination + N - 1, replacement);
+$0
+// The  reason   why  \`replacement\`   goes  till  the   end  is   because  its
+// terminating null is also  copied, terminating \`destination\` early (assuming
+// \`replacement\`  is shorter  than what  remains after  the N-th  character of
+// \`destination\`).
+endsnippet
+
+snippet t45 "copy up to N characters (or a null) from source to destination" Am
+char destination[N];
+strncpy(destination, source, N - 1);
+destination[N - 1] = '\0';
+$0
+// If the  number of  characters in  \`source\` is less  than \`N\`,  the entire
+// string is  copied, including  the null character.   OTOH, the  function never
+// copies more than \`N\` characters, so if it reaches \`N\` before reaching the
+// end  of \`source\`,  no null  character  is added.   As a  result, the  final
+// product may or may not have a null character.
+//
+// For this reason,  we set \`N\` to  one less than the size  of the destination
+// array and  then set  the final element  in the array  to the  null character:
+// This ensures  that we've stored a  string.  If \`source\` actually  fits, the
+// null  character  copied  with it  marks  the  true  end  of the  string.   If
+// \`source\`  doesn't fit,  this  final null  character marks  the  end of  the
+// string.
+//
+// ---
+//
+// \`strncpy()\`'s return value is \`destination\`.
+endsnippet
+
+snippet t46 "printf()-like function writing to a string variable rather than display" Am
+sprintf(${1:var}, "${2:format}", ${3:expressions});
+endsnippet
+
+snippet t47 "get pointer to first location in string holding given character" Am
+strchr(string, N);
+$0
+// \`N\`  is  the   integer  value  of  the  searched  character   as  given  by
+// \`printf("%d", 'character')\`.
+//
+// ---
+//
+// The function returns the null pointer if the character is not found.
+endsnippet
+
+snippet t48 "get pointer to first location in string1 that holds any character in string2" Am
+strpbrk(string1, string2);
+$0
+// The function returns the null pointer if no character is found.
+endsnippet
+
+snippet t49 "get pointer to last location of given character in given string" Am
+strrchr(string, 'character');
+$0
+// The function returns the null pointer if no character is found.
+endsnippet
+
+snippet t50 "get pointer to first occurrence of string2 in string1" Am
+strstr(string1, string2);
+$0
+// The function returns the null pointer if the string is not found.
+endsnippet
+
+# booleans {{{2
+
+snippet t51 "work around the absence of the Boolean type in C89" Am
+// define the \`Bool\` enumerated type, whose enumerated constants are TRUE and FALSE
+typedef enum {TRUE = 1, FALSE = 0} Bool;
+Bool flag = TRUE;
+// Don't write \`if (flag == TRUE)\`.
+// It would only  work when \`flag\` is  1.  But there are other  true values (any
+// non-zero value actually).
+if (flag)
+	printf("flag is true\n");
+if (!flag)
+	printf("flag is false\n");
+$0
+endsnippet
+
+snippet t52 "use booleans in C99" Am
+// supplies macros for the \`bool\` type (to replace the default \`_Bool\`),
+// and for the \`true\` and \`false\` values
+#include <stdbool.h>
+
+// NOTE: contrary to C89, this type of boolean variable can only hold 0 or 1;
+// any non-zero value is automatically turned into 1
+bool flag = true;
+endsnippet
+
+# integers {{{2
+
+snippet t53 "express number as hexadecimal or octal" Am
+// 0x123 is 291 in decimal, and 0123 is 83.
+${1:0x123} or ${2:0123}
+endsnippet
+
+snippet t54 "printf()'s syntax" Am
+// For \`flags\`, \`modifier\` and \`specifier\`, see the annex.
+//
+// ---
+//
+// \`width\`: The  minimum field  width.   A wider  field will  be  used if  the
+// printed number or string won't fit in the field (example: \`%4d\`).
+// \`width\` can be \`*\`, which means that the width is an expression which you
+// must supply as an extra argument.
+//
+// ---
+//
+// \`.precision\`: For  \`%e\`, \`%E\`  and  \`%f\` conversions,  the number  of
+// digits  to  be  printed  to  the  right  of  the  decimal.   For  \`%g\`  and
+// \`%G\` conversions,  the maximum  number of  significant digits.   For \`%s\`
+// conversions, the  maximum number  of characters to  be printed.   For integer
+// conversions, the minimum  number of digits to appear; leading  zeros are used
+// if necessary  to meet  this minimum.   Using only  \`.\` implies  a following
+// zero, so \`%.f\` is the same as \`%.0f\`.
+// Example: \`%5.2f\` prints  a float in a  field five characters wide  with two
+// digits after the decimal point.
+//
+// \`precision\` can be  \`*\`, which means that the precision  is an expression
+// which you must supply as an extra argument.
+//
+// ---
+//
+// \`printf()\` returns the number of characters it printed, or a negative value
+// if an output error occurred.
+printf("... %[flags][width][.precision][modifier]specifier ...", ...)
+$0
+endsnippet
+
+snippet t55 "assign octal/hexadecimal value to char variable" Am
+// octal (you can only use 2 digits; also, you can omit the leading 0(s); the max is \`\077\`)
+char ${1:var} = '\0${2:12}'
+// hexadecimal (you can only use 3 digits; the max is \`\x07f\`)
+char $1 = '\x${3:013}'
+endsnippet
+
+snippet t56 "cast float expression as an integer" Am
+(int)(${1:expr})
+endsnippet
+
+# floats {{{2
+
+snippet t57 "express float in hexadecimal" Am
+0xa.1fp10 = (10 + 1/16 + 15/256) * 2^10 = 10364
+//           ^^   ^--^   ^----^    ^
+//           a     1       f       [pP] (!= [eE])
+endsnippet
+
+# complex numbers {{{2
+snippet t58 "assign and print a complex number" Am
+#include <stdio.h>
+#include <complex.h>
+	int
+main(void)
+{
+	// You can use \`complex\` instead of  \`_Complex\` if you don't have to
+	// worry  about  conflicts  with  past  usage (e.g.  you  never  used  a
+	// \`struct\` named \`complex\`).
+	float ${1:complex | _Complex} ${2:z} = ${3:12.34} + ${4:56.78}*I;
+	printf("%f + %fi\n", creal($2), cimag($2));
+
+	return 0;
+}
+// There    are     three    complex    types,     called    \`float _Complex\`,
+// \`double _Complex\`,  and  \`long double _Complex\`.   Similarly,  there  are
+// three  imaginary types,  called \`float _Imaginary\`,  \`double _Imaginary\`,
+// and \`long double _Imaginary\`.
+endsnippet
+
+# misc {{{2
+
+snippet t59 "declare several pointers in a single line" Am
+int * pt1, * pt2, * pt3;
+$0
+// It's as if \`*\` was part of the variable name.
+//
+// ---
+//
+// You can even declare other non-pointer variables at the same time:
+//
+//     int x, * pt;
+endsnippet
+
+snippet t60 "print size of given type or variable" Am
+printf("Type ${1:type | var} has a size of %zd bytes.", sizeof($1));
+// NOTE: The size of  \`char\` is necessarily 1 byte because  C defines the size
+// of 1 byte in terms of \`char\`.  So, on a system with a 16-bit char (as given
+// by \`CHAR_BIT\` from  \`limits.h\`) and a 64-bit  \`double\`, \`sizeof\` will
+// report \`double\` as having a size of 4 bytes (not 8).
+endsnippet
+
+snippet t61 "assign size of given type or variable" Am
+size_t ${1:var1} = sizeof(${2:type | expr}) | strlen(${3:string});
+$0
+endsnippet
+
+snippet t62 "create a symbolic constant" Am
+const ${1:type} ${2:VAR} = ${3:value};
+// This make \`$2\` into a read-only value.
+endsnippet
+
+snippet t63 "cast operator" Am
+(${1:type})${2:expr}
+endsnippet
+# }}}1
+# test {{{1
+
+snippet t64 "test if `scanf()` succeeded into reading items" Am
+scanf(...) == ${1:n}
+endsnippet
+
+snippet t65 "test if 2 floats are equal" Am
+// You should  limit yourself to  using only  \`<\` and \`>\`  in floating-point
+// comparisons.  The  reason is  that round-off errors  can prevent  two numbers
+// from being  equal, even though  logically they  should be.  For  example, the
+// product of 3 and  1/3 is 1.0.  But if you express 1/3  as a six place decimal
+// fraction, the product is .999999, which is not quite equal to 1.
+#include <math.h>
+fabs(${1:float1} - ${2:float2}) < ${3:0.0001}
+$0
+endsnippet
+
+snippet t66 "test if a character is a lowercase letter" Am
+#include <ctype.h>
+// \`islower()\` is more portable than \`'a' <= ch && ch <= 'z'\`.
+// The latter only works for character codes such as ASCII, but not for EBCDIC.
+if (islower(${1:ch}))
+$0
+endsnippet
+
+snippet t67 "test if a character is a non-whitespace" Am
+#include <ctype.h>
+if (!isspace(${1:ch}))
+$0
+endsnippet
+
+# function {{{1
+
+snippet t68 "function definition" Am
+	${1:return type}
+${2:main}(${3:parameters})
+{
+	$0
+	return ${4:value};
+}
+endsnippet
+
+snippet t69 "function prototype" Am
+// \`$1\` and \`$3\` can be \`void\`.
+// Also, in \`$3\`, the names of the parameters can be omitted.
+${1:return type} ${1:function name}(${3:parameters; e.g. int a, char b})
+$0
+endsnippet
+
+snippet t70 "mutate variables of outer function from inner function call" Am
+// pass the variables via their pointers
+
+#include <stdio.h>
+void exchange(int * i, int * j);
+
+	int
+main(void)
+{
+	int i = 1;
+	int j = 2;
+	printf("i = %d, j = %d\n", i, j);
+	exchange(&i, &j);
+	//       ^   ^
+	printf("i = %d, j = %d\n", i, j);
+}
+	void
+exchange(int * i, int * j)
+{
+	int temp;
+	temp = *i;
+	*i = *j;
+	*j = temp;
+}
+$0
+endsnippet
+
+snippet t71 "print decimal number into binary form using recursive function" Am
+// In general, if \`n\` is a number,  the final digit is \`n % 2\`, so the first
+// digit you find  is the last digit  you want to print.  This  suggests using a
+// recursive function in which \`n % 2\` is calculated before the recursive call
+// but in  which it is  printed after the recursive  call.  That way,  the first
+// value calculated is the last value printed.
+//
+// ---
+//
+// Remember that – in a recursive function – statements that come before the
+// recursive call are executed in the  same order that the functions are called.
+// But  statements that  come  after  the recursive  call  are  executed in  the
+// opposite order from which the functions are called.
+to_binary(unsigned long n)
+{
+	int r;
+	r = n % 2;
+	if (n >= 2)
+		to_binary(n / 2);
+	putchar(r == 0 ? '0' : '1');
+}
+$0
+endsnippet
+
+# miscellaneous {{{1
+
+snippet t72 "include given library" Am
+// \`$1\` can be:
+//
+//    - \`assert\` (for \`assert()\`)
+//    - \`math\` (for \`pow()\`)
+//    - \`stdbool\` (for \`bool\` data type)
+//    - \`stdio\` (for \`printf()\`, \`scanf()\`)
+//    - \`stdlib\` (for \`exit()\`)
+//    ...
+#include <${1:header file}.h>
+// Alternatively, you can surround \`$1\` with double quotes:
+#include "$1.h"
+// In that case, the  header file is looked for in the  directory of the current
+// file.
+$0
+endsnippet
+
+snippet t73 "macro definition" Am
+// If \`$2\` is a mere constant/literal you can drop the parentheses.
+// If it contains an operator, keep them (omitting them is a common pitfall).
+#define ${1:identifier} (${2:replacement-list})
+$0
+endsnippet
+
+snippet t74 "ask for user input with scanf()" Am
+scanf("%${1:d|f|lf|Lf}...", &${2:var}, ...)
+$0
+// \`%d\`, \`%f\`, \`%lf\`, \`%Lf\` tell \`scanf()\` to read resp. an integer, a
+// float, a double,  or a long double.  \`&$2\` tells  \`scanf()\` to write that
+// value in the variable \`$2\`.
+//
+// For more  info about the  available conversion specifiers and  modifiers, see
+// the annex.
+//
+// ---
+//
+// \`scanf()\` returns  the number of items  that it successfully reads,  or EOF
+// when it detects the condition known as “end of file.”
+//
+// ---
+//
+// Note that if  \`$2\` is an array,  you must drop \`&\`  (\`array\`; the first
+// element will be set).
+// But if \`$2\` is an element of an array, you still need \`&\` (\`&array[idx]\`).
+endsnippet
+
+snippet t75 "iterate over input lines" Am
+#include <stdio.h>
+// Here, \`MAXLINE\` is only used to  initialize \`line\` and to provide a value
+// to the  second argument  of \`fgets()\`.   But it  won't truncate  lines over
+// \`MAXLINE\` characters, because \`fgets()\` will iterate over chunks of lines
+// if necessary.
+#define ${1:MAXLINE} ${2:123}
+
+	int
+main(void)
+{
+	char line[MAXLINE];
+	while (fgets(line, MAXLINE, stdin) != NULL)
+		fputs(line, stdout);
+
+	return 0;
+}
+$0
+endsnippet
+
+snippet t76 "iterate over input lines; truncate after a given number of characters" Am
+#include <stdio.h>
+#define ${1:MAXLINE} ${2:123}
+
+	int
+main(void)
+{
+	int i;
+	char line[MAXLINE];
+	while (fgets(line, MAXLINE, stdin) != NULL)
+	{
+		fputs(line, stdout);
+		i = 0;
+		while (line[i] != '\n' && line[i] != '\0')
+			i++;
+		if (line[i] != '\n')
+			putchar('\n');
+		while (getchar() != '\n')
+			continue;
+	}
+
+	return 0;
+}
+$0
+endsnippet

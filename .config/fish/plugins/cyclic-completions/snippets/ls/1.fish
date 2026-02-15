@@ -1,0 +1,1 @@
+--sort=time --time=ctime --reverse -l  # sort by time of last status change (newest last)

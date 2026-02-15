@@ -1,0 +1,50 @@
+#!/bin/bash -
+# Our patches are meant to be applied against version 0.9.3.{{{
+#
+# Not master.  Constantly updating the patches  so that they work against master
+# would require too much work.
+#}}}
+# How to update the patches for a newer version of st?{{{
+### How to undo them?
+#
+#                        new version
+#                        v---v
+#     $ git reset --hard X.Y.Z \
+#         && git ls-files --others --directory --exclude-standard | xargs rm -f
+#
+# Apply just the first patch.
+# If it succeeds, run:
+#
+#     $ git add . \
+#           && git commit -m 'so far so good' \
+#           && make clean \
+#           && make
+#
+# It the code compiles, apply the second patch, and repeat the process.
+#
+# If  a patch  fails  to be  applied,  run  `$ vim *.rej` and  try  to apply  it
+# manually.  Then:
+#
+#     $ git add . \
+#         && git diff --staged --no-color
+#
+# ... to get the fixed patch; use the output to replace the old broken patch.
+# Commit, compile, and continue until all patches apply successfully.
+#}}}
+
+readonly -a DEPENDENCIES=(
+  'libx11-dev'
+  'libxft-dev'
+  'x11proto-dev'
+)
+
+source "${0%/*}/_lib"
+_Install_Dependencies "${DEPENDENCIES[@]}"
+_Extract_Archive 'st' 'https://st.suckless.org/'
+
+for file in "$HOME"/.config/st/patches/*.diff; do
+  patch <"$file"
+done
+
+sed -i "s,^PREFIX = .*,PREFIX = $HOME/.local," config.mk
+make install

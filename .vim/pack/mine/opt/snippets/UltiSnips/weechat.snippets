@@ -1,0 +1,291 @@
+# buffer {{{1
+
+snippet t01 "name of current buffer" Am
+# \`full_name\`, contrary  to \`name\`,  includes the name  of the  plugin which
+# created the buffer.
+#
+# ---
+#
+# See here for all possible buffer-related info you can get:
+# https://weechat.org/files/doc/stable/weechat_plugin_api.en.html#_buffer_get_string
+${buffer.name}
+${buffer.full_name}
+endsnippet
+
+snippet t02 "name of plugin which created current buffer" Am
+# There  is  one  difference  between  the  2  syntaxes:  in  the  core  buffer,
+# \`${buffer.plugin.name}\` evaluates  to no  value; \`${plugin}\`  evaluates to
+# \`core\`.
+${plugin}
+${buffer.plugin.name}
+endsnippet
+
+snippet t03 "type of current buffer" Am
+${type}
+${buffer.local_variables.type}
+# More generally, all  variables local to a  buffer can be retrieved  via one of
+# these 2 syntaxes:
+#
+#     ${VAR}
+#     ${buffer.local_variables.VAR}
+#
+# \`VAR\` being \`plugin\`, \`name\`, \`type\`, ...
+endsnippet
+
+snippet t04 "list of variables local to current buffer" Am
+# This will only print  the names of all variables local  to the current buffer.
+# If you  also want their  values, replace \`.keys()\`  with \`.keys_values()\`.
+# Or execute \`/buffer listvar\`; but note that the output of \`.keys_values()\`
+# is easier to parse.
+${buffer.local_variables.keys()}
+endsnippet
+
+snippet t05 "list of variables local to next/previous buffer" Am
+${buffer.next_buffer.local_variables.keys()}
+${buffer.prev_buffer.local_variables.keys()}
+endsnippet
+
+snippet t06 "test current buffer is visible" Am
+${buffer.num_displayed}
+endsnippet
+
+snippet t07 "list of evaluations of given expression in all buffers" Am
+/allbuf /mute /eval /set plugins.var.${1:var} ${plugins.var.$1} ${2:expr}
+endsnippet
+
+# directory {{{1
+
+snippet t08 "configuration directory" Am
+${weechat_config_dir}
+endsnippet
+
+snippet t09 "scripts directory" Am
+${weechat_data_dir}
+endsnippet
+
+snippet t10 "logs directory" Am
+${eval:${logger.file.path}}
+endsnippet
+
+# string {{{1
+
+snippet t11 "first characters of given string" Am
+${cut:${1:num},,${2:string}}
+endsnippet
+
+snippet t12 "last characters of given string" Am
+# Remove the space in \`} }}\`.
+${rev:${cut:${1:num},,${rev:${2:string}} }}
+endsnippet
+
+snippet t13 "repetition of given string" Am
+${repeat:${1:num},${2:string}}
+endsnippet
+
+snippet t14 "N-th item after splitting string on given separator" Am
+# \`$1\`  can be  a  1-based positive  index  (counting from  the  start), or  a
+# negative index (counting from the end).
+#
+# It can also be \`count\`, in which  case the evaluation is the total number of
+# split items.
+#
+# ---
+#
+# \`$2\` is a list of characters used as separators.
+# If omitted, it defaults to a comma.
+#
+# ---
+#
+# \`$3\` is a list of flags separated by \`+\`.
+# It can also be omitted.
+#
+# Examples:
+#
+#     >> /eval -n ${split:1,#,,##foo##bar}
+#     == []
+#
+#     >> /eval -n ${split:1,#,collapse_seps,##foo##bar}
+#     == [foo]
+#
+#     >> /eval -n ${split:1,#,collapse_seps+keep_eol,##foo##bar}
+#     == [foo##bar]
+#
+# ---
+#
+# To avoid splitting on a separator inside a string, use \`split_shell\` instead
+# of \`split\`.  Example:
+#
+#     >> /eval -n ${split_shell:1,"arg 1" arg2}
+#     == [arg 1]
+#
+# ---
+#
+# For more info: https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#eval_variables
+${split:${1:index},${2:separators},${3:flags},${4:string}}
+endsnippet
+
+# miscellaneous {{{1
+
+snippet t15 "truth value of expression" Am
+# All expressions are truthy, except 0 and no value.
+endsnippet
+
+snippet t16 "operand omission" Am
+# In an expression using operators, any operand can be omitted.
+#
+# And where a number is expected, an omitted operand defaults to 0:
+#
+#     >> /eval -n ${if:==0}
+#     == [1]
+endsnippet
+
+snippet t17 "conditional expression" Am
+${if:${1:test}?${2:if true}:${3:if false}}
+endsnippet
+
+snippet t18 "evaluated expression" Am
+# This is useful when \`<expr>\`'s evaluation *contains* yet another expression that you want to evaluate.{{{
+#
+# Example:
+#
+#     >> /eval -n ${logger.file.path}
+#     == [${weechat_data_dir}/logs]
+#         ^-----------------^
+#
+#                 v-----v                   v
+#     >> /eval -n ${eval:${logger.file.path}}
+#     == [/home/user/.local/share/weechat/logs]
+#}}}
+${eval:${1:expr}}
+endsnippet
+
+snippet t19 "evaluated condition expression" Am
+# This is  useful when \`<expr>\`'s  evaluation *is* yet another  condition that
+# you want to evaluate.  Otherwise, \`${if:<expr>}\` is simpler.
+${eval_cond:${1:expr}}
+endsnippet
+
+snippet t20 "test existence of option" Am
+# Remove the space in \`} }\`.
+${eval_cond:${${1:file}.${2:section}.${3:option}} }
+endsnippet
+
+snippet t21 "current server" Am
+${server}
+endsnippet
+
+snippet t22 "current channel" Am
+${channel}
+endsnippet
+
+snippet t23 "environment variable" Am
+${env:${1:VAR}}
+endsnippet
+
+snippet t24 "ad-hoc variable/option" Am
+#    > option_name:  option name, WeeChat  will add prefix  "plugins.var.xxx." (where
+#    > "xxx" is current plugin name)
+#
+# https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_config_get_plugin
+# https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_config_is_set_plugin
+# https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_config_set_plugin
+# https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_config_set_desc_plugin
+# https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_config_unset_plugin
+${plugins.var.${1:var}}
+endsnippet
+
+snippet t25 "access value held by hdata" Am
+# A hdata is a hashtable with position of variables in structure:{{{
+#
+#    > Hdata does not contain data, it’s only a hashtable with
+#    > position of variables in structure. That means you will need
+#    > this hdata and a pointer to a WeeChat/plugin object to read
+#    > some data.
+#
+# Source: https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_hdata_get
+#}}}
+# As an example, consider this code taken from our Python snippets:{{{
+#
+#     own_lines = hdata_pointer(hdata_get('buffer'), buf, 'own_lines')
+#     first_line = hdata_pointer(hdata_get('lines'), own_lines, 'first_line')
+#     data = hdata_pointer(hdata_get('line'), first_line, 'data')
+#     message = hdata_string(hdata_get('line_data'), data, 'message')
+#
+# It can be re-written as this \`/eval\` one-liner:
+#
+#     /eval -n ${line_data[${line[${lines[${buffer.own_lines}].first_line}].data}].message}
+#
+# For more info: https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#eval_variables
+# At the very end of the table.
+#}}}
+# Inside the square brackets, in addition to a pointer, you can also write the name of a list:{{{
+#
+#     /eval -n ${buffer[gui_buffers].full_name}
+#                       ^---------^
+#}}}
+# If you get a hashtable, you can append one of these methods to inspect their contents:{{{
+#
+#    - \`.keys()\`
+#    - \`.values()\`
+#    - \`.keys_values()\`
+#    - \`.keys_sorted()\`
+#    - \`.keys_values_sorted()\`
+#}}}
+${hdata[pointer].var...}
+endsnippet
+
+snippet t26 "WeeChat's PID (via ${info:...})" Am
+# The general syntax is \`${info:<name>,[args]}\`.
+#
+# See here for all possible \`<name>\`s:
+# https://weechat.org/files/doc/stable/weechat_plugin_api.en.html#_info_get
+${info:pid}
+endsnippet
+
+snippet t27 "number of nicks who joined current channel" Am
+# documented at \`/help buflist\`
+${buffer.nicklist_nicks_count}
+endsnippet
+
+snippet t28 "current window's height/width in percentage" Am
+${window.win_height_pct}
+${window.win_width_pct}
+endsnippet
+
+snippet t29 "color value" Am
+# A valid color name can be:{{{
+#
+#    - an english name like \`blue\`
+#    - a decimal code like \`123\`
+#    - an option name like \`irc.color.message_quit\`
+#
+# If  you use  an option  name starting  with the  \`weechat.color.\` prefix,  the
+# latter can be dropped.
+#
+# For more info: https://weechat.org/files/doc/stable/weechat_plugin_api.en.html#_color
+#
+# ---
+#
+# Example:
+#
+#     # set background color to dark gray
+#     color:,darkgray
+#           ^
+#           separate the (here missing) foreground from the background color
+#}}}
+# \`<attributes>\` can be any sequence of these characters:{{{
+#
+#    - \`%\`: blink
+#    - \`.\`: "dim" (half bright)
+#    - \`*\`: bold text
+#    - \`!\`: reverse video
+#    - \`/\`: italic
+#    - \`_\`: underlined text
+#    - \`|\`: keep attributes: do not reset blink/dim/bold/reverse/italic/underlined when changing color
+#
+# For example, \`*_214\` is color 214 with the attributes bold and underline.
+#
+# See: https://weechat.org/files/doc/stable/weechat_user.en.html#colors_attributes
+#}}}
+[${1:attributes}]${2:foreground color}[${3:,background color}]
+endsnippet

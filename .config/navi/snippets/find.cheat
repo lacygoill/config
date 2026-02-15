@@ -1,0 +1,167 @@
+% find
+
+# list files whose status changed recently (less than a day ago)
+find . -ctime 0 -type f
+    # The time since each file's status was  last changed is divided by 24 hours
+    # and any remainder is discarded.
+
+# list files newer than timestamp file
+find . -mindepth 1 -cnewer <timestamp> -print
+    # This is useful to create incremental backups:
+    #
+    #     $ find . -mindepth 1 -cnewer timestamp -print0 \
+    #         | tar --null --create --file=❬archive❭.tar.gz --files-from=- --gzip --verbose
+    #
+    # This creates  a new archive  with only the  files which changed  since the
+    # last time you `touch(1)`ed the `timestamp` file.
+
+# print newest file (by last status change time)
+find . -type f -printf '%C@:%p\0' 2>/dev/null \
+    | awk -F: -v RS='\0' \
+       '{
+          if ($1 > max_last_change) {
+            max_last_change = $1
+            newest = $2
+          }
+        }
+
+        END {
+          print newest
+        }'
+
+# print oldest file (by last status change time)
+find . -type f -printf '%C@:%p\0' 2>/dev/null \
+    | awk -F: -v RS='\0' \
+    'NR == 1 { min_last_change = $1 }
+
+    {
+      if ($1 < min_last_change) {
+        min_last_change = $1
+        oldest = $2
+      }
+    }
+
+    END {
+      print oldest
+    }'
+
+# list biggest files
+find . -type f -printf '%s %p\n' 2>/dev/null \
+    | sort --ignore-leading-blanks --numeric-sort --reverse \
+    | numfmt --to=iec \
+    | head
+    # In the `printf` format, `%s` is for the size, and `%p` for the path.
+    #
+    # ---
+    #
+    # To remove some of the files, append a backslash on the last line, and add these lines:
+    #
+    #     | fzf --multi --nth=2 \
+    #     | awk '{ print $2 }' \
+    #     | xargs rm --
+    #
+    # ---
+    #
+    # To print the biggest files *and* directories, replace `find(1)` with:
+    #
+    #     $ du --all --human-readable .
+    #
+    # ---
+    #
+    # To reliably iterate over those file/directory names, use NULLs:
+    #
+    #                                    vv
+    #     $ find . -type f -printf '%s %p\0' 2>/dev/null \
+    #                                                                 v---------------v
+    #         | sort --ignore-leading-blanks --numeric-sort --reverse --zero-terminated \
+    #                           v---------------v
+    #         | numfmt --to=iec --zero-terminated \
+    #                v---------------v
+    #         | head --zero-terminated
+    #
+    # Note that `fzf(1)` supports NULLs  via `--read0` and `--print0` (you might
+    # need  both  if  it's in  the  middle  of  a  pipeline). `awk(1)`  too  via
+    # `-v ORS='\0'`; and `du(1)` too via `--null`.
+
+# list files bigger than given size
+find . -type f -size +<size> -printf '%-10s %p\n'
+    # for example, `❬size❭` could be `100M` (100 MiB)
+
+# list files/directories whose setuid/setgid bit is set
+sudo find / \
+    \( -path '*/containers/*' -o -fstype dev -o -fstype proc -o -fstype sysfs -o -fstype tmpfs -o -fstype udev \) -prune \
+    -o -perm /u=s,g=s \
+    -printf '%M | %u | %g | %p\n' \
+    | column -t -s='|'
+    # To print the octal representation of file modes, replace `%M` with `%#m`.
+
+# list ebook/music/video files into separate logs
+find . -name '*.epub' -fprint $TMPDIR/ebooks.log \
+    , \( -name '*.mp3' -o -name '*.ogg' \) -fprint $TMPDIR/music.log \
+    , \( -name '*.avi' -o -name '*.mkv' \) -fprint $TMPDIR/videos.log
+    # Thanks to the comma operator, `find(1)` only has to traverse the filesystem once.
+    #
+    # And still perform three independent tests based on `-name`:
+    #
+    #     v
+    #     , \( -name '*.mp3' -o -name '*.ogg' \) -fprint $TMPDIR/music.log \
+    #     , \( -name '*.avi' -o -name '*.mkv' \) -fprint $TMPDIR/videos.log \
+    #     ^
+    #
+    # For more info: `man find /EXPRESSION/;/OPERATORS/;/expr1 , expr2`.
+
+# list projects' roots under current directory
+find . -type d \( \
+    -execdir /usr/bin/test -d '{}'/.git \; \
+    -o -execdir /usr/bin/test -d '{}'/.svn \; \
+    -o -execdir /usr/bin/test -d '{}'/CVS \; \
+    \) -print -prune
+    # This is useful in a directory where you store multiple projects (e.g. `~/VCS/`).
+    #
+    # Each of them  can have its own directory organisation,  and SCM tool (e.g.
+    # `git(1)`, `svn(1)`, `cvs(1)`).
+    #
+    # ---
+    #
+    # `-prune` makes the  search more efficient; there is no  need for `find(1)`
+    # to traverse a directory  if it contains an SCM directory  and thus we know
+    # it's  the root  of a  project (let's  assume a  project can't  contain yet
+    # another project).
+    #
+    # This also shows that  `-prune` doesn't have to be the  only action; it can
+    # be combined with  another.  That is, even if you  ignore its *contents*, a
+    # `-prune`d directory can be still be processed in any given way.
+
+# list broken symlinks
+find . -type l \! -execdir /usr/bin/test -e '{}' \; -printf '%P\n' 2>/dev/null
+    # `-execdir /usr/bin/test -e {} \;` evaluates to `true` if, and only if, the target of the symlink exists.
+    #
+    # But the  bang negates the  value, so  `\! -execdir ...` is `true`  if, and
+    # only  if,  the  symlink  is  broken, in  which  case  the  next  predicate
+    # (`-printf`) is evaluated which prints the path of the symlink.
+
+# list regular files with possibly broken permissions
+find . \! \( -user root -o -executable -o -perm 644 -o -perm 664 -o -perm 600 \) -type f -printf '%M | %p\n'
+    #                                           ^^^          ^^^          ^^^
+    #                                     umask 022    umask 002          only accessible to owner:
+    #                                                                        ~/mbox
+    #                                                                        ~/.netrc
+    #                                                                        ~/.ssh/id_❬algo❭
+    #                                                                        ...
+    #
+    #
+    # The value of `umask(1)` is controlled by the EUID of the creating process.
+    # Usually, it's 022 (for  any user on Debian/Arch, ..., as  well as for root
+    # on Ubuntu).  Exception: it's 002 for a regular user on Ubuntu.
+
+# list directories with possibly broken permissions
+find . \! \( -user root -o -perm 755 -o -perm 775 \) -type d -printf '%M | %p\n'
+    #                            ^^^          ^^^
+    #                      umask 022          umask 002
+
+# list executables with possibly broken permissions
+find . -executable \! \( -user root -o -perm 755 -o -perm 775 -o -perm 744 -o -perm 764 \) -type f -printf '%M | %p\n'
+    #                                  ^----------------------------------------------^
+    #                                  The umask can be 022 or 002.
+    #                                  The executable might have been set with `+x` or `u+x`.
+    #                                  That gives 4 combinations of file mode bits in total.

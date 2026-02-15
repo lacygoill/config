@@ -1,0 +1,215 @@
+#!/bin/bash -
+# Usage:{{{
+#
+#     $ cmd | sendtoclipboard
+#     $ sendtoclipboard FILE ...
+#     $ sendtoclipboard
+#
+# In the last command, write your text, and end by pressing `C-d`:
+#
+#     $ sendtoclipboard
+#     hello
+#     C-d
+#
+# You can press `Enter`  whenever you need a newline in your  text; it won't end
+# the input.
+#}}}
+
+# TODO: We've fallen quite a few commits behind the original script:
+# https://github.com/sunaku/home/blob/master/bin/yank
+# Review the whole script from scratch.
+
+# What does this script do?{{{
+#
+# It writes  arbitrary text in the  clipboard selection via `xsel(1x)`  (only if
+# `$DISPLAY` is set) and via OSC 52.
+#
+# The source of the text can be:
+#
+#    - a pipe
+#    - some file(s)
+#    - the terminal (what you type interactively)
+#
+# ---
+#
+# If the script is run from a shell managed by tmux, it will also write the text
+# in a tmux buffer (in addition to the clipboard selection).
+#}}}
+#   Where did you find it?{{{
+#
+# https://github.com/sunaku/home/blob/master/bin/yank
+# https://sunaku.github.io/tmux-yank-osc52.html
+#}}}
+#   Why does it write in the clipboard selection via `xsel(1x)` *and* via OSC 52?{{{
+#
+# Most of the time, this is indeed redundant.
+# That is, when you're  copying some short text from a local  shell, only one of
+# these tools is necessary.
+#
+# However, there are 2 special cases where only one of them will work.
+#
+# - If the script is run locally, OSC 52 may truncate the text if it's too long (>75k).
+#   In that case, `xsel(1x)` is useful as a more reliable fallback.
+#
+# - If the script is run on a remote server, there is probably no display server (Xorg).
+#   In that case, `xsel(1x)` will fail.
+#   And even if there  is a display server, you probably want to  copy the text in
+#   the *local* clipboard selection, not the remote one.
+#   Only OSC 52 can do that.
+#}}}
+#   What is its benefit over using tmux with `set-clipboard` set to `on`?{{{
+#
+# In  that  case,   the  script  is  useless  when  you   copy  some  text  with
+# `copy-selection`  or `copy-pipe`  (because tmux  automatically sends  OSC 52).
+# But in all other cases (see `Usage:`), the script is useful.
+#}}}
+
+# Why `rlwrap(1)`?{{{
+#
+# It's convenient when we type the text interactively.
+#}}}
+# Why `cat(1)`?{{{
+#
+# The input could be some file(s).
+#}}}
+#   Why does it still work when the input is not a file?{{{
+#
+# When the script's input is a pipe, or the terminal, `"$@"` is empty.
+# And `cat(1)`,  without arguments,  reads its  standard input  – which  here is
+# inherited from the script.
+#
+#     # the input is a pipe
+#     $ echo 'text' | cat
+#     text˜
+#
+#     # the input is the terminal
+#     $ cat
+#     text
+#     text˜
+#}}}
+buf="$(rlwrap cat "$@")"
+
+# copy to tmux buffer {{{1
+
+# shellcheck disable=SC2015
+# `||:` makes sure that the script exits with the code 0, even if tmux is not running.{{{
+#
+# https://github.com/sunaku/home/commit/cdd9a75c97d0f8c10527f4ebc856491967a2f245#diff-736f8a257c8415da60b212e37ac5cf30
+#
+# The `:` command has no effect, it will just succeed no matter what:
+#
+#     $ not_a_cmd || :
+#     $ echo $?
+#     0˜
+#
+# It's documented at `man bash /SHELL BUILTIN COMMANDS`:
+#
+# >     : [arguments]
+# >            No effect; the command does nothing beyond  expanding  arguments
+# >            and  performing any specified redirections.  A zero exit code is
+# >            returned.
+#}}}
+[[ -n "$TMUX" ]] && tmux set-buffer "$buf" || :
+
+# copy to clipboard selection via `xsel(1x)`{{{1
+
+if [[ -n "$DISPLAY" ]]; then
+  printf '%s' "$buf" | { xsel --input --clipboard ;}
+fi
+
+# OSC 52 {{{2
+
+# Don't try to set the clipboard via OSC 52 if we're in gVim.{{{
+#
+# gVim doesn't support OSC 52.
+#
+# ---
+#
+# As a guard, you could also try:
+#
+#     if [[ "$TERM" != 'dumb' ]]; then
+#     if [[ -n "$WINDOWID" ]]; then
+#}}}
+if [[ "$TERM" == 'dumb' ]]; then
+  exit
+fi
+
+declare -i len
+len="$(wc --bytes <<<"$buf")"
+# Where does that number come from?{{{
+#
+# tmux doesn't send to the outer terminal any sequence of more than 10^5 bytes:
+# https://www.mail-archive.com/tmux-users%40lists.sourceforge.net/msg05950.html
+#
+# Besides, there's an overhead of 8  bytes for the header (`\033]52;c;`) and the
+# footer (`\007`); so, only 99_992 bytes can be used for the text.
+# Finally, the text must be base64-encoded, which adds 33% of additional overhead:
+#
+#     77_994 * 4/3 = 99_992
+
+# For the `4*ceil(n/3)` length formula:
+#
+# >     The ratio of output bytes to input bytes is 4:3 (33% overhead).
+#
+# Source: https://en.wikipedia.org/wiki/Base64#Output_padding
+#}}}
+declare -i max=74994
+if (( len > max )); then
+  printf "%s: input is $(( len - max )) bytes too long\n" "$0" >&2
+fi
+
+# Why `$ head --bytes`?{{{
+#
+# To truncate the text after `$max` bytes, in case it's too long.
+# The final sequence must not exceed 100_000 bytes.
+#}}}
+# Why `$ tr --delete '\n'`?{{{
+#
+# To remove the trailing newline added by `base64(1)`.
+#}}}
+base64_encoded_text="$(
+  printf '%s' "$buf" \
+  | head --bytes="$max" \
+  | base64 \
+  | tr --delete '\n' \
+)"
+function Put {
+  local seq="$1"
+  # Why do you wrap the OSC 52 sequence inside a DCS sequence?{{{
+  #
+  # Without, the script would fail on a remote machine (or a local one without X
+  # or `xsel(1x)` if `set-clipboard` is not  set to `on`.  The DCS wrapper makes
+  # the script more reliable and insensitive to the value of `set-clipboard`.
+  #}}}
+  if [[ -n "$TMUX" ]]; then
+    seq="\033Ptmux;\033$seq\033\0134"
+  fi
+  # `%b` makes `printf` translate `\033` and `\007` into `Esc` and `ST`.{{{
+  #
+  # Remember that `printf`  translates a backslash escape sequence  if, and only
+  # if, the latter is  in the format, or in an argument  associated to `%b`; and
+  # *not* if  it's inside an  argument bound to  any other specifier  (like e.g.
+  # `%s`).
+  #
+  # From `man bash /printf/;/%b`:
+  #
+  # >   %b     causes printf to expand backslash escape sequences in the
+  # >          corresponding argument (except that \c terminates output,
+  # >          backslashes  in \', \", and \? are not removed, and octal
+  # >          escapes beginning with \0 may contain up to four digits).
+  #}}}
+  # Is there a risk that some part of the sequence is wrongly interpreted as a backslash escape sequence (like `\007`)?{{{
+  #
+  # No, because the encoded text will never contain a backslash:
+  # https://tools.ietf.org/html/rfc4648#section-4
+  #
+  # You can check yourself by encoding a large file:
+  #
+  #     $ base64 <~/.vim/vimrc | vim -
+  #     /\
+  #}}}
+  printf '%b' "$seq"
+}
+Put "\033]52;c;$base64_encoded_text\007"
+#            ^
+#            clipboard selection parameter

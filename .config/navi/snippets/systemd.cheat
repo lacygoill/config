@@ -1,0 +1,400 @@
+% systemd
+
+$ partial: printf '%s\n' 'partial: add/change parameter; full: delete parameter' partial full \
+    --- --header-lines 1 \
+        --map "\
+            case $(cat) in \
+                partial) ;; \
+                full) printf -- '--full' ;; \
+            esac \
+        "
+
+$ signal: printf '%s\n' KILL TERM
+
+; We enforce `--now` after  `enable` so that we don't have  to reboot or execute
+; an extra `$ systemctl start` command to start the unit.
+; Same thing for the `disable` and  `mask` subcommands; with `--now`, no need to
+; execute `$ systemctl stop` afterward.
+$ subcmd: printf '%s\n' status start stop enable disable mask unmask reload restart reenable \
+    --- --map "\
+            cat >/tmp/.navi \
+          ; case $(< /tmp/.navi) in \
+                enable|disable|mask) printf '%s --now' $(< /tmp/.navi) ;; \
+                *) printf '%s' $(< /tmp/.navi) ;; \
+            esac \
+          ; rm /tmp/.navi \
+        "
+
+; For our commands  using `<unit>`, `list-unit-files` gives  more useful results
+; than `list-units`.  For  example, the former can give masked  units (useful if
+; you want to unmask  one of them).  The latter gives  units created at runtime,
+; which add noise:
+;
+;     dev-disk-by\x2did-ata\x2dINTEL_SSDSC2CW120A3_CVCV434202BE120BGN.device
+;     dev-ttyS31.device
+;     sys-devices-platform-serial8250-tty-ttyS31.device
+;     ...
+;
+; Also,  `list-units` might  miss some  units  (even with  `--all`) which  we're
+; interested  in.  Remember  that  `list-units` only  lists  units that  systemd
+; currently has in memory; i.e. a unit that:
+;
+;    - is active
+;    - has a pending job
+;    - was active in the past and has failed
+;    - is referenced directly
+;    - is referenced through a dependency
+;    - is pinned by an application programmatically
+$ unit: systemctl list-unit-files --no-legend --plain | awk '{ print $1 }'
+
+$ sed_pattern_state: systemctl list-units --type=help \
+    | sed ' \
+        /Available/d; \
+        s/$/ SUBstates/; \
+        $ a unit active STATES\nunit load STATES\nunit file STATES' \
+    --- --map 'sed "s/SUBstates/unit substates/; s/STATES/states/"'
+
+$ unit_state: systemctl list-units --state=help \
+    | sed -n '/Available unit file states:/,/^$/p' \
+    | sed '/^$/d' \
+    --- --header-lines 1 \
+        --multi \
+        --map 'paste --serial --delimiters=","'
+
+$ unit_type: systemctl list-units --type=help \
+    --- --header-lines 1 \
+        --multi \
+        --map 'paste --serial --delimiters=","'
+
+# reload systemd manager configuration (which includes all unit files)
+sudo systemctl daemon-reload
+
+# status|start|stop|enable|disable|mask|unmask|reload|restart|reenable unit
+sudo systemctl <subcmd> <unit>
+    # `reload` makes the service reload its config, but requires `ExecReload=` to be set
+
+# kill troublesome processes of given unit
+sudo systemctl kill --signal=SIG<signal> <unit>
+
+# edit existing unit
+sudo systemctl edit <partial> <unit>
+    # For a partial  edit, a temporary file will be  opened with instructions on
+    # where to write  your new directives.  Once you're done,  save and quit the
+    # editor.  A drop-in directory and file should have been created:
+    #
+    #     /etc/systemd/system/❬unit❭.d/override.conf
+    #
+    # ---
+    #
+    # For a full edit, a new modified copy will be saved under `/etc/systemd/system`.
+    # This copy overrides the original under `/usr/lib/systemd/system`.
+    #
+    # ---
+    #
+    # When done, reload the systemd manager configuration:
+    #
+    #     $ sudo systemctl daemon-reload
+
+# create new unit
+sudo systemctl edit --full --force <new_unit>
+
+# interact with service 'foo' using the name 'bar'
+sudo systemctl edit <unit>
+    # Write an `Alias=bar.service` directive right under an `[Install]` section.
+    # Then, (re-)enable the service:
+    #
+    #     $ systemctl enable ❬unit❭
+
+# limit amount of CPU, RAM, I/O bandwidth that our user can consume
+set ncore $(lscpu | awk '/^CPU\(s\):[[:blank:]]*[0-9]*$/ { print $2 }') \
+    && sudo systemctl set-property user-$UID.slice CPUQuota=$(math "$ncore * <CPU_quota>")% \
+    && sudo systemctl set-property user-$UID.slice MemoryMax=<memory_max>G \
+    && set device $(findmnt --noheadings --output=SOURCE -- $(df --output=target . | grep '^/')) \
+    && find /dev/disk/by-path -type l -print \
+      | while read by_path
+          if test "$(realpath -- $by_path)" = "$device"
+              sudo systemctl set-property user-$UID.slice IOReadBandwidthMax="$by_path <IO_max>M"
+              sudo systemctl set-property user-$UID.slice IOWriteBandwidthMax="$by_path <IO_max>M"
+              break
+          end
+        end \
+    && sudo systemctl daemon-reload
+    # These `systemctl(1)` commands create drop-in files in:
+    #
+    #     /etc/systemd/system.control/user-$UID.slice.d/
+    #
+    # ---
+    #
+    # Warning: `❬CPU_quota❭` is spread among all CPU cores.
+    #
+    # For example,  if you have 4  cores, and set `❬CPU_quota❭`  to 75, your
+    # user won't  be able to  consume three quarters of  the CPU time,  but only
+    # around 19%  (`75 / 4`).  That's why  we multiply it  by our number  of CPU
+    # cores.
+    #
+    # For more info: `man 5 systemd.resource-control /OPTIONS/;/CPUQuota`
+    #
+    # ---
+    #
+    # To find your current maximum I/O bandwidth:
+    #
+    #     # to be run while the system is idle
+    #     $ dd if=/dev/zero of=/tmp/file bs=1M count=10000
+    #     $ dd if=/tmp/file of=/dev/null
+    #     20480000+0 records in
+    #     20480000+0 records out
+    #     10485760000 bytes (10 GB, 9.8 GiB) copied, 41.5474 s, 252 MB/s
+    #                                                           ^------^
+    #
+    # ---
+    #
+    # TODO: Read more about resource control.
+    #
+    # In particular,  chapter 12  "Controlling CPU usage"  in our  systemd ebook
+    # (and maybe chapter 13 "Understanding cgroup Version 2" too).
+    #
+    # Also, document the `pam_limits` module as an alternative for some limits.
+    # See: `/etc/security/limits.conf` and `man 5 limits.conf`.
+
+% systemd, debug
+@ systemd
+
+# list failed units (i.e. find out why system status is "degraded")
+systemctl list-units --state=failed
+
+# lint given service file
+systemd-analyze verify <unit>
+
+# reset "failed" state of broken units (to fix "degraded" State in `$ systemctl status`)
+systemctl daemon-reload ; systemctl reset-failed <failed_unit>
+    # This  is  only useful  if  you've  edited the  unit  file,  and fixed  the
+    # underlying issue.
+    #
+    # If you did not, and just want to delete the unit entirely, run this first:
+    #
+    #     $ systemctl disable --now ❬failed_unit❭
+    #     $ rm -- "$(systemctl show --property=FragmentPath --value ❬failed_unit❭)"
+    #
+    # Then, `daemon-reload` and `reset-failed`.
+
+# start debug shell
+sudo systemctl start debug-shell
+    # Useful if  `$ systemctl {reboot|poweroff}` fails  or hangs.
+    # To access the debug shell, simply press `Ctrl-Alt-F9`.
+    #
+    # ---
+    #
+    # If  you're not  in the  process  of restarting/powering  off the  machine,
+    # remember to  stop the  debug shell  after you're done  with it  to prevent
+    # unauthorized access to your system:
+    #
+    #     $ sudo systemctl stop debug-shell
+    #
+    # ---
+    #
+    # Do *not* enable the `debug-shell` service;  it would start the debug shell
+    # permanently which  is a *security hole*  as it allows  unauthenticated and
+    # unrestricted root access to your computer if you forget to disable it.
+    #
+    # Source: /usr/share/doc/systemd/README.Debian.gz
+
+% systemd, journal
+@ systemd
+
+$ id: journalctl --field=SYSLOG_IDENTIFIER -o json-pretty | sort --unique
+
+# filter journal by given boot
+journalctl --boot=-0
+    # `-0` identifies the last boot, `-1` the last but one boot, ...
+    # Instead  of  an  offset,  you  can   also  specify  an  ID,  as  given  by
+    # `$ journalctl --list-boots`.  The benefit  is that the semantics  of an ID
+    # does not change across reboots (contrary to an offset).
+
+# filter journal by given identifier
+journalctl --identifier=<id>
+
+# filter journal by given time
+journalctl --since=<time>
+    #     ❬time❭                | meaning
+    #     -------------------------------
+    #     -4h                   | 4 hours ago
+    #     06:00:00              | at 6 o'clock
+    #     2020-01-14            | on January 14th, 2020
+    #     '2020-01-14 14:30:00' | on January 14th, 2020 at 2:30 PM
+    #
+    # ---
+    #
+    # To specify a time range, you can add `--until`:
+    #
+    #     $ journalctl --since=❬time1❭ --until=❬time2❭
+    #
+    # `❬time1❭` must be lower than `❬time2❭`.
+
+# filter journal by process of given PID
+journalctl _PID=<pid>
+
+# filter journal by given unit
+journalctl --unit=<unit>
+    # Warning: `❬unit❭` must not be an alias.
+    #
+    # For example, this doesn't work:
+    #                            ✘
+    #                            v
+    #     $ journalctl --unit=sshd
+    #     -- Logs begin at ...
+    #     -- No entries --
+    #
+    # Because `sshd` is an alias for `ssh`:
+    #
+    #     $ systemctl show --property=Names --value sshd.service | sed 's/ /\n/g'
+    #     ssh.service
+    #     sshd.service
+
+# follow messages of given unit (useful for debugging)
+journalctl --unit=<unit> --follow
+
+# follow new messages
+journalctl --follow
+    # Alternative to: `$ tail -f /var/log/syslog`
+
+# grep the journal
+journalctl --grep=<regex>
+    # You only get the messages matching the regex.
+    # But often, important information might be nearby in terms of time.
+    # Try to pick out the timestamp from  a match, and then use `--since` with a
+    # time just before (to read the messages which came around that timestamp).
+
+# list units having written a message in the journal
+journalctl --field=_SYSTEMD_UNIT
+    # `--field` lists all values in the journal for a given field.
+
+# list field names currently used in all entries of the journal
+journalctl --fields
+
+# print size of the journal
+journalctl --disk-usage
+    # To reduce its size and keep only journal files newer than 100 days:
+    #
+    #     $ sudo journalctl --vacuum-time=100d
+
+% systemd, info
+@ systemd
+
+$ property: systemctl show -- "$unit" | awk -F'=' '{ print $1 }'
+
+# print config of given unit(s) (or manager itself)
+systemctl show <unit>
+    # To include empty properties, pass `--all` to `show`.
+    # To specify several units, separate them with spaces.
+    # To print the config of the manager itself, omit `❬unit❭`.
+    # To print only some properties, pass `--property=` to `show`;
+    # the latter accepts a comma-separated list of properties names.
+
+# print contents of given unit file
+systemctl cat <unit>
+
+# print value of given property of given unit
+systemctl show <unit> --property=<property> --value
+    # To get the path to the underlying unit file, use the property `FragmentPath`.
+
+# print default target
+systemctl get-default
+    # Alternative:
+    #
+    #     $ find -- $(systemd-analyze unit-paths) -name 'default.target' -execdir /usr/bin/ls -l '{}' \; 2>/dev/null
+    #     ... /lib/systemd/system/default.target -> graphical.target
+    #                                               ^--------------^
+
+# print how much time the system took to boot
+systemd-analyze time
+
+# list timers
+systemctl list-timers
+
+# list aliases for given unit
+systemctl show --property=Names --value <unit> | sed 's/ /\n/g'
+
+# list in-memory units of a given type
+systemctl list-units --type=<type>
+    # To include inactive units, pass `--all` to `list-units`.
+    # To filter out units based on their state, pass `--state=` to `list-units`.
+
+# list on-disk unit files of given type(s), in given state(s)
+systemctl list-unit-files --type=<unit_type> --state=<unit_state>
+
+# list available (sub)states of units/unit files
+systemctl list-units --state=help \
+    | sed -n '/<sed_pattern_state>/,/^$/p' \
+    | sed '/^$\|^Available/d'
+
+# list directories from which unit files might be loaded
+systemctl show --property=UnitPath --value | tr ' ' '\n'
+    # Alernative:
+    #
+    #     $ systemd-analyze unit-paths
+    #
+    # Note   that  `unit-paths`   prints  the   list  that   is  compiled   into
+    # `systemd-analyze(1)`  itself, and  does not  communicate with  the running
+    # manager.
+
+# list reverse dependencies of given unit (i.e. which unit(s) depend on it)
+systemctl list-dependencies --reverse <unit>
+    # useful to understand why a unit has been started
+
+# read manual for one or more units
+systemctl help <unit> | vim --not-a-term +'Man!' -
+
+# analyze security settings of given service
+systemd-analyze security <service>
+
+% systemd, login
+@ systemd
+
+$ session_ID: loginctl list-sessions | awk '/^[[:blank:]]*c[0-9]/ { print $1 }'
+
+# list current sessions
+loginctl list-sessions
+
+# print status information about given session(s)
+loginctl session-status <session_ID>
+
+# log out
+loginctl terminate-user -- $USER
+    # Alternative:
+    #
+    #     $ loginctl terminate-session -- $(loginctl session-status | awk 'NR == 1 { print $1 }')
+    #
+    # Source: https://unix.stackexchange.com/a/321096/289772
+    #
+    # But `terminate-user`  seems more reliable,  because you can  have multiple
+    # sessions, even if you only logged once.
+    #
+    # For example,  ATM, I  have 3 sessions,  even though I'm  only logged  in a
+    # graphical environment (and not in any console):
+    #
+    #     $ loginctl list-sessions
+    #     SESSION  UID USER SEAT  TTY
+    #        c117 1000 lgc  seat0
+    #        c119 1000 lgc  seat0
+    #        c127 1000 lgc  seat0
+
+# power off
+systemctl poweroff
+
+# reboot
+systemctl reboot
+    # Don't use `$ systemctl isolate reboot.target`;
+    # you would be prompted for your password.
+
+% systemd, test
+@ systemd
+
+# a drop-in file exists for given service
+systemctl status <name> | grep --ignore-case --after=1 drop-in
+    #     Drop-In: /etc/systemd/system/❬unit❭.d
+    #              └─foo.conf, bar.conf
+    #
+    # In this example, we can see that the unit has 2 drop-in files `foo.conf` and `bar.conf`.
+
+# given unit is enabled or active
+systemctl is-enabled --full <unit>; systemctl is-active <unit>

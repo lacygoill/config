@@ -1,0 +1,2371 @@
+% SSH
+
+; We purposefully omit `dsa`, because it seems like a weak/old algorithm.
+;
+; On Debian 12, `$ sudo ssh-keygen -A` does not generate keys for that algorithm.
+; Also, the key size is fixed to a low number of bits (`1024`):
+;
+;    > DSA keys must be exactly 1024 bits as specified by FIPS 186-2.
+;
+; Source: `man ssh-keygen(1)`
+;
+; Besides, `ssh-keyscan(1)` does not fetch DSA keys (not even with `-t dsa`).
+;
+; Finally, it's superseded by `ecdsa`:
+;
+;    > Currently, the DSA is not a very popular algorithm and is being superseded by ECDSA.
+;
+; Source: the book "Demystifying Cryptography with OpenSSL 3.0".
+$ algo: printf '%s\n' rsa ecdsa ed25519
+
+$ cert: find . -name '*-cert.pub' -printf '%P\n' 2>/dev/null
+
+$ comment: echo $USER@$(hostname)
+
+$ crypto_keyword: printf '%s\n' Ciphers HostKeyAlgorithms KexAlgorithms MACs PubkeyAcceptedKeyTypes
+
+; any kind of identity (standard or special)
+$ identity_file: find ~/.ssh \( -name 'id_*' -o -name 'task-*' \) \! -name '*.pub' -print
+; special identities meant to run automated processes
+$ task_file: find ~/.ssh -name 'task-*' \! -name '*.pub' -print
+
+; a key file can be an identity file
+$ input_keyfile: find ~/.ssh /etc/ssh \( -name 'id_*' -o -name 'ssh_host_*' \) -print
+
+; From `man ssh-keygen /^\s*-b\>\C`:
+;
+;    > For RSA keys, the minimum size is 1024 bits and the default is 3072 bits.
+;    > For ECDSA keys, [...]: 256, 384 or 521 bits.
+;    > [...] Ed25519 [...] keys have a fixed length and the -b flag will be ignored.
+$ keysize: case $algo in \
+        rsa) printf '%s\n' 1024 2048 3072 4096 ;; \
+        ecdsa) printf '%s\n' 256 384 521 ;; \
+        *) printf '' ;; \
+    esac
+
+# run given command on remote host
+ssh <user>@<host> '<cmd>'
+    # No interactive shell is opened; the SSH client merely authenticates itself
+    # to the host, runs the command, and exits.
+    #
+    # ---
+    #
+    # `❬user❭@` is optional.  If omitted, `$USER@` is used.
+    #
+    # An alternative syntax is `-l ❬user❭`:
+    #
+    #     $ ssh -l ❬user❭ ❬host❭ ❬cmd❭
+    #           ^-------^
+    #
+    # ---
+    #
+    # In a shell script, you can use this SSH command in a test because it exits
+    # with the exit status of `❬cmd❭` or with 255 if an error occurred.
+
+# copy file (or directory) from local machine to remote
+scp [-r -p] <local_path> <user>@<host>:<remote_path>
+    # `-r -p`: for a directory.
+    # `-r` to recurse, and `-p` to preserve the times and modes.
+    #
+    # ---
+    #
+    # If the SSH server listens on a non-standard port, use `-P`:
+    #
+    #     $ scp -P 123 ...
+    #           ^----^
+    #
+    # Warning: Flags of `scp(1)` and `sftp(1)` are often inconsistent with `ssh(1)`.
+    # For example, `-P` for `scp(1)` vs `-p` for `ssh(1)`.
+    # Avoid them as much as possible; instead, write their values in `ssh_config`:
+    #
+    #     Host some.domain
+    #         Port 123
+    #         ^------^
+    #
+    # ---
+    #
+    # If `remote_path` is relative (or  omitted), it's prefixed with the *login*
+    # directory of  the user  on the remote  (as specified in  the last  but one
+    # field of `/etc/passwd`).
+    #
+    # ---
+    #
+    # `❬local_path❭`: aka the source.
+    # `❬user❭@❬host❭:❬remote_path❭`: aka the target.
+    #
+    # But the general syntax of the  source and target is actually more complex;
+    # it can be either of:
+    #
+    #                v
+    #     [user@]host:[path]
+    #     scp://[user@]host[:port][/path]
+    #                       ^
+    #
+    # Notice  that the  colon  has different  semantics: in  the  first one,  it
+    # separates the  host from  the *path* and  is *mandatory*  (without, `host`
+    # would be wrongly parsed  as a file name); in the  second one, it separates
+    # the host from the *port* and is *optional*.
+    #
+    # All tokens can be omitted:
+    #
+    #    - `user` defaults to the local `$USER`
+    #    - `host` defaults to the local `hostname(1)`
+    #    - `path` defaults to the file name in the path specified in the source
+    #      (but can only be omitted in the target)
+    #    - `port` defaults to `Port` in `ssh_config`
+    #
+    # The URI  syntax (`scp://...`) lets  you specify  a different port  for the
+    # source; `-P` only affects it on the target.
+    #
+    # These syntaxes imply that the source is not necessarily on the local host.
+    # You can copy between 2 remote hosts.
+    #
+    # ---
+    #
+    # Alternatively, if the upload bandwidth is too limited, compress the file(s):
+    #
+    #                                                      v----v
+    #     $ tar --create --directory=❬local_path❭ --file=- --gzip ❬local_dir❭ \
+    #         | ssh ❬user❭@❬host❭ 'tar --directory=❬remote_path❭ --extract --file=- --gzip --verbose'
+    #
+    # `--directory` is used to change `tar(1)`'s CWD.
+    # `❬local_dir❭` must be a directory at the root of `❬local_path❭`.
+    #
+    # Note that  this works in the  other direction too (to  download instead of
+    # upload):
+    #
+    #     $ ssh ❬user❭@❬host❭ 'tar --create --directory=❬remote_path❭ --file=- --gzip ❬remote_dir❭' \
+    #         | tar --directory=❬local_path❭ --extract --file=- --gzip --verbose
+    #
+    # Which illustrates  that `ssh(1)`  can be used  to transparently  connect a
+    # remote process  to a  local one  via a  pipe, no  matter where  the remote
+    # process is relative to the pipe (left or right).
+
+# download, upload, rename, ... files between client and server interactively
+sftp <user>@<host>
+
+# expose files from given directory on remote at given mount point on local machine
+sshfs <user>@<host>:<dir> <mountpoint>
+    # `user` and `dir` can be omitted:
+    #
+    #    - `user` defaults to `$USER`
+    #    - `dir` defaults to the home directory on the remote
+    #
+    # ---
+    #
+    # Once you're done, unmount the user-space filesystem with:
+    #
+    #     $ fusermount -u ❬mountpoint❭
+
+# set client keyword which has no dedicated flag on the CLI
+ssh -o <keyword>=<value> <host>
+    # For  example,  `BindAddress`  has  no  convenient  dedicated  command-line
+    # option.  But you can still set it with `-o BindAddress=...`.
+    #
+    # OTOH, `Port` does have `-p`, so `-o Port=...` is useless (but still valid).
+
+# log to server from intermediate jump host
+ssh -J <user_on_jump_host>@<jump_host> <user>@<final_server>
+    # `ssh(1)` lets you use `❬jump_host❭` as a relay to connect to `❬final_server❭`.
+    #
+    # ---
+    #
+    # If  `❬jump_host❭` listens  on  a non-standard  port,  specify it  with
+    # `:❬port❭`:
+    #
+    #     $ ssh -J ❬user_on_jump_host❭@❬jump_host❭:❬port❭ ❬user❭@❬final_server❭
+    #                                             ^-----^
+    #
+    # Not with `-p`:
+    #
+    #     $ ssh -p ❬port❭ -J ❬user_on_jump_host❭@❬jump_host❭ ❬user❭@❬final_server❭
+    #           ^-------^
+    #               ✘
+    #
+    # `-p ❬port❭` does not apply to `❬jump_host❭`, but to `❬final_server❭`.
+    #
+    # ---
+    #
+    # You'll get  prompted for your  credentials on `❬jump_host❭`,  and then
+    # for your credentials on `❬final_server❭`.
+    #
+    # ---
+    #
+    # The alternative  would be to  log into `❬jump_host❭`, and  from there,
+    # run `ssh(1)` again to log into `❬final_server❭`.  But there would be a
+    # few caveats:
+    #
+    #    - `❬jump_host❭` would see what you type as plain text
+    #    - `❬jump_host❭` could refuse to enable some feature you need on
+    #      `❬final_server❭`, like the ability to forward X or your agent
+    #
+    # No such  issues with `-J`. `❬jump_host❭`  will not see what  you type;
+    # just an encrypted data stream.  And it can't refuse to enable any feature,
+    # because it  has no control  over the  keywords your client  negotiate with
+    # `❬final_server❭`.
+
+# force IPv4 to connect
+ssh -4 <host>
+    # to force IPv6, replace `-4` with `-6`
+
+# run graphical program on remote and display its window locally via X forwarding
+ssh -X -C -f <user>@<host> '<cmd>'
+    # If the program crashes or doesn't work as expected, try `-Y` instead of `-X`.
+    #
+    # `-X` (`ForwardX11 yes`)  only supports a  (less-insecure) subset of  the X
+    # protocol.   But maybe  your  program needs  some  function(s) beyond  that
+    # subset.   `-Y` (`ForwardX11 yes`  + `ForwardX11Trusted yes`)  supports the
+    # full set of X functions.
+    #
+    # WARNING: With `-Y`, an intruder who controls  the SSH server can take over
+    # your desktop and capture your keystrokes.  Only use it if necessary and if
+    # you fully trust the server.
+    #
+    # ---
+    #
+    # This can be  useful, as an example, to bypass  your company's firewall, by
+    # running your web browser on a remote server and funnel the display back to
+    # your PC at work.
+    #
+    # Since HTTP  requests originate from your  server, which is not  subject to
+    # the content filter restrictions of  your company's firewall, you can visit
+    # whatever web site you're interested in.
+    #
+    # ---
+    #
+    # `-C` (`Compression yes`) enables compression which can as much as *double*
+    # throughput of forwarded X connections.
+    #
+    # ---
+    #
+    # `-f` tells `ssh(1)` to background itself, which immediately gives you back
+    # the original shell prompt.  Otherwise, the terminal would be useless until
+    # your graphical program terminates.
+    #
+    # ---
+    #
+    # It doesn't work!
+    #
+    # Start a new session without `-f` and `❬cmd❭`:
+    #
+    #     $ ssh -X -C ❬user❭@❬host❭
+    #
+    # Inside the shell, make sure that `$DISPLAY` looks like `localhost:10.0`.
+    # If it's empty,  it means X forwarding is not  enabled; restart `ssh(1)` in
+    # verbose mode to find out why.
+    # If it looks like `remote:1`, it means  that the connection to the X server
+    # uses the insecure and legacy protocol XDMCP; your shell found an X server,
+    # but not the  one you're trying to  forward over SSH.  Do *not*  run your X
+    # program.
+    #
+    # Also, make sure that `X11Forwarding` is set to `yes` in `sshd_config`, and
+    # that the server machine has `xauth(1)`.
+    #
+    # If everything is correct, try to run `xeyes(1)` (a mouse X demo):
+    #
+    #     $ xeyes &
+    #
+    # A pair of  eyes should appear on  your desktop.  You might need  to wait a
+    # little if:
+    #
+    #    - there is some latency between your machine and the server
+    #    - the bandwidth is constrained
+    #    - you're not logged in a graphical session on the server (in that
+    #      case, for example, there is no need to wait for `xeyes(1)`, but you
+    #      need to wait about half a minute for `mousepad(1)`)
+    #
+    # ---
+    #
+    # X forwarding can increase latency, jitter  or packet loss; that might make
+    # a  graphical program  unusable  in practice.   In  that case,  investigate
+    # alternatives:
+    #
+    #    - dynamic port forwarding
+    #    - protocol designed to accommodate high latency
+    #    - program-specific remote use feature (e.g. Wireshark can accept
+    #      a tcpdump stream from another host)
+
+# extract public key from private key file
+sudo ssh-keygen -y -f <input_keyfile> \
+    | sudo tee <input_keyfile>.pub \
+    && sudo chmod 0644 <input_keyfile>.pub
+    # That's possible  because a private  key file also  contains a copy  of the
+    # matching public key.
+    #
+    # ---
+    #
+    # By default, when calling `ssh-keygen(1)`  to generate a public/private key
+    # pair, it sets the  permissions to `644` for the public  key (and `600` for
+    # the  private one).   However,  if the  latter was  removed,  and now  it's
+    # re-created with `tee(1)`, the permissions might be set to `664` (depending
+    # on  the umask).   In any  case, we  want to  be sure  the permissions  are
+    # correct, hence the `chmod(1)`.
+
+# change comment in private and public key files
+ssh-keygen -c -f <input_keyfile> -P '<passphrase>'
+    # `❬input_keyfile❭` must be the path to the *private* key; not the public one.
+
+% SSH, agent
+@ SSH
+
+# load private keys into agent
+ssh-add
+    # This adds all these identity files to the authentication agent:
+    #
+    #     ~/.ssh/id_{rsa,dsa,ecdsa,ecdsa_sk,ed25519,ed25519_sk}
+    #
+    # If you  want to be  more specific, pass the  path to the  desired identity
+    # file as an argument:
+    #
+    #     $ ssh-add ~/.ssh/id_rsa
+    #               ^-----------^
+    #
+    # ---
+    #
+    # If you have  several private keys encrypted with the  same passphrase, the
+    # agent is smart enough to only ask you to enter it once.
+    #
+    # ---
+    #
+    # Don't load  a key  into an  SSH agent until  you made  sure the  key works
+    # without.
+    #
+    # And don't  use an  SSH agent  if other people  have root  or administrator
+    # access on your machine.  They can access your agent and masquerade as you.
+
+# start agent from console
+ssh-agent $SHELL
+    # This starts an  agent as well as a subshell  in which `$SSH_AUTH_SOCK` and
+    # `$SSH_AGENT_PID` are  set (check  the value of  `$SHLVL` before  and after
+    # running the command; it increases by 1).  Quitting the subshell causes the
+    # agent to terminate after a few seconds  (and the variables to no longer be
+    # set).
+    #
+    # You  need to  do  that even  if  you already  have  another agent  running
+    # (whether it  was started from  another console  or from the  GUI).  That's
+    # because `ssh-add(1)` needs  `$SSH_AUTH_SOCK` to be set to  find the socket
+    # over which it  can communicate with the agent.  But  an agent started from
+    # another console (or from the GUI) has  no effect on the environment of the
+    # shell running in your current console.
+    #
+    # ---
+    #
+    # Alternative:
+    #
+    #     $ eval $(ssh-agent)
+    #
+    # The drawback of this command is that  if you quit the shell running in the
+    # console, the agent does not terminate.
+
+# list keys currently loaded in agent
+ssh-add -l
+
+# remove given key from agent
+ssh-add -d <identity_file>
+    # I get a confusing error!
+    #
+    #     Bad key file ...: No such file or directory
+    #
+    # The message might be confusing because the given file actually does exist.
+    #
+    # Anyway, make sure  the public and private keys are  in the same directory.
+    # If you only have  a private key, extract the public key  from it, and save
+    # it where `ssh-add(1)` expects it to be:
+    #
+    #     $ cd ~/.ssh
+    #     $ ssh-keygen -y -f id_rsa > id_rsa.pub
+    #     $ chmod 0644 id_rsa.pub
+
+# remove all keys from agent
+ssh-add -D
+    # Useful before suspending your laptop (if  someone else can wake it up, and
+    # log in), or before going to lunch without locking your desktop.
+
+% SSH, server_auth
+@ SSH
+
+# generate all host keys missing from /etc/ssh
+sudo ssh-keygen -A
+    # Only missing keys for a given algorithm are generated.
+    #
+    # ---
+    #
+    # Private keys are not encrypted with a passphrase, because it would prevent
+    # the  SSH service  from  starting until  someone enters  it  at the  server
+    # console, and the SSH service must start when the system boots.
+    #
+    # Passphrases are most often used with *user* authentication keys (!= *host* keys).
+    #
+    # ---
+    #
+    # Whenever a client connects, the server and the client use one of those key
+    # pairs to  negotiate a  temporary key  pair shared  only between  these two
+    # hosts.  The  client and  the server  both use this  temporary key  pair to
+    # derive a  symmetric key that  they will use  to exchange data  during this
+    # session.  If the session runs for a  long time or exchanges a lot of data,
+    # the  hosts will  intermittently negotiate  a  new temporary  key pair  and
+    # symmetric key.
+    #
+    # ---
+    #
+    # In  effect, the  private host  keys also  authenticate the  server to  the
+    # client.  A spoof  server could try to copy many  things (e.g. the prompt);
+    # but not  the private keys,  which they would  need to decrypt  the traffic
+    # encrypted  by the  client  using  the public  keys.   I  guess the  client
+    # automatically closes the  connection if they notice that  the server fails
+    # to  decrypt the  traffic,  which  should happen  *before*  the client  has
+    # exchanged authentication information with the server.
+    #
+    # ---
+    #
+    # Each supported encryption algorithm uses a separate file.
+    # `ssh_host_❬algo❭_key` is the conventional scheme when naming a private
+    # host key file.
+    #
+    # On Debian-based systems, missing keys are created when running:
+    #
+    #     $ sudo dpkg-reconfigure openssh-server
+
+# generate host key for given algorithm
+sudo ssh-keygen -N '' -t <algo> -b <keysize> -f /etc/ssh/ssh_host_<algo>_key
+
+# get fingerprint of server public key from local key file
+ssh-keygen -l -f <input_keyfile>
+    # `❬input_keyfile❭` can  be the key file  of a public *or*  private key.
+    # That's because  a private key  file also contains  a copy of  the matching
+    # public key.
+    #
+    # ---
+    #
+    # Example:
+    #
+    #     $ sudo ssh-keygen -l -f /etc/ssh/ssh_host_rsa_key
+    #
+    #     size of the key                                     encryption algorithm
+    #     v--v                                                                 vvv
+    #     3072 SHA256:kJAsfGld3Eu9CTOaVXNhBnBmcX4Cm3m2XnpwhWYKH9Q root@ubuntu (RSA)
+    #          ^----^ ^-----------------------------------------^ ^---------^
+    #          hash algorithm      actual fingerprint             user and host that generated the key
+    #          of the fingerprint
+    #
+    # ---
+    #
+    # This is useful for a sysadmin who needs to communicate the fingerprints of
+    # its server to its users:
+    #
+    #     $ for keyfile in /etc/ssh/ssh_host_*_key \
+    #         ; sudo ssh-keygen -l -f $keyfile \
+    #         ; end >fingerprints.txt
+    #
+    # Now,  they need  to communicate  `fingerprints.txt` to  their users.   For
+    # example, they might display it on  an *encrypted* Web site accessible from
+    # within their  organization.  When a user  needs SSH access to  the server,
+    # they'll be  given a link to  the fingerprint page, along  with their login
+    # credentials.
+    #
+    # Although,  a better  alternative  is  to generate  and  deploy the  users'
+    # `known_hosts`; but this  assumes that the sysadmin and all  the users work
+    # in the  same organization,  and that the  former administers  the latters'
+    # machines.
+    #
+    # Another alternative is  to distribute your server  public key fingerprints
+    # via DNS, but:
+    #
+    #    - you need to know some DNS basics
+    #
+    #    - you need to have a DNS provider which supports SSHFP records
+    #
+    #    - you need to configure DNS Security Extensions (DNSSEC), because
+    #      traditional DNS services are not secure
+    #
+    #    - your users must set `VerifyHostKeyDNS` to `yes` or `ask` in `ssh_config`
+    #
+    #    - PuTTY does not support checking for host key fingerpints in the DNS
+    #      (OpenSSH does)
+    #
+    # If you still want to know more about it, look for "SSHFP" in the book "SSH
+    # Mastery" (in chapter 11 titled "Key Distribution").
+    #
+    # ---
+    #
+    # This also works on your `known_hosts`  file; in that case, the fingerprint
+    # of each host you accepted in the past will be printed:
+    #
+    #     $ ssh-keygen -l -f ~/.ssh/known_hosts
+    #
+    #                v-----------------------------------------v
+    #     256 SHA256:HbW3g8zUjNSksFbqTiUWPWg2Bq1x8xdGUrliXFzSnUw ...
+    #     ...
+    #     256 SHA256:p2QAMXNIC1TJYWeIOttrVc98/R1BUFWu3/LiyKgUfQM ...
+    #                ^-----------------------------------------^
+    #
+    # ---
+    #
+    # This will print the SHA256 fingerprint.  To get the MD5 one, use `-E md5`.
+
+# generate known_hosts file (for sysadmin to later distribute to client machines)
+ssh-keyscan <host> >myserver.known_hosts
+    # Once you have a `known_hosts`,  deploy it at `/etc/ssh/ssh_known_hosts` on
+    # all  clients which  need it,  via a  configuration management  system like
+    # Ansible.  Such  a system is useful  whenever you have to  update the file.
+    # Without, eventually, you won't keep up on it; as a result, your users will
+    # see spurious warnings which they'll  learn to ignore.  That's bad, because
+    # then  they might  also ignore  a legitimate  warning which  requires their
+    # attention.
+    #
+    # Problem: OpenSSH  also checks  for  host keys  in `~/.ssh/known_hosts`.   It
+    # might contain obsolete or invalid  entries which will interfere with later
+    # key changes or revocations.
+    #
+    # Solution: Move it:
+    #
+    #     $ mv ~/.ssh/known_hosts{,.personal}
+    #
+    # Do *not* delete  it.  It might contain verified host  keys for servers you
+    # don't control.
+    #
+    # Then, tell your users what you did.  If their files still contain valuable
+    # entries,  I  guess they  will  have  to  set `UserKnownHostsFile`  to  the
+    # `.personal` file in `Host` blocks.
+    #
+    # Problem: On Windows,  PuTTY keeps  its host keys  in the  Windows Registry
+    # (not in a `known_hosts` file).
+    #
+    # Solution: Download the PuTTY source code at: https://github.com/github/putty
+    # Then, in the  `contrib/` directory, run the `hk2reg.py`  script to convert
+    # your `known_hosts` into PuTTY's Registry keys:
+    #
+    #     $ kh2reg.py your_known_hosts > putty.reg
+    #
+    # Install this registry  file on your clients via Active  Directory, a login
+    # script, or by  having your users double-click on it  (PuTTY stores keys in
+    # each user's registry; there is no systemwide PuTTY registry tree).
+    #
+    # ---
+    #
+    # `❬host❭` can optionally be followed  by a comma-separated list of host
+    # names/IPs (`❬namelist❭`):
+    #
+    #     $ ssh-keyscan 1.2.3.4 name.my.domain,name,n.my.domain,n,1.2.3.4,1.2.4.4 >myserver.known_hosts
+    #                   ^-----^ ^-----------------------------------------------^
+    #                    host                       namelist
+    #
+    # `❬host❭`  is  used  by  `ssh-keyscan(1)`   to  connect  to  the  host.
+    # `❬namelist❭` is  used – as is  – to set the  output's first field;
+    # that  is, it  becomes the  host name  field of  `known_hosts` (instead  of
+    # `❬host❭`):
+    #
+    #     name.my.domain,name,n.my.domain,n,1.2.3.4,1.2.4.4 ❬key_type❭ ❬key❭
+    #
+    # This syntax  is useful if your  server has multiples host  names, aliases,
+    # IPs.   Because then,  you don't  have to  write the  same key  on multiple
+    # mostly-duplicate lines for different names.
+    #
+    # BTW,  if your  server has  several  IP addresses,  and you  don't want  to
+    # specify all of them in the `known_hosts`, because you intend your users to
+    # only connect via  one of them, it might make  sense to configure `sshd(8)`
+    # so that it only listens on one specific address via `ListenAddress`.
+    #
+    # ---
+    #
+    # You can write multiple  `❬host❭` in a file, one per  line, and pass it
+    # to `ssh-keyscan(1)` via `-f`:
+    #
+    #     $ tee /tmp/hosts <<'EOF'
+    #     hostname
+    #     IP
+    #     hostname namelist
+    #     ...
+    #     EOF
+    #
+    #     $ ssh-keyscan -f /tmp/hosts >myserver.known_hosts
+    #
+    # ---
+    #
+    # If `sshd(8)` on `❬host❭` listens on a different port than the standard
+    # `22`,  specify  it with  `-p`.   In  the output,  the  host  name will  be
+    # surrounded with square brackets and followed by a colon and the port:
+    #
+    #                   v-------v
+    #     $ ssh-keyscan -p ❬port❭ ❬host❭ ...
+    #     [❬host❭]:❬port❭ ❬key_type❭ ❬key❭
+    #     ^      ^^
+    #     ...
+    #
+    # ---
+    #
+    # By default, `ssh-keyscan(1)` fetches RSA, ECDSA, and ED25519 keys.
+    # You can control which type of keys you want to fetch with `-t`:
+    #
+    #     $ ssh-keyscan -t ecdsa,rsa ❬host❭
+    #                   ^----------^
+    #
+    # ---
+    #
+    # If  `sshd(8)`  on  `❬host❭`  can offer  multiple  keys  for  different
+    # encryption  algorithms, the  output will  contain each  key on  a separate
+    # line.
+    #
+    # ---
+    #
+    # `ssh-keyscan(1)`  does  not  hash  the  host  name  in  the  first  field,
+    # regardless of how `HashKnownHosts` is set to in the client config.
+    #
+    # The public key is base64-encoded.
+    #
+    # ---
+    #
+    # Later, if `ssh(1)` has to append a  new entry in `known_hosts`, and if you
+    # used an  SSH alias to  refer to  the host, the  name written in  the first
+    # field will be the resolved IP (the alias is ignored).  OTOH, if you used a
+    # canonical name or  an alias set in `/etc/hosts`, then  the name written in
+    # the first field will be a comma-separated list `name,IP`.
+
+# hash known_hosts file
+ssh-keygen -H -f <known_hosts>
+    # A copy of the original file is kept in the same directory, with the `.old`
+    # extension.
+    #
+    # ---
+    #
+    # `-f ❬known_hosts❭` is optional.  Without, `~/.ssh/known_hosts` is assumed.
+    #
+    # ---
+    #
+    # Encrypted host names  are not deterministic; if you run  the command twice
+    # on the  same file, you'll get  different outputs.  I guess  they're hashed
+    # *and* salted.
+
+# remove all keys belonging to given host from known_hosts file
+ssh-keygen -R <host>
+    # `❬host❭` can be an IP address.
+    #
+    # ---
+    #
+    # You can optionally specify the `known_hosts` file from which to remove the
+    # keys; e.g. with `-f ~/.ssh/known_hosts`.
+
+# rotate host keys (for sysadmin)
+    # Generate a new host key for each algorithm that your server offers:
+    #
+    #     $ sudo ssh-keygen -N '' -t ed25519 -f /etc/ssh/2024_ssh_host_ed25519_key \
+    #         && sudo ssh-keygen -N '' -t rsa -b 2048 -f /etc/ssh/2024_ssh_host_rsa_key \
+    #         && ...
+    #
+    # Then, in  `sshd_config`, append  these additional `HostKey`  lines *after*
+    # the existing ones:
+    #
+    #     # existing keys
+    #     HostKey 2023_ssh_host_ed25519_key
+    #     HostKey 2023_ssh_host_rsa_key
+    #     ...
+    #
+    #     # new keys
+    #     HostKey 2024_ssh_host_ed25519_key
+    #     HostKey 2024_ssh_host_rsa_key
+    #     ...
+    #
+    # Finally, reload `sshd(8)`.
+    #
+    # ---
+    #
+    # A  rotation  is  only  useful  if  at  least  some  of  your  clients  set
+    # `UpdateHostKeys` to `yes`  or `ask`.  Otherwise, you might  as well remove
+    # the old host  keys immediately.  Note that a rotation  is probably useless
+    # for PuTTY  clients, because the latter  can't accept multiple keys  of the
+    # same type.
+    #
+    # Once you think all of your clients  have cached the new host keys in their
+    # `known_hosts`, you can remove the old  keys (i.e. the key files, and their
+    # corresponding `HostKey` lines) and reload `sshd(8)`.
+
+% SSH, user_auth
+@ SSH
+
+# generate standard user authentication key
+ssh-keygen -N '<passphrase>' -t ed25519 -C '<comment>'
+    # This  is meant  to be  run  on your  local machine.   However, the  public
+    # key  still needs  to be  appended to  `~user/.ssh/authorized_keys` on  the
+    # *server*. `user` being  the name of the  user you'll log in  as.  Unless a
+    # public user CA key is written  in the file assigned to `TrustedUserCAKeys`
+    # on the server, and you use it  to create a certificate alongside your user
+    # key in `~/.ssh/` on your client machine.
+    #
+    # ---
+    #
+    # `-t` (which algo)  and `-b` (which key size) can  be omitted; they default
+    # to `rsa` and `3072`.
+    #
+    # However, I recommend using `-t ed25519` (with which `-b` is ignored):
+    #
+    #    > I also think that **it is even better to use Elliptic Curve Cryptography**
+    #    > **(ECC) instead of RSA** in cases where the usage of ECC is as easy as the
+    #    > usage of RSA – for example, in TLS certificates and **SSH keys**.
+    #
+    # Source: the book "Demystifying Cryptography with OpenSSL 3.0".
+    #
+    # Alternatively, try `-t ecdsa` and `-b 256` (until 2030).
+    #
+    # Rationale: EdDSA is  more modern than  ECDSA, which itself is  more modern
+    # than RSA.   For more  info, see our  comment about  `HostKeyAlgorithms` at
+    # `~/.config/etc/ssh/sshd_config.d/99-local.conf`
+    #
+    # Also,   it  produces   shorter   keys   which  are   nicer   to  read   in
+    # `~/.ssh/authorized_keys` (and it helps to syntax highlight inline trailing
+    # comments without having to increase `'synmaxcol'`).
+    #
+    # ---
+    #
+    # The default comment is `'❬user❭@❬host❭'`.
+    # Choose a comment which helps you identify the key.
+    #
+    # ---
+    #
+    # If  you have  a  privileged account  on  the server  (i.e.  you have  sudo
+    # privileges), set a  passphrase to encrypt the private key;  don't leave it
+    # empty.  Its goal is to prevent an intruder from accessing the server as if
+    # they were you, and to discourage casual eavesdropping.
+    #
+    # If adding a passphrase is too  cumbersome (e.g. for an automated process),
+    # try to limit the server account's privileges.
+    #
+    # ---
+    #
+    # Cryptographically, a user key is identical to a server/host key.
+    # The only difference is where the key is written.
+
+# generate special user authentication key (to run automated task)
+ssh-keygen -N '' -f ~/.ssh/task-<purpose> -t ed25519 -C '<comment>'
+    # Suitable for use by an automated program for which nobody will be there to
+    # type a passphrase.
+    #
+    # ---
+    #
+    # Add the key on the remote with something like:
+    #
+    #     $ ssh ❬user❭@❬host❭ 'tee --append ~/.ssh/authorized_keys
+    #     chmod 00700 ~/.ssh
+    #     chmod 0600 ~/.ssh/authorized_keys' < ~/.ssh/task-❬purpose❭.pub
+    #
+    # If the key is for the `root` user, try something like this instead:
+    #
+    #     $ scp ~/.ssh/task-❬purpose❭.pub ❬user❭@❬host❭:
+    #     $ ssh ❬user❭@❬host❭
+    #     $ sudo tee --append /root/.ssh/authorized_keys < ~/task-❬purpose❭.pub
+    #     $ rm ~/task-❬purpose❭.pub
+    #
+    # Where `❬user❭` is not `root`, but a regular user with which you can log in.
+    #
+    # ---
+    #
+    # Since   the  private   key  is   not   protected  by   a  passphrase,   in
+    # `authorized_keys` on *any* remote server on which you want to authenticate
+    # with this  key, make sure  to tightly restrict  the resources the  key has
+    # access to,  and what actions  it can perform.   If it gets  disclosed, you
+    # want to minimize as much as possible the damage an intruder could inflict.
+    #
+    # Typically, you will write something like  this for the options in front of
+    # the key inside any *remote* `authorized_keys`:
+    #
+    #     restrict,command="some command",from="some IP" ...
+    #
+    # ---
+    #
+    # We put the  key files in `~/.ssh/`, because outside  it would seem untidy.
+    # We  name them  with the  prefix  `task-` because  it seems  like a  useful
+    # convention.
+
+# authenticate to server via special user key (to run automated task)
+ssh -i <task_file> -o IdentitiesOnly=yes -o BatchMode=yes <user>@<host>
+    # This is useful if your key does not identify a user, but is meant for some
+    # special circumstances, like automated jobs.   In that case, you might want
+    # to  put  it  in  a  non-standard  location so  that  it's  not  picked  up
+    # automatically by something like `ssh-add(1)`.
+    #
+    # BTW, the standard location is  controlled by the `IdentityFile` keyword in
+    # `ssh_config` which by default is set to a bunch of `~/.ssh/id_*` files:
+    #
+    #     $ ssh -G localhost | grep identityfile
+    #     identityfile ~/.ssh/id_rsa
+    #     identityfile ~/.ssh/id_dsa
+    #     identityfile ~/.ssh/id_ecdsa
+    #     identityfile ~/.ssh/id_ecdsa_sk
+    #     identityfile ~/.ssh/id_ed25519
+    #     identityfile ~/.ssh/id_ed25519_sk
+    #     identityfile ~/.ssh/id_xmss
+    #
+    # ---
+    #
+    # `-o IdentitiesOnly=yes` prevents `ssh(1)` from using an identity loaded in
+    # our  SSH agent  rather than  `❬task_file❭`. `❬task_file❭`  is most
+    # probably  *not*  loaded  in  our  agent;  and even  if  it  is,  there  is
+    # no  guarantee  that it  will  be  the one  to  be  picked up  by  `ssh(1)`
+    # (multiple identities might  be loaded).  But we want  to authenticate with
+    # `❬task_file❭`  specifically, because  of the  options that  we set  in
+    # `authorized_keys`.   In particular,  we  need the  `command` option  which
+    # specifies the command to execute.
+    #
+    # ---
+    #
+    # `-o BatchMode=yes` disables all possible `ssh(1)` prompts during login.
+    #
+    # In general, when you  log in, you might be asked for a  password, or for a
+    # passphrase (to decrypt a private key), or for a confirmation when the host
+    # key  is  not  known.   Here,  that should  not  happen  if  you  correctly
+    # configured OpenSSH (i.e. you authenticate via a key which is not protected
+    # by a passphrase, and the remote is in your `known_hosts`).  But if somehow
+    # you  did  not,  then  you  don't  want  a  script  in  which  you  run  an
+    # `ssh(1)`  command  to pointlessly  hang  around  forever.  In  that  case,
+    # `-o BatchMode=yes` makes sure the command exits and fails immediately.
+    #
+    # Note  that  `-o BatchMode=yes`  has  no  effect  on  input  requests  from
+    # processes  started after  the connection  (e.g. `read`  shell builtin,  or
+    # `sudo(8)`).  It only deals with input requests from `ssh(1)` itself.
+
+# add user public key to authorized_keys file (to be run by user)
+ssh-copy-id -p <port> <user>@<host>
+    # By default, all  keys currently loaded into the agent  are added (as given
+    # by  `$ ssh-add -L`).  If  none  of  them is,  the  most recently  accessed
+    # `~/.ssh/id_*.pub` key is added; if you  want the command to add a specific
+    # key, `touch(1)` it before.
+    #
+    # ---
+    #
+    # Alternative:
+    #
+    #     $ ssh -p ❬port❭ ❬user❭@❬host❭ 'tee --append ~/.ssh/authorized_keys
+    #         chmod 00700 ~/.ssh
+    #         chmod 0600 ~/.ssh/authorized_keys' < ~/.ssh/id_❬algo❭.pub
+
+# add user public key to authorized_keys file (to be run by sysadmin)
+grep --quiet '^<user>:.*/bin/bash$' /etc/passwd \
+    && mkdir --mode=0700 -p ~<user>/.ssh \
+    && tee --append <identity_file>.pub ~<user>/.ssh/authorized_keys \
+    && chmod 0600 ~<user>/.ssh/authorized_keys
+    # This command  is meant to be  run by a sysadmin  after a user sent  them a
+    # public key with which they want to authenticate.
+    #
+    # ---
+    #
+    # The purpose  of `grep(1)`  is to  make sure  that the  user has  an active
+    # account with a valid shell.
+    #
+    # ---
+    #
+    # If  you run  this command  often,  you might  want  to replace  it with  a
+    # configuration management system such as Ansible which can handle this task
+    # cleanly.
+    #
+    # ---
+    #
+    # As  a   sysadmin,  you  might  want   to  force  users  to   upload  their
+    # `authorized_keys`  to  some automation  system  which  will perform  basic
+    # integrity tests.  For example, this system could make sure that a user did
+    # not unknowingly corrupt  their file by adding newlines in  the middle of a
+    # long key.
+    #
+    # Also, you might want your automation system to deploy `authorized_keys` at
+    # a location owned by  root.  To let `sshd(8)` know where  to find the file,
+    # write something like this in `sshd_config`:
+    #
+    #     AuthorizedKeysFile /etc/ssh/authorized_keys/%u
+    #
+    # The  benefit is  that the  files will  now be  centralized under  the same
+    # directory, making their  management easier.  Besides, even  if an intruder
+    # penetrates a user  account, they will no  longer be able to  edit the keys
+    # without privilege escalation.
+    #
+    # Alternatively,  if   you  manage  several  servers,   instead  of  letting
+    # each   of   them  authenticate   users,   you   might   want  to   use   a
+    # centralized  authentication  system   such  as  LDAP.   Have   a  look  at
+    # the  `AuthorizedKeysCommand` and  `AuthorizedKeysCommandUser` keywords  in
+    # `sshd_config`.   Also, you  can  read more  about this  in  the book  "SSH
+    # Mastery", chapter  11 titled "Key Distribution",  subchapter "Querying the
+    # Network for Keys".
+
+% SSH, cert
+@ SSH
+
+# generate CA key to sign host keys
+sudo mkdir -p /usr/local/sshca/hosts/ \
+    && cd /usr/local/sshca/hosts/ \
+    && sudo ssh-keygen \
+        -N '<passphrase>' \
+        -t ed25519 \
+        -f host-ca-key \
+        -C "CA host key generated $(date +'%Y-%m-%d')"
+    # Run this command  on a dedicated-purpose machine that only  gets booted to
+    # sign keys.   If an intruder compromises  your CA key, they  can sign their
+    # own host keys which will be trusted by all of your clients.
+    #
+    # ---
+    #
+    # Don't put  your CAs in  `/etc/ssh/`.  The latter  is reserved for  the SSH
+    # services of the machine you're working on.   But your CAs are not for this
+    # machine.  They're for other hosts, so they deserve their own directory.
+    #
+    # ---
+    #
+    # For your clients  to trust certificates signed by your  host CA, write its
+    # public key  in `/etc/ssh/ssh_known_hosts` on each  of them.  Mark it  as a
+    # certificate authority (via the  marker `@cert-authority`), and specify the
+    # host names it's valid for:
+    #
+    #     @cert-authority *.some.domain ❬key_type❭ ❬key❭
+    #
+    # If it's valid for multiple domains, separate them with commas:
+    #
+    #     @cert-authority *.some.domain,another.domain ❬key_type❭ ❬key❭
+    #                                  ^
+    #
+    # Note  that   `/etc/ssh/ssh_known_hosts`  can  contain  multiple   CA  keys
+    # simultaneously.  This is useful when you want to rotate your CA keys; i.e.
+    # use new  keys while temporarily  keeping the  old ones (until  you're sure
+    # all  new host  keys  and  their certificates  have  been re-generated  and
+    # distributed).
+    #
+    # ---
+    #
+    # I get an error!
+    #
+    #     do_ca_sign: key "...-cert.pub" type ...-CERT cannot be certified
+    #
+    # There is already a certificate with the same name.  Move it out of the way.
+
+# generate CA key to sign user keys
+sudo mkdir -p /usr/local/sshca/users/ \
+    && cd /usr/local/sshca/users/ \
+    && sudo ssh-keygen \
+        -N '<passphrase>' \
+        -t ed25519 \
+        -f user-ca-key \
+        -C "CA user key generated $(date +'%Y-%m-%d')"
+    # For your servers to trust certificates  signed by your user CA, write this
+    # in `sshd_config`, on each of them:
+    #
+    #     TrustedUserCAKeys /etc/ssh/user-ca-keys.pub
+    #
+    # Then, in `/etc/ssh/user-ca-keys.pub`, write your  public user CA key.  The
+    # file can  contain multiple keys  (useful when you  want to rotate  your CA
+    # keys), one per line.  And  its formatting is similar to `authorized_keys`.
+    # In particular, it accepts comments marked off with a leading `#`.
+    #
+    # Finally, reload `sshd(8)`.
+
+# generate certificates for given host
+sudo mkdir -p /usr/local/sshca/hosts/<hostname> \
+    && cd /usr/local/sshca/hosts/<hostname> \
+    && sudo ssh-keygen \
+        -s ../host-ca-key \
+        -h \
+        -I host_<hostname> \
+        -n <host> \
+        -V +<reltime> \
+        ssh_host_<algo>_key.pub
+    # Certificates are  named after the  public keys they certify,  with `-cert`
+    # inserted before `.pub`:
+    #
+    #     # host public key
+    #     ssh_host_rsa_key.pub
+    #
+    #     # host certificate
+    #     ssh_host_rsa_key-cert.pub
+    #                     ^---^
+    #
+    # ---
+    #
+    # Certificates  are enough  to authenticate  a host.   You could  delete the
+    # public host keys;  unless you intend to use them  again to re-generate new
+    # certificates when  the old ones have  expired.  BTW, the same  is true for
+    # public *user* keys; user certificates are enough to authenticate.
+    #
+    # ---
+    #
+    # `-s ../host-ca-key`: where to find your CA key.
+    # `-h`: you want a host key certificate (not a user one).
+    # `-I host_❬hostname❭`: the certificate identity.
+    # `-n ❬host❭`: host this certificate is good for.
+    # `-V +❬reltime❭`: expiration date (relative to current time).
+    #
+    # `❬hostname❭` should be a simple telling name like `backup` or `debian`,
+    # which helps you identify the host.
+    #
+    # In `-n ❬host❭`,  `❬host❭` accepts a comma-separated  list of hosts
+    # (aka principals in this context).  At least,  one of them must be the host
+    # name or IP,  as it will be  specified by the `ssh(1)` client  when it will
+    # try to connect.  No wildcard seems  to be allowed.  Alternatively, you can
+    # omit the argument entirely, in which case the certificate will be accepted
+    # for any host.
+    #
+    # `❬reltime❭` uses a syntax documented at `man 5 sshd_config /^TIME FORMATS`.
+    # For example, to have a certificate expire in 12 weeks, 3 days, 4 hours and
+    # 5 seconds  from now, you would  write `-V +12w3d4h5s`.  If you  omit `-V`,
+    # the certificate will be valid forever.
+    #
+    # BTW, you should make a certificate to expire (say after a year) because:
+    #
+    #    - the private key (corresponding to the certified public one) might
+    #      get disclosed
+    #
+    #    - algorithms grow easier to break as computing power advances
+    #
+    #    - even if the private key uses an algorithm which  is – in theory
+    #      – secure (and with  a strong enough key  size), a software
+    #      implementing  that algorithm can still  have bugs, making it
+    #      possible to  brute-force the key in  less time
+    #
+    #    - even  if the chances for an  intruder to brute-force a  key are
+    #      extremely low,  the more time they have, the bigger those chances
+    #      become
+    #
+    # ---
+    #
+    # This  command assumes  that you  copied your  public host  keys from  your
+    # server (`/etc/ssh/ssh_host_*_key.pub`) to your CA machine.
+    #
+    # ---
+    #
+    # Once  generated, copy  all of  these certificates  back on  the server  in
+    # `/etc/ssh/`.
+    #
+    # Then, still on the server, tell  `sshd(8)` where to find the certificates.
+    # In `sshd_config`, write:
+    #
+    #     HostCertificate /etc/ssh/ssh_host_ed25519_key-cert.pub
+    #     HostCertificate /etc/ssh/ssh_host_rsa_key-cert.pub
+    #     ...
+    #
+    # Finally, reload `sshd(8)`.
+    #
+    # ---
+    #
+    # If you need to run `ssh-keygen(1)` several times, but only want to provide
+    # the passphrase once, start an agent (and a shell) for the root user:
+    #
+    #     $ sudo ssh-agent $SHELL
+    #
+    # In the root shell, add the private key identity to the authentication agent:
+    #
+    #     $ ssh-add ../host-ca-key
+    #
+    # Finally, pass  `-U` to `ssh-keygen(1)`,  so that  it asks for  the private
+    # part of the CA keys to the agent rather than to you.
+    #
+    # ---
+    #
+    # To test that the certificate is working, run this on a client:
+    #
+    #     $ mv $HOME/.ssh/known_hosts{,.old}
+    #
+    # Then, `ssh(1)`  into the  server.  You  should get  a shell  without being
+    # prompted to verify the host key's fingerprint.
+    #
+    # ---
+    #
+    # The  book "SSH  Mastery"  recommends to  keep a  copy  of every  generated
+    # certificate, and its corresponding public key:
+    #
+    #    > Be sure  your CA retains a  copy of every certificate  and the corresponding
+    #    > public key (NDLR: i.e. the user/host key that it certifies).
+    #
+    # Both prepended with the date formatted as `year-month-day`, because:
+    #
+    #    > If you discover that a private key has been compromised, you'll need to
+    #    > revoke the certificate for that key. It's much easier to revoke the certificate
+    #    > when you have a copy on hand. When I create a certificate I create a copy
+    #    > of the certificate and its corresponding public key, both prepended with the
+    #    > date in ISO 8601 format (numeric year-month-day). This makes it easy to
+    #    > find certificates with a certain date.
+    #    > When you create a new CA key and obsolete the old one, you can
+    #    > discard certificates created with that key.
+    #
+    # ---
+    #
+    # It doesn't work!  I'm still prompted to verify the host key's fingerprint!
+    #
+    # Make sure you  correctly configured the public part of  the CA public keys
+    # in `/etc/ssh/ssh_known_hosts` on the client:
+    #
+    #     @cert-authority *.some.domain ❬key_type❭ ❬key❭
+    #
+    # And if  you've reset `HostKeyAlgorithms`  in `sshd_config`, make  sure you
+    # didn't remove `ssh-❬algo❭-cert-v01@openssh.com`.
+    #
+    # If that  doesn't help, run  `ssh(1)` in  verbose mode and/or  `sshd(8)` in
+    # debugging mode.  Make  sure that `ssh(1)` finds the  certificate, and that
+    # it's trusted  (i.e. the public part  of the CA  keys can be found  too, in
+    # `/etc/ssh/ssh_known_hosts`).
+    #
+    # As  a last  resort, run  `ssh(1)`  with no  config, and  `sshd(8)` with  a
+    # minimal config containing only `HostCertificate` keywords.  If that works,
+    # re-introduce your configurations progressively until it breaks.
+
+# generate certificate for given user
+sudo mkdir -p /usr/local/sshca/users/<user> \
+    && cd /usr/local/sshca/users/<user> \
+    && sudo ssh-keygen \
+        -s ../user-ca-key \
+        -I user_<user> \
+        -n <user> \
+        -V +<reltime> \
+        id_<algo>.pub
+    # Install the certificate in `~/.ssh/`  on the client machine, alongside the
+    # public user key  that it certifies; not  on the server.  Don't  copy it as
+    # root (you  don't need  to; `~/.ssh/` is  not owned by  root), but  as your
+    # regular user.
+    #
+    # ---
+    #
+    # `❬user❭` is the user name on the remote server.
+    #
+    # ---
+    #
+    # To test that the certificate is working, run this on the server:
+    #
+    #     $ mv $HOME/.ssh/authorized_keys{,.bak}
+    #
+    # Then, from your client, `ssh(1)` into  the server.  You should get a shell
+    # without being prompted for a password.
+    #
+    # ---
+    #
+    # Whenever  a  user  authenticates  with  a  certificate,  the  log  message
+    # includes  the  certificate identity.   You  can  leverage this  to  retain
+    # user  accountability.  Indeed,  you  don't  have to  set  the identity  to
+    # `user_❬user❭`.  You can set it  to something else which identifies the
+    # real person using the key.  For example:
+    #
+    #     -I user_1234_John_Doe
+    #             ^--^
+    #             employee number
+    #
+    # When "John Doe" will authenticate, the log will contain a message such as:
+    #
+    #     ... sshd[...]: Accepted publickey for john ... ID user_1234_John_Doe ...
+    #                                                       ^----------------^
+    #
+    # This is especially useful for the root user.
+    #
+    # ---
+    #
+    # It doesn't work!  I can't authenticate with the certificate!
+    #
+    # Make sure you  correctly configured the public part of  the CA public keys
+    # in  whatever file  you assigned  to `TrustedUserCAKeys`  in `sshd_config`.
+    # Typically, that would be in `/etc/ssh/user-ca-keys.pub`.
+    #
+    # Also, check the systemd journal:
+    #
+    #     $ journalctl --unit=ssh.service  --no-hostname --since='10m ago'
+    #
+    # In particular, look for an error message such as:
+    #
+    #     ... sshd[...]: error: Certificate does not contain an authorized principal
+    #
+    # If you find one, look  for the file assigned to `AuthorizedPrincipalsFile`
+    # in `sshd_config`.   The latter  contains a  list of  authorized principals
+    # (one per line).  Either append `❬user❭`  to the file, or re-generate a
+    # new certificate; but this time, make it include an authorized principal:
+    #
+    #     -n ❬user❭,❬authorized_principal❭
+    #              ^---------------------^
+
+# generate certificate for given special task
+sudo mkdir -p /usr/local/sshca/users/<user> \
+    && cd /usr/local/sshca/users/<user> \
+    && sudo ssh-keygen \
+        -s ../user-ca-key \
+        -I user_<task> \
+        -n <task> \
+        -V +<reltime> \
+        -O clear \
+        -O force-command='<cmd>' \
+        task-<task>.pub
+    # `❬user❭` is the remote account with which you'll authenticate.
+    # `❬task❭` is a telling name for the task (e.g. `backup`).
+    #
+    # ---
+    #
+    # `-O` lets you set these options:
+    #
+    #    - `clear`: clear all default enabled permissions (equivalent of
+    #      `restrict` option in `authorized_keys`)
+    #
+    #    - `force-command`: force execution of given command, instead of any
+    #      shell or command specified by user on CLI (equivalent of `command`
+    #      option in `authorized_keys`)
+    #
+    # Other possible options are:
+    #
+    #    - `source-address` (equivalent of `from` in `authorized_keys`)
+    #    - `{no|permit}-agent-forwarding`
+    #    - `{no|permit}-port-forwarding`
+    #    - `{no|permit}-pty`
+    #    - `{no|permit}-touch-required`
+    #    - `{no|permit}-user-rc`
+    #    - `{no|permit}-x11-forwarding`
+    #
+    # ---
+    #
+    # You want to restrict the resources the certificate has access to (and what
+    # actions it can perform), because  a special user authentication key (meant
+    # to run an automated task) can't be protected by a passphrase.
+    #
+    # ---
+    #
+    # ATM, these `authorized_keys` options have no equivalent:
+    #
+    #    - `environment`
+    #    - `permitlisten`
+    #    - `permitopen`
+    #    - `tunnel`
+    #
+    # They give errors such as:
+    #
+    #     Unsupported certificate option "environment=FOO=bar"
+    #
+    # ---
+    #
+    # If  restrictions are  present both  in the  local certificate  *and* in  a
+    # remote  `authorized_keys`,  the latter  file  wins  (i.e. options  in  the
+    # certificate are ignored).  Which contradicts the documentation:
+    #
+    #    > Certificates may encode access restrictions similar to these key
+    #    > options.  If both certificate restrictions and key options are
+    #    > present, **the most restrictive union of the two is applied**.
+    #
+    # Source: `man 8 sshd /AUTHORIZED_KEYS FILE FORMAT/;/cert-authority`
+    #
+    # Same  thing if  a  command  is specified  both  in  the certificate  *and*
+    # in  `authorized_keys`.  The  one  in  the latter  wins.   And again,  this
+    # contradicts the documentation:
+    #
+    #    > If a command is specified and a forced-command is embedded in a
+    #    > certificate used for authentication, then **the certificate will be**
+    #    > **accepted only if the two commands are identical**.
+    #
+    # Source: `man 8 sshd /AUTHORIZED_KEYS FILE FORMAT/;/^\s*command`
+    #
+    # That makes  sense, because  `authorized_keys` might be  a root  file under
+    # `/etc/ssh/` (via `AuthorizedKeysFile`).  In that case, the user should not
+    # be able to override a restriction imposed by the sysadmin.
+    #
+    # Anyway,   having   a   key   embedded  into   a   certificate   *and*   in
+    # `authorized_keys` is  confusing.  Use one or  the other, but not  the two.
+    # If you  control the server, consider  disabling `authorized_keys` entirely
+    # with `AuthorizedKeysFile none`.
+
+# inspect contents of given certificate
+ssh-keygen -L -f <cert>
+    # Output example:
+    #
+    #     ./ssh_host_ed25519_key-cert.pub:
+    #             Type: ssh-ed25519-cert-v01@openssh.com host certificate
+    #             Public key: ED25519-CERT SHA256:...
+    #             Signing CA: ED25519 SHA256:... (using ssh-ed25519)
+    #             Key ID: "host_ubuntu"
+    #             Serial: 0
+    #             Valid: from ... to ...
+    #             Principals:
+    #                     192.168.122.1
+    #             Critical Options: (none)
+    #             Extensions: (none)
+    #
+    # These fields might be interesting to you:
+    #
+    #    - `Signing CA`: CA key which signed the certificate (useful if you have multiple CAs)
+    #    - `Key ID`: identity specified when the certificate was created
+    #    - `Valid`: when the certificate will expire
+    #    - `Principals`: entities (host/user names) the certificate is valid for (one per line)
+    #    - `Critical Options`: options like `force-command` for a user certificate
+    #    - `Extensions`: options for a user certificate (e.g. `permit-pty`)
+
+% SSH, debug
+@ SSH
+
+# print client config at runtime, after evaluating Host/Match blocks
+ssh -G <host>
+    # The  client does  not  even try  to connect;  it  exits immediately  after
+    # printing its  actual config (not  the one  written in your  file(s), whose
+    # evaluation  might be  tricky  to  predict ahead  of  time: multiple  files
+    # overriding each other, global section vs blocks, which blocks match, ...).
+
+# test if server is running (from client machine)
+nc -v <host> <port>
+    # Example:
+    #
+    #     $ nc -v localhost 22
+    #     Connection to localhost 22 port [tcp/ssh] succeeded!
+    #
+    #             SSH server software name (OpenSSH is not the only existing SSH implementation)
+    #             v-----v
+    #     SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.9
+    #     ^-----^         ^---------------------^
+    #     SSH protocol    SSH server software version
+    #     version
+    #
+    # The whole line is called a "banner".
+    #
+    # ---
+    #
+    # From the server machine itself, you would run either of:
+    #
+    #     $ systemctl status sshd
+    #     $ pgrep sshd
+
+# test alternate server config file (useful to find MRE by bisecting default config)
+sudo /usr/sbin/sshd -f /tmp/sshd_config -p 2022
+    # When you connect to this server, then quit your session, the new `sshd(8)`
+    # process should  terminate automatically.  If  you don't connect to  it (or
+    # can't quit your session), and you  no longer need this server, remember to
+    # kill it.
+    #
+    # ---
+    #
+    # We need to specify the full path to `sshd(8)`:
+    #
+    #     $ sudo /usr/sbin/sshd -f /tmp/sshd_config -p 2022
+    #            ^--------^
+    #
+    # to avoid this error:
+    #
+    #     sshd re-exec requires execution with an absolute path
+    #
+    # Also, we need to specify an alternate port:
+    #
+    #     $ sudo /usr/sbin/sshd -f /tmp/sshd_config -p 2022
+    #                                               ^-----^
+    #
+    # Because only  one `sshd(8)` instance can  listen on a particular  TCP port
+    # (and the default port is already taken by your main `sshd(8)` instance).
+    #
+    # Note that `-p` cannot override a `ListenAddress` keyword binding `sshd(8)`
+    # to a port as well as an address.
+
+# test alternate per-user client config file (useful to find MRE by bisecting default config)
+ssh -F /tmp/ssh_config <host>
+    # `/etc/ssh/ssh_config` is ignored.
+    # `~/.ssh/config` is replaced by `/tmp/ssh_config`.
+    #
+    # ---
+    #
+    # You  might wonder  why  the file  option is  specified  in uppercase  `-F`
+    # instead of the more common lowercase `-f`.  That's because `-f` is already
+    # reserved for requesting  `ssh(1)` to go to background  just before command
+    # execution.
+
+# test if given host name is in known_hosts file
+ssh-keygen -F <host> -f ~/.ssh/known_hosts
+    # Useful if host names are hashed in the key cache:
+    #
+    #     $ head --lines=1 ~/.ssh/known_hosts
+    #     |1|8/pRJ.../WM= ecdsa-sha2-nistp256 AAAAE2VjZH...
+    #     ^-------------^
+    #     what's that host name?
+    #
+    #                     let's see if it's 192.168.12.3
+    #                     v----------v
+    #     $ ssh-keygen -F 192.168.12.3 -f ~/.ssh/known_hosts
+    #             yes, it is
+    #            v----------v
+    #     # Host 192.168.12.3 found: line 1
+    #     |1|8/pRJ.../WM= ecdsa-sha2-nistp256 AAAAE2VjZH...
+    #     ^-------------^
+
+# make server more verbose
+sudo /usr/sbin/sshd -d -p 2022
+    # Typically, you  will run this command  to start a new  server in debugging
+    # mode, then from another  terminal you will run a client  to try to connect
+    # to it.   In the terminal where  you started the server,  the output should
+    # tell you exactly what the issue is.
+    #
+    #     # from terminal 1
+    #     $ sudo /usr/sbin/sshd -d -p 2022
+    #     # Read output now if the issue is that the server fails to start.
+    #     # Read output later if the issue is that the client fails to connect.
+    #
+    #     # from terminal 2
+    #     $ ssh -v 0.0.0.0 -p 2022
+    #
+    # ---
+    #
+    # `-d` starts the server in debug mode (in the foreground, without detaching
+    # from  the controlling  terminal) and  increases its  verbosity; it  can be
+    # specified up to 3 times.
+    #
+    # Messages which are only printed above a given debugging level are prefixed
+    # with `debugN:` (where `N` is 1, 2 or 3).
+
+# make client more verbose
+ssh -v <host>
+    # `-v` increases the verbosity; it can be specified up to 3 times.
+    #
+    # Messages which  are only  printed above  a given  level are  prefixed with
+    # `debugN:` (where `N` is 1, 2 or 3).
+    #
+    # ---
+    #
+    # This will make `ssh(1)` more verbose *all the time*; not only when you log
+    # in.  For example,  if you have created `~/.ssh/rc`, but  forgot to make it
+    # run `xauth(1)`, X11 forwarding will not work:
+    #
+    #     $ ssh -X -C ❬user❭@❬host❭
+    #     $ xeyes
+    #     Error: Can't open display: localhost:10.0
+    #
+    # That last message is not very telling.  You would get more info with `-v`:
+    #
+    #     debug1: client_input_channel_open: ctype x11 rchan 3 win 65536 max 16384
+    #     debug1: client_request_x11: request from ::1 58598
+    #     debug1: channel 1: new [x11]
+    #     debug1: confirm x11
+    #     X11 connection rejected because of wrong authentication.
+    #     debug1: channel 1: free: x11, nchannels 2
+    #     Error: Can't open display: localhost:10.0
+    #
+    # In particular, notice this line:
+    #
+    #     X11 connection rejected because of wrong authentication.
+    #     ^^^                                ^------------------^
+    #
+    # This suggests to run `xauth(1)`.
+
+# check if privilege separation is enabled
+ps -ef | grep [s]shd
+    # Meant to be run on the server machine while a client is connected.
+    #
+    # The output should contain at least 3 lines like these:
+    #
+    #     root ... sshd: /usr/sbin/sshd ...
+    #     root ... sshd: user [priv]
+    #     user ... sshd: user@pts/0
+    #
+    # The first line  is for the master  process listening to TCP  port 22.  The
+    # second line is for the privileged  process which handles the connection to
+    # the  client.  The  third  line  is for  the  *un*privileged process  which
+    # handles  the client's  login  session.  Each  process is  a  child of  the
+    # previous one; the master process is a child of PID 1.
+    #
+    # If  privilege  separation  is  disabled you  won't  see  the  unprivileged
+    # process.
+
+# read messages logged by server since today
+journalctl --identifier=sshd --since=today
+    # Alternative:
+    #
+    #     $ journalctl --unit=ssh --since=today
+    #                  ^----^
+    #
+    # Warning: This doesn't work:
+    #
+    #                            ✘
+    #                  v----v    v
+    #     $ journalctl --unit=sshd
+    #     -- Logs begin at ...
+    #     -- No entries --
+    #
+    # Because `--unit` does not accept an alias; and `sshd` is an alias for `ssh`:
+    #
+    #     $ systemctl show --property=Names --value sshd.service | sed 's/ /\n/g'
+    #     ssh.service
+    #     sshd.service
+    #
+    # ---
+    #
+    # `--unit=ssh` and `--identifier=sshd` don't give the same output.
+    # Only `--unit=ssh` gives lines about starting/stopping the server.
+    # Only `--identifiers=sshd` gives lines about the user disconnecting.
+
+# list all SSH-related sockets
+begin; sudo lsof -U -w ; sudo lsof -i -nP -w; end | grep '^sshd\? ' | sort --key=2bn,22
+
+# list all supported cryptographic algorithms
+ssh -Q <crypto_keyword>
+    # SSH uses cryptographic algorithms for these keywords:
+    #
+    #    - `Ciphers`: algorithms for general encryption
+    #    - `HostKeyAlgorithms`: algorithms for host keys
+    #
+    #    - `KexAlgorithms`: algorithms to generate one-time per-connection
+    #      symmetric key; KEX stands for "Key EXchange"
+    #
+    #    - `MACs`: algorithms for data integrity protection (i.e. to detect
+    #      alterations in traffic); MAC stands for "Message Authentication
+    #      Code"
+    #
+    #    - `PubkeyAcceptedKeyTypes`: algorithms for user authentication keys
+    #
+    # They can be set in `ssh_config` *and* in `sshd_config`.
+
+% SSH, fix
+@ SSH
+
+# The authenticity of the remote server can't be established!
+    #     The authenticity of host '...' can't be established.
+    #     ... key fingerprint is ...
+    #     Are you sure you want to continue connecting (yes/no/[fingerprint])?
+    #
+    # The server  has sent you  an *unknown*  public key for  verification; i.e.
+    # it's absent from `~/.ssh/known_hosts`.
+    #
+    # You're  supposed  to compare  its  actual  fingerprint  to one  which  was
+    # communicated to you by the sysadmin.
+    #
+    # For example, they  might display it on an *encrypted*  Web site accessible
+    # from within  your organization.  When you  need SSH access to  the server,
+    # you'll be  given a  link to  the fingerprint page,  along with  your login
+    # credentials.
+    #
+    # If you think they  match, type `yes`; if you think  they don't, type `no`;
+    # if  you  don't  know,  copy-paste  the  fingerprint  communicated  by  the
+    # sysadmin  so  that  the  client  compares  it  for  you  (that's  what  it
+    # expects  you to  do  by  default, hence  `[fingerprint]`  in the  prompt).
+    # You  first  need  to  type  the hashing  algorithm  followed  by  a  colon
+    # (e.g. `SHA256:❬fingerprint❭`) as displayed in the prompt:
+    #
+    #     The authenticity of host '...' can't be established.
+    #     ... key fingerprint is SHA256:...
+    #                            ^-----^
+    #
+    # Once accepted,  the public key  will be added to  `~/.ssh/known_hosts` for
+    # future use.   You won't be bothered  by this prompt again,  unless the key
+    # changes, in which case the SSH  client will display a warning message that
+    # the server's identity has changed.
+    #
+    # ---
+    #
+    # In practice,  the sysadmin rarely sends  the host key fingerprints  to the
+    # users.  In that  case, you'll have to blindly accept  the host key without
+    # verification (which subjects you to MITM attacks).
+    #
+    # ---
+    #
+    # Note that  a server can  have multiple  fingerprints, because it  can have
+    # multiple  public  keys; one  per  encryption  algorithm that  it  supports
+    # (`/etc/ssh/ssh_host_*_key.pub`).  To determine  which fingerprint you need
+    # to compare, read the algorithm printed in the prompt:
+    #
+    #     The authenticity of host '...' can't be established.
+    #     ECDSA key fingerprint is ...
+    #     ^---^
+    #
+    # Here, the server sent you an ECDSA  public key, so you should look for the
+    # ECDSA  key  fingerprint communicated  by  the  sysadmin (not  another  key
+    # fingerprint like the RSA one).
+
+# WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
+    #     $ ssh 192.168.12.3
+    #     @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    #     @    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+    #     @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    #     IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+    #     Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+    #     It is also possible that a host key has just been changed.
+    #     The fingerprint for the ECDSA key sent by the remote host is
+    #     SHA256:TwtoJBvIo6VtEobHUXXdezxll08K8esZqawi84ldS+Y.
+    #     Please contact your system administrator.
+    #     Add correct host key in /home/lgc/.ssh/known_hosts to get rid of this message.
+    #     Offending ECDSA key in /home/lgc/.ssh/known_hosts:1
+    #       remove with:
+    #       ssh-keygen -f "/home/lgc/.ssh/known_hosts" -R "192.168.12.3"
+    #     ECDSA host key for 192.168.12.3 has changed and you have requested strict checking.
+    #     Host key verification failed.
+    #
+    # ---
+    #
+    # Maybe the host  key has changed (old one  expired, accidentally destroyed,
+    # updated to  increase the key length...).   The sysadmin should have  a new
+    # fingerprint for you.
+    #
+    # ---
+    #
+    # Maybe your  key cache is wrong  (e.g. it has been  corrupted).  Remove the
+    # key from it:
+    #
+    #     $ ssh-keygen -R 192.168.12.3
+    #
+    # Then re-validate the key, the next time you try to connect to the server.
+    #
+    # ---
+    #
+    # Maybe the site uses round robin  DNS, effectively giving several servers a
+    # single host name, and you're connecting  to the shared name rather than an
+    # individual server's name.   That's an issue, because the  cached key might
+    # have been  offered by server  A, while you're  now connecting to  server B
+    # which offers a  different key (both A  and B sharing the  same host name).
+    # Access an individual host, not a shared host name.
+    #
+    # ---
+    #
+    # Maybe an intruder controls the server or has diverted your connection to a
+    # different server.  Contact the sysadmin and/or your security team.
+
+# The terminal description for my local terminal is missing on the remote!
+infocmp -1 -x >/tmp/$TERM.terminfo \
+    && scp /tmp/$TERM.terminfo <user>@<host>:/tmp/ \
+    && ssh <user>@<host> "echo '<password>' | sudo -S tic -s -x /tmp/$TERM.terminfo"
+    # `❬password❭` is for `❬user❭` on `❬host❭`.
+    #
+    # ---
+    #
+    # Don't  simply copy  the  compiled terminfo  description  onto the  remote.
+    # There's no guarantee that the binary format is the same on both machines.
+    #
+    # Besides,  `tic(1)` takes  care of  giving  the proper  permissions to  the
+    # generated binary, and place it  in the correct directory (creating missing
+    # ones if necessary).
+    #
+    # ---
+    #
+    # Alternatively, you could reset `$TERM` just for the running `ssh(1)` process:
+    #
+    #     $ TERM=xterm ssh ...
+    #       ^--------^
+    #
+    # The new value will be mirrored  to the remote session (unlike other common
+    # environment variables).  Choose a value which is present inside the remote
+    # terminfo database.
+
+# I can't connect to a server because it uses obsolete cryptographic algorithms!
+    # If you try to  connect to an old device and/or  SSH server, the connection
+    # might fail if your client doesn't  accept any of the offered cryptographic
+    # algorithms.   That  doesn't  necessarily  mean it  doesn't  support  them.
+    # *Maybe* they've  only been  disabled by  default; in  which case,  you can
+    # re-enable them on the CLI with `-o`.  For example:
+    #
+    #     $ ssh -o HostKeyAlgorithms=+ssh-dss \
+    #         -o KexAlgorithms=+diffie-hellman-group14-sha1 \
+    #         ❬user❭@❬host❭
+    #
+    # Or you can re-enable them in `ssh_config`:
+    #
+    #     Host ❬host❭
+    #         HostKeyAlgorithms +ssh-dss
+    #         KexAlgorithms +diffie-hellman-group14-sha1
+    #
+    # The `+` sign in  front of an algorithm name means  that it's *appended* to
+    # the default  set, instead of replacing  it.  If you want  to *prepend* it,
+    # use `^` instead of `+`.
+    #
+    # ---
+    #
+    # An  error message  caused by  an obsolete  cryptographic algorithm  can be
+    # relatively easy to understand:
+    #
+    #     Unable to negotiate with ...: no matching host key type found. Their offer: ssh-dss
+    #
+    # Or not:
+    #
+    #     Fssh_ssh_dispatch_run_fatal: Connection to ...: DH GEX group out of range
+    #
+    # If it's hard to understand, either put  the message in a search engine, or
+    # run `ssh(1)` in verbose mode.
+    #
+    # ---
+    #
+    # Even if you  find a configuration which  lets you connect, this  is just a
+    # temporary fix.
+    #
+    # The reason why  algorithms might only be disabled, and  not deprecated, is
+    # to  give  you  enough  time  to  become  aware  of  the  issue;  that  is,
+    # your  connection is  using cryptographic  algorithms which  are no  longer
+    # considered as secure (i.e. weak).
+    #
+    # But  one day,  OpenSSH will  fully  deprecate them.   Upgrade the  machine
+    # you're connecting to (and/or the SSH server it runs) before that happens.
+
+% SSH, channel
+@ SSH
+
+# local port forwarding
+ssh -f -N -L <local_port>:127.0.0.1:<remote_port> <user>@<host>
+    # This  lets  you  secure  the  traffic  between  a  client  program  and  a
+    # remote server application  if they communicate with  an insecure protocol.
+    # Your client  should address its requests  to `127.0.0.1:❬local_port❭`;
+    # they'll be  automatically forwarded  to the server  over an  encrypted SSH
+    # channel.
+    #
+    # You might want to edit `/etc/hosts`  to tell your client programs that the
+    # server's IP is `127.0.0.1`.  This will  make it more usable.  For example,
+    # if you connect to an HTTP server, you could run:
+    #
+    #     $ echo '127.0.0.1 mywebsite' | sudo tee --append /etc/hosts
+    #
+    # Which will let you write this in your Web client:
+    #
+    #     http://mywebsite:❬local_port❭
+    #
+    # Instead of:
+    #
+    #     http://127.0.0.1:❬local_port❭
+    #
+    # This is easier to read and write.  It will also prevent you from accessing
+    # the server directly, without an SSH channel, over an insecure protocol.
+    #
+    # Also, if you're the only one to  use the server application, then once you
+    # have port forwarding setup, you could  tell the application to only listen
+    # on  `127.0.0.1`.  This  way,  it  will only  be  accessible  over the  SSH
+    # channel, which will provide another  layer of protection (i.e. an intruder
+    # can't even try to connect to the server from their machine).
+    #
+    # ---
+    #
+    # `-N`: Do not  execute a remote shell.   We don't intend to  administer the
+    # server; we just need a secure channel.
+    #
+    # ---
+    #
+    # We've omitted a parameter:
+    #
+    #     -L [bind_address:]port:host:hostport
+    #        ^-------------^
+    #
+    # It  defaults  to  `127.0.0.1`.   This loopback  address  has  a  different
+    # semantics than the next one.   The implicit one (`bind_address`) refers to
+    # your  local machine.   The  explicit  one (`host`)  refers  to the  remote
+    # machine (the  one specified with `❬host❭`  at the end of  the `ssh(1)`
+    # command).
+    #
+    # ---
+    #
+    # You can test this with a Web server running in a VM.
+    #
+    # Let's assume that:
+    #
+    #    - you arbitrarily choose port `8080` for your Web server to listen on
+    #    - you arbitrarily choose port `8000` for `❬local_port❭`
+    #    - you authenticate to `sshd(8)` on the VM with the account `john`
+    #    - your VM has the IP `192.168.12.3`
+    #
+    # From a VM, run:
+    #
+    #     $ python3 -m http.server 8080 >/dev/null 2>&1 & disown
+    #
+    # From your real machine, set up the local port forwarding:
+    #
+    #     $ ssh -f -N -L 8000:127.0.0.1:8080 john@192.168.12.3
+    #
+    # Then, still on the real machine, type this in the URL bar of Firefox:
+    #
+    #     http://127.0.0.1:8000
+    #
+    # ---
+    #
+    # To set up local port forwarding *every*  time you connect to a server, use
+    # the `LocalForward` keyword in `ssh_config`:
+    #
+    #     Host ...
+    #         LocalForward [❬local_IP❭:]❬local_port❭ localhost:❬remote_port❭
+    #                                               ^
+    #         contrary to the command-line, there must be no colon here
+    #
+    # This lets you shorten the command into:
+    #
+    #     $ ssh -f -N ❬user❭@❬host❭
+    #
+    # ---
+    #
+    # My application doesn't work over port forwarding!
+    #
+    # In `sshd_config`  on `❬host❭`, make sure  that `AllowTcpForwarding` is
+    # set to  `yes` or `local`,  but not `no` nor  `remote`.  If you  change the
+    # value, you'll have to reload `sshd(8)`:
+    #
+    #     $ sudo systemctl reload sshd
+    #
+    # Then, you'll have to re-set the local port forwarding.
+    #
+    # Also, still in `sshd_config` on  `❬host❭`, make sure that `PermitOpen`
+    # is not set.  If  it is, make sure it allows the  *remote* IP/host name and
+    # port you specified on the command-line.  For example:
+    #
+    #     PermitOpen ... 127.0.0.1:8080 ...
+    #
+    # And the  key you  authenticate with  might have  a `permitopen`  option in
+    # `~/.ssh/authorized_keys`,  with the  same semantics.   If it  does, again,
+    # make sure it allows your IP/port.
+    #
+    # The processing of the value is a bit complex; see our `sshdconfig` snippet
+    # for `PermitOpen`.
+    #
+    # If none  of this helps,  use `netcat(1)` to send  a request to  the server
+    # directly:
+    #
+    #     $ nc -C 192.168.12.3 8080 < <(tee <<'EOF'
+    #     GET / HTTP/1.1
+    #     Host: 192.168.12.3:8080
+    #
+    #     EOF
+    #     )
+    #
+    # And another over the forwarded port:
+    #
+    #     $ nc -C 127.0.0.1 8000 < <(tee <<'EOF'
+    #     GET / HTTP/1.1
+    #     Host: 127.0.0.1:8000
+    #
+    #     EOF
+    #     )
+    #
+    # Make sure the answer sent by the server is the same in both cases.
+    #
+    # If it's not the same, it means  that port forwarding is not working.  Make
+    # sure that `❬local_port❭` is not  already used by another process (i.e.
+    # it's closed):
+    #
+    #     $ nmap -p T:❬local_port❭ localhost | awk '/^❬local_port❭\/tcp/ { print $2 }'
+    #     closed
+    #
+    # And make  `ssh(1)` and `sshd(8)` more  verbose by starting them  with `-v`
+    # and `-d` (and drop `-f` for `ssh(1)`).
+    #
+    # If it is  the same, it means  that your application has  trouble with port
+    # forwarding.  You'll need  to read the documentation  about the application
+    # and its protocol  to figure out why  it's not working.  But  note that not
+    # all protocols work with port forwarding.
+    #
+    # ---
+    #
+    # I need to use a reserved port for `❬local_port❭`!
+    #
+    # Run `ssh(1)` as root, but log into the server as a regular user.
+    #
+    # Note  that  if  you  choose  a  reserved  port  and  run  `ssh(1)`  as  an
+    # unprivileged user, it will *silently* fail to start a listening process:
+    #
+    #                    v--v
+    #     $ ssh -f -N -L 1023:127.0.0.1:8080 ❬user❭@❬host❭
+    #     $ sudo lsof -i 4TCP:1023 -s TCP:LISTEN -nP
+    #     # no output
+    #
+    # Because the `bind(2)` system call fails:
+    #
+    #     bind(4, {sa_family=AF_INET, sin_port=htons(1023), ...}, 16) = -1 EACCES (Permission denied)
+    #                                                ^--^               ^---------------------------^
+    #
+    # ---
+    #
+    # I want to use the channel from a different machine!
+    #
+    # From a different machine, you can no longer write such a URL in Firefox:
+    #
+    #     http://127.0.0.1:8000
+    #            ^-------^
+    #                ✘
+    #
+    # Because the loopback address has the `host` scope.
+    # Instead, you need to write something like this:
+    #
+    #     http://192.168.12.3:8000
+    #            ^----------^
+    #                 ✔
+    #
+    # But for  this URL  to work,  when you  set up  the local  port forwarding,
+    # you  need  to replace  the  implicit  loopback  address with  an  explicit
+    # network-facing one:
+    #
+    #     $ ssh -f -N -L 192.168.12.3:❬local_port❭:127.0.0.1:❬remote_port❭ ❬user❭@❬host❭
+    #                    ^----------^
+    #
+    # Alternatively, in  `ssh_config`, set  `GatewayPorts` to `yes`.   This will
+    # make `ssh(1)` listen on the wildcard address `*` when you omit the IP.
+    #
+    # Explanation: By  default,  `ssh(1)`  binds  a  local  port  forwarding  to
+    # `127.0.0.1`.  This means that you can only connect to the channel from the
+    # machine where you  ran `ssh(1)`.  If you want to  connect from a different
+    # machine, you need  the `ssh(1)` process which handles the  channel here to
+    # listen on an  IP address which you  can connect to from  the outside (i.e.
+    # its scope  in `$ ip address show` should  be `local` or `global`,  but not
+    # `host`).
+    #
+    # ---
+    #
+    # To be sure  you can observe everything  that is described here,  ask for a
+    # big file (at least 23 MiB).  For  example, play an audio file and pause it
+    # immediately.   If  the  file  is  too small,  the  connection  will  close
+    # immediately; or  the Web server might  finish to transfer the  file before
+    # you can observe  its socket or the  thread it started.  In  that case, you
+    # can create a bigger file with `cat(1)`:
+    #
+    #     $ cat small.mp3 small.mp3 ... >big.mp3
+    #
+    # Here is how  local port forwarding works  in the case of  securing an HTTP
+    # connection: Firefox creates a  socket – let's call it  "sockA" – bound
+    # to an arbitrary  port, with which it sends its  request to `ssh(1)`. sockA
+    # converts  Firefox's byte-stream  into packets  and sends  them to  another
+    # socket, sockB, owned by `ssh(1)`:
+    #
+    #     $ lsof -i 4TCP:8000 -s TCP:^LISTEN -nP
+    #     ssh       ... 127.0.0.1:8000->127.0.0.1:1111 (ESTABLISHED)
+    #     firefox-b ... 127.0.0.1:1111->127.0.0.1:8000 (ESTABLISHED)
+    #                             ^--^
+    #                             arbitrary
+    #
+    # Here, sockB is on the first line, and  sockA on the second one.  As far as
+    # Firefox is  concerned, it's *directly* talking  to a local Web  server via
+    # sockA (even  though that's not  the case). `ssh(1)` reads  Firefox request
+    # from sockB  as a  byte-stream, encrypts  it, and sends  it to  yet another
+    # socket, sockC, which  is connected to the remote `sshd(8)`  process in the VM:
+    #
+    #     $ lsof -i 4TCP:22 -s TCP:^LISTEN -nP
+    #     ssh ... 192.168.12.1:3333->192.168.12.3:22 ...
+    #             ^----------^ ^--^  ^----------^
+    #                   |       |      IP of VM
+    #                   |   arbitrary
+    #             IP of real machine on same network interface as IP of VM
+    #
+    # In the  VM, the  request arrives as  packets on sockD,  which is  owned by
+    # `sshd(8)`:
+    #
+    #     $ sudo lsof -i 4TCP:22 -s TCP:^LISTEN -nP
+    #     sshd 123 root ... 192.168.12.3:22->192.168.12.1:3333 (ESTABLISHED)
+    #     sshd 456 user ... 192.168.12.3:22->192.168.12.1:3333 (ESTABLISHED)
+    #
+    # Notice  that there  are 2  processes because  of the  privilege separation
+    # mechanism used by OpenSSH. sockD is probably on the second line, because I
+    # don't think `sshd(8)` needs root privileges to decrypt the request.
+    #
+    # `sshd(8)` decrypts  the request and  sends it to  the Web server  with yet
+    # another socket, sockE:
+    #
+    #     $ sudo lsof -i 4TCP:8080 -s TCP:^LISTEN -nP
+    #     python3 ... 127.0.0.1:8080->127.0.0.1:4444 (ESTABLISHED)
+    #     sshd    ... 127.0.0.1:4444->127.0.0.1:8080 (ESTABLISHED)
+    #                           ^--^
+    #                           arbitrary
+    #
+    # Here, sockE is on  the last line.  Above, you can find  the socket used by
+    # the Web  server to send  the audio  file to `sshd(8)`.   The communication
+    # continues back in the other direction, to `ssh(1)`, then to Firefox.
+    #
+    # Note  that  the Python  Web  server  starts a  new  thread  to handle  the
+    # connection:
+    #
+    #     $ pstree --ascii $(pidof -s python3)
+    #     python---{python3}
+    #
+    # Also, the same `ssh(1)` process listens for connections, *and* connects to
+    # Firefox,  *and* connects  to the  VM:
+    #
+    #     $ sudo lsof -i 4TCP -nP | grep '^ssh '
+    #         vvv
+    #     ssh 123 ... 192.168.12.1:3333->192.168.12.3:22 (ESTABLISHED)
+    #     ssh 123 ... 127.0.0.1:8000 (LISTEN)
+    #     ssh 123 ... 127.0.0.1:8000->127.0.0.1:1111 (ESTABLISHED)
+    #         ^^^
+    #         same PID
+    #
+    # This  differs from  `sshd(8)` which  – when  used to  start regular  SSH
+    # sessions – listens for connections  but starts other `sshd(8)` processes
+    # to handle them.
+    #
+    # There is always only 1 `ssh(1)` process.  It doesn't matter how many files
+    # you ask (0,  1, or more via  several tab pages). `ssh(1)`  does not handle
+    # individual connections between a Web client and a server; it just provides
+    # a secure channel over which any traffic sent to port `8000` can pass.  The
+    # same goes for `sshd(8)` at the  other end of the channel.  Actually, there
+    # are 2 `sshd(8)` processes because  of privilege separation, in addition to
+    # the master  instance which always  listens for connections.  That  makes 3
+    # processes.  But that number is always  the same; it does not increase with
+    # the number of files that Firefox asks.
+    #
+    # You can  also analyze the traffic  with Wireshark.  In the  display filter
+    # area of the welcome  screen, type "http or ssh", then  double click on the
+    # `any` interface (or  just select it then press `C-e`).   If you select the
+    # `Loopback:lo` interface,  you can  only capture  the HTTP  traffic between
+    # Firefox and `ssh(1)`.   And if you select the `virbr0`  interface, you can
+    # only capture  the SSH traffic  between the  local `ssh(1)` and  the remote
+    # `sshd(8)`.
+
+# remote port forwarding
+ssh -f -N -R <remote_port>:127.0.0.1:<local_sshd_port> <user>@<host>
+    # `❬remote_port❭` can be arbitrarily chosen.
+    # `❬local_sshd_port❭` must  be the port  on which the  *local* `sshd(8)`
+    # listens.  *Not* the port of the remote `sshd(8)`.
+    #
+    # As always, `❬host❭` must be the host name of the remote machine, while
+    # `❬user❭` must  be a  user account  on the latter,  with which  you can
+    # authenticate.
+    #
+    # ---
+    #
+    # This is useful if you have a  workstation which is not accessible from the
+    # public  Internet, because  it's behind  a  firewall which  does not  allow
+    # *incoming* SSH connections, but still allows *outgoing* ones.  Remote port
+    # forwarding  lets  you access  the  workstation  from  any machine  on  the
+    # Internet.  To  do that, you need  to start `sshd(8)` on  your workstation,
+    # and run the previous command.  Then, from `❬host❭`, run:
+    #
+    #     $ ssh -p ❬remote_port❭ ❬local_user❭@localhost
+    #                            ^----------^ ^-------^
+    #                                 |       NOT the IP of your workstation
+    #                                 |
+    #                             user on the workstation
+    #                             i.e. `$USER` in the shell where you ran `$ ssh -R ...`
+    #
+    # This last `ssh(1)` command should start a new (nested) SSH session passing
+    # through the SSH channel which was  set up by `$ ssh -R ...`.  It will show
+    # up in the workstation's journal as  a new connection, originating from the
+    # localhost:
+    #
+    #     $ journalctl --unit=ssh.service --no-hostname
+    #     ... sshd[1234]: Accepted publickey for ❬local_user❭ from 127.0.0.1 port 1111 ssh2: RSA SHA256:...
+    #                                                              ^-------^
+    #
+    # Remote port forwarding  can function as a backdoor and  make a private Web
+    # server publicly available.
+    #
+    # ---
+    #
+    # You can test this by blocking incoming SSH traffic.
+    #
+    # Let's assume that:
+    #
+    #    - `sshd(8)` listens on port `2222` on your workstation
+    #    - you arbitrarily choose port `3333` for `❬remote_port❭`
+    #    - you start a VM which has the IP `192.168.12.3`
+    #
+    #    - your real machine has the IP `192.168.12.1` (on the same network
+    #      interface as the VM's IP)
+    #
+    #    - you authenticate to `sshd(8)` on the VM with the account `john`
+    #    - you authenticate to `sshd(8)` on the real machine with the account `lgc`
+    #
+    # If you use `nftables(8)`:
+    #
+    #     $ systemctl is-enabled nftables.service >/dev/null \
+    #         || sudo systemctl enable --now nftables.service
+    #     $ sudo nft add rule inet filter input ip saddr 127.0.0.1 tcp dport 2222 accept
+    #     $ sudo nft add rule inet filter input tcp dport 2222 drop
+    #
+    # If you use `iptables(8)`:
+    #
+    #     $ sudo iptables --append=INPUT --protocol=tcp --destination-port=2222 --source=127.0.0.1 --jump=ACCEPT
+    #     $ sudo iptables --append=INPUT --protocol=tcp --destination-port=2222 --jump=DROP
+    #
+    # The first rule allows SSH traffic originating from your localhost.
+    # The second rule blocks SSH traffic from any other source.
+    # If you  were configuring a  firewall which  was on an  intermediate router
+    # between you and the remote host, you would just need the second rule.  But
+    # here, the firewall is  on your local machine.  So you  also need the first
+    # rule to allow the SSH traffic after it was forwarded over the channel.
+    #
+    # Now, start  a VM.   Then from your  real machine, set  up the  remote port
+    # forwarding:
+    #
+    #     $ ssh -f -N -R 3333:127.0.0.1:2222 john@192.168.12.3
+    #
+    # Next, from the VM:
+    #
+    #     $ ssh -p 2222 lgc@192.168.12.1
+    #     $ ssh -p 3333 lgc@localhost
+    #
+    # The first command should hang because of the firewall.
+    # But the second command should succeed thanks to remote port forwarding.
+    #
+    # Finally, reboot so  that the firewall rules are removed.   Or delete them;
+    # for `nftables(8)`, a quick way to reset the firewall's config is:
+    #
+    #     $ sudo nft -f /etc/nftables.conf
+    #
+    # Also,  if you're  using `nftables(8)`,  and the  firewall was  not enabled
+    # originally, disable it again:
+    #
+    #     $ sudo systemctl disable --now nftables.service
+    #
+    # ---
+    #
+    # To set up remote port forwarding *every* time you connect to a server, use
+    # the `RemoteForward` keyword in `ssh_config`:
+    #
+    #     Host ...
+    #         RemoteForward [❬host_IP❭:]❬host_port❭ localhost:❬local_sshd_port❭
+    #                                              ^
+    #         contrary to the command-line, there must be no colon here
+    #
+    # This lets you shorten the command into:
+    #
+    #     $ ssh -f -N ❬user❭@❬host❭
+    #
+    # ---
+    #
+    # `ssh(1)` doesn't work over port forwarding!
+    #
+    # In `sshd_config`  on `❬host❭`, make sure  that `AllowTcpForwarding` is
+    # set to  `yes` or `remote`,  but not `no` nor  `local`.  If you  change the
+    # value, you'll have to reload `sshd(8)`:
+    #
+    #     $ sudo systemctl reload sshd
+    #
+    # Then, you'll have to re-set the remote port forwarding.
+    #
+    # Also,   still   in  `sshd_config`   on   `❬host❭`,   make  sure   that
+    # `PermitListen`  is  not   set.   If  it  is,  make  sure   it  allows  the
+    # (possibly omitted) remote IP and  `❬remote_port❭` you specified on the
+    # command-line.  For example:
+    #
+    #     PermitListen ... localhost:3333 ...
+    #
+    # And the  key you authenticate with  might have a `permitlisten`  option in
+    # `~/.ssh/authorized_keys`,  with the  same semantics.   If it  does, again,
+    # make sure it allows your IP/port.
+    #
+    # The processing of the value is a bit complex; see our `sshdconfig` snippet
+    # for `PermitListen`.  Note that `GatewayPorts` might further restrict which
+    # addresses can be listened on the remote.
+    #
+    # ---
+    #
+    # I need to use a reserved port for `❬remote_port❭`!
+    #
+    # Log into the server as root:
+    #
+    #     $ ssh -f -N -R ❬remote_port❭:127.0.0.1:❬local_sshd_port❭ root@❬host❭
+    #                                                              ^--^
+    #
+    # You don't need  to run `ssh(1)` as root.  But,  on `❬host❭`, you might
+    # need to enable the root account:
+    #
+    #     $ sudo passwd root
+    #
+    # Also, still on `❬host❭`, you  might need to reset `PermitRootLogin` to
+    # `yes` in `sshd_config`, then reload `sshd(8)`:
+    #
+    #     $ sudo systemctl reload sshd
+    #
+    # Note that logging as root is usually a bad idea; try to use a non-reserved
+    # port.
+    #
+    # ---
+    #
+    # I want to connect to `❬host❭`'s channel from a different machine than `❬host❭`!
+    #
+    # From a different machine, you can no longer run this:
+    #
+    #     $ ssh -p 3333 lgc@localhost
+    #                       ^-------^
+    #
+    # Because the loopback address has the `host` scope.
+    # Instead, you need to run something like this:
+    #
+    #     $ ssh -p 3333 lgc@❬network_facing_IP❭
+    #                       ^-----------------^
+    #
+    # To do so, when you set up the remote port forwarding, replace the implicit
+    # loopback address with an explicit network-facing one, like `192.168.12.3`:
+    #
+    #     $ ssh -f -N -R 192.168.12.3:❬remote_port❭:127.0.0.1:❬local_sshd_port❭ ❬user❭@❬host❭
+    #                    ^----------^
+    #                    ❬remote_IP❭
+    #
+    # Also, in `sshd_config` on `❬host❭`,  make sure that the `GatewayPorts`
+    # keyword is  set to `clientspecified`, and  not `no` (which is  the default
+    # value).
+    #
+    # Explanation: By  default, `sshd(8)`  on `❬host❭`  binds a  remote port
+    # forwarding to  `127.0.0.1`.  This means that  you can only connect  to the
+    # channel  from `❬host❭`.   If  you  want to  connect  from a  different
+    # machine,  you need  the `sshd(8)`  process  which handles  the channel  on
+    # `❬host❭` to listen on an IP address  which you can connect to from the
+    # outside  (i.e.  its scope  in  `$ ip address show`  should be  `local`  or
+    # `global`, but not `host`).
+    #
+    # Also, if `GatewayPorts`  is set to `no`, `sshd(8)`  (on `❬host❭`) will
+    # only  allow a  remote  port  forwarding to  bind  to  a loopback  address.
+    # Instead, you  must give it  the value `clientspecified` so  that `sshd(8)`
+    # listens on the address specified  by the client (i.e. `❬remote_IP❭` in
+    # the  previously mentioned  `ssh(1)` command).   You could  also set  it to
+    # `yes`, but that  would make `sshd(8)` listen on the  wildcard address `*`,
+    # which seems overkill/insecure.
+    #
+    # ---
+    #
+    # Here is how remote port forwarding works.
+    #
+    # Let's assume that:
+    #
+    #    - `sshd(8)` listens on port `2222` on your workstation
+    #    - `sshd(8)` listens on port `22` on the remote
+    #    - you arbitrarily choose port `3333` for `❬remote_port❭`
+    #    - you pass `-4` to `ssh(1)` (it makes the observations simpler):
+    #
+    #         $ ssh -4 -p 3333 lgc@localhost
+    #               ^^
+    #
+    # On your workstation, the channel is handled by an `ssh(1)` process:
+    #
+    #     $ sudo lsof -i 4TCP:22 -nP
+    #     ssh ... ❬workstation_IP❭:4444->❬remote_IP❭:22 (ESTABLISHED)
+    #                              ^--^
+    #                              arbitrary
+    #
+    # Which is connected to an `sshd(8)`  process on the remote:
+    #
+    #     # to run on the remote
+    #     $ sudo lsof -i 4TCP:22 -s TCP:^LISTEN -nP
+    #     sshd ... ❬remote_IP❭:22->❬workstation_IP❭:4444 (ESTABLISHED)
+    #
+    # That same `sshd(8)` process is also listening for connections on port `3333`:
+    #
+    #     $ sudo lsof -i 4TCP:3333 -s TCP:LISTEN -nP
+    #     sshd ... 127.0.0.1:3333 (LISTEN)
+    #
+    # Now,  when you  run the  `ssh(1)` command  on the  remote, a  new `ssh(1)`
+    # process connects to the `sshd(8)` process listening on port `3333`:
+    #
+    #     $ sudo lsof -i 4TCP:3333 -s TCP:^LISTEN -nP
+    #     sshd ... 127.0.0.1:3333->127.0.0.1:5555 (ESTABLISHED)
+    #     ssh  ... 127.0.0.1:5555->127.0.0.1:3333 (ESTABLISHED)
+    #                        ^--^
+    #                        arbitrary
+    #
+    # But  remember  that this  `sshd(8)`  process  is  also connected  to  your
+    # workstation:
+    #
+    #     sshd ... ❬remote_IP❭:22->❬workstation_IP❭:4444 (ESTABLISHED)
+    #
+    # That's how  `ssh(1)` on the  remote is able to  send its traffic  over the
+    # channel to the workstation.  Finally,  on the workstation, a new `sshd(8)`
+    # process has also been started when you ran `ssh(1)` on the remote:
+    #
+    #     $ sudo lsof -i 4TCP:2222 -s TCP:^LISTEN -nP
+    #     ssh  ... 127.0.0.1:6666->127.0.0.1:2222 (ESTABLISHED)
+    #     sshd ... 127.0.0.1:2222->127.0.0.1:6666 (ESTABLISHED)
+    #                                        ^--^
+    #                                        arbitrary
+    #
+    # That's  the server  process to  which `ssh(1)`  on the  remote is  finally
+    # connected to.
+    #
+    # Note that whenever a new `sshd(8)` process appears, it's always started by
+    # the master `sshd(8)`, which listens for connections on port `2222` on your
+    # workstation,  and on  port  `22` on  the remote.   Also,  a new  `sshd(8)`
+    # process  always starts  yet another  child for  privilege separation  (the
+    # parent runs as root, the child runs as your local user).
+
+# dynamic port forwarding
+ssh -f -N -D <local_port> <user>@<host>
+    # This lets  you use `❬host❭` as  a SOCKS proxy between  any SOCKS-aware
+    # local client (typically a web browser) and a server program (e.g. apache).
+    # "SOCKS-aware" means that  the client should provide  some configuration to
+    # specify that a SOCKS proxy is to be used to access the Internet.
+    #
+    # With *local* port forwarding, the traffic would stop at `❬host❭`; with
+    # *dynamic* port  forwarding, it's relayed  further to whatever  machine the
+    # client needs to connect:
+    #
+    #    > Whenever a connection is made to this port, the connection is forwarded over
+    #    > the secure channel, **and the application protocol is then used to**
+    #    > **determine where to connect to from the remote machine.**
+    #
+    # Source: `man ssh /^\s*-D`
+    #
+    # This is useful, for example, if  you're behind a firewall which blocks the
+    # protocol that your client uses.
+    #
+    # ---
+    #
+    # You can test this by blocking outgoing HTTP traffic.
+    #
+    # Let's assume that:
+    #
+    #    - you start a VM which has the IP `192.168.12.3`
+    #    - you authenticate to `sshd(8)` on the VM with the account `john`
+    #    - you arbitrarily choose port `4444` for `❬local_port❭`
+    #    - you arbitrarily choose port `8080` for your Web server to listen on
+    #
+    # Start a web server from the VM:
+    #
+    #     $ python3 -m http.server 8080 >/dev/null 2>&1 & disown
+    #
+    # Then, from your real machine, confirm that you can access the web page:
+    #
+    #     $ xdg-open http://192.168.12.3:8080/
+    #
+    # Now, block outgoing HTTP traffic.  If you use `nftables(8)`:
+    #
+    #     $ systemctl is-enabled nftables.service >/dev/null \
+    #         || sudo systemctl enable --now nftables.service
+    #     $ sudo nft add rule inet filter output tcp dport 8080 drop
+    #
+    # Or, if you use `iptables(8)`:
+    #
+    #     $ sudo iptables --append=OUTPUT --protocol=tcp --destination-port=8080 --jump=DROP
+    #
+    # Refresh the web page in Firefox, and confirm that the page no longer loads.
+    #
+    # Next, set up the dynamic port forwarding:
+    #
+    #     $ ssh -f -N -D 4444 john@192.168.12.3
+    #
+    # And configure Firefox to use it:
+    #
+    #    - visit `about:preferences`
+    #    - click on `Network Settings`
+    #    - select `Manual proxy configuration`
+    #    - write `127.0.0.1` in the `SOCKS Host` field, and `4444` in the `Port` one
+    #    - click on `OK`
+    #
+    # Refresh the web page, and confirm that it loads correctly again.
+    #
+    # Finally, reboot so  that the firewall rule is removed.   Or delete it; for
+    # `nftables(8)`, a quick way to reset the firewall's config is:
+    #
+    #     $ sudo nft -f /etc/nftables.conf
+    #
+    # Also,  if you're  using `nftables(8)`,  and the  firewall was  not enabled
+    # originally, disable it again:
+    #
+    #     $ sudo systemctl disable --now nftables.service
+    #
+    # ---
+    #
+    # To set  up dynamic port forwarding  *every* time you connect  to a server,
+    # use the `DynamicForward` keyword in `ssh_config`:
+    #
+    #     Host ...
+    #         DynamicForward [❬local_IP❭:]❬local_port❭
+    #
+    # This lets you shorten the command into:
+    #
+    #     $ ssh -f -N ❬user❭@❬host❭
+    #
+    # ---
+    #
+    # I want to use the SOCKS proxy from a different machine!
+    #
+    # From a  different machine, you  can no  longer specify `127.0.0.1`  in the
+    # `SOCKS Host`  field  of  Firefox's  network  configuration.   Because  the
+    # loopback address  has the `host`  scope.  Instead,  you need to  specify a
+    # network-facing IP like `192.168.12.3`.
+    #
+    # To  do  so,  replace  the  implicit  loopback  address  with  an  explicit
+    # network-facing one:
+    #
+    #     $ ssh -f -N -D 192.168.12.3:❬local_port❭ ❬user❭@❬host❭
+    #                    ^----------^
+    #
+    # Alternatively, in  `ssh_config`, set  `GatewayPorts` to `yes`.   This will
+    # make `ssh(1)` listen on the wildcard address `*` when you omit the IP.
+    #
+    # Explanation: By  default,  `ssh(1)`  binds  a  local  port  forwarding  to
+    # `127.0.0.1`.  This means that you can only connect to the channel from the
+    # machine where you  ran `ssh(1)`.  If you want to  connect from a different
+    # machine, you need  the `ssh(1)` process which handles the  channel here to
+    # listen on an  IP address which you  can connect to from  the outside (i.e.
+    # its scope  in `$ ip address show` should  be `local` or `global`,  but not
+    # `host`).
+    #
+    # ---
+    #
+    # My application doesn't work over port forwarding!
+    #
+    # It  probably needs  to  forward  all its  DNS  requests  to the  listening
+    # `ssh(1)` on  this machine.  Not all  clients support this.  Also,  see our
+    # other shell snippet for *local* port forwarding.
+    #
+    # ---
+    #
+    # I need to use a reserved port for `❬local_port❭`!
+    #
+    # See our other shell snippet for *local* port forwarding.

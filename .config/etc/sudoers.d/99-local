@@ -1,0 +1,107 @@
+# Warning: Do *not* name this file with the `.conf` extension!{{{
+#
+# It would be ignored:
+#
+#    > sudo will suspend processing of the current file and read each file in
+#    > /etc/sudoers.d, **skipping file names that** end in ‘~’ or **contain a ‘.’**
+#    > character [...]
+#
+# Source: `man 5 sudoers /SUDOERS FILE FORMAT/;/Including other files from within sudoers/;/skip`
+#}}}
+# Warning: Don't hard-code a username (e.g. `lgc`) nor a hostname (e.g. `ubuntu`) in this file.{{{
+#
+# We might work with a different user or on a different host.
+# Instead, try to use the `ALL` user and host aliases:
+# `man sudoers /SUDOERS FILE FORMAT/;/Other special characters and reserved words/;/ALL`
+#}}}
+
+# General syntax for the `env_keep` parameter:{{{
+#
+#     Defaults        env_reset
+#     Defaults        env_keep = "VAR1 VAR2 ..."
+#     Defaults        env_keep += "..."
+#     ...
+#
+# Notice that the `env_reset` flag needs to be set.
+# It should be by default, but you can check with `$ sudo visudo`.
+#}}}
+
+# Alternative:{{{
+#
+#     Defaults:lgc setenv
+#
+# You would still need to pass `--preserve-env` to `sudo(8)`.
+# And as a result, *all* your environment would be preserved (which seems overkill ATM).
+# Technically, `setenv` lets you disable `env_reset` on demand via `--preserve-env`.
+#}}}
+#   For which user(s) is it OK?{{{
+#
+# Only for a sysadmin who wants  enough flexibility to troubleshoot any possible
+# problem.
+#
+# Giving this ability to any user would make the machine too insecure.
+#}}}
+#   How to override this on a per-command basis?{{{
+#
+# Use the `SETENV` tag:
+#
+#                         reset the tag
+#                         vv
+#     lgc ubuntu = (root) NOSETENV:NOPASSWD: /usr/bin/ls
+#                           ^----^
+#}}}
+
+# `CONTAINERS_CONF`: For Podman to use our config at `~/.config/containers/containers.conf` even when run with `sudo(8)`.{{{
+#
+# Otherwise, when we would run an interactive shell inside a container, we would
+# need to press `C-P` twice (instead of once) to re-call a past shell command:
+#
+#     $ sudo podman run --interactive=true --tty=true --rm=true ubuntu:20.04
+#     root@...:/# echo a
+#     # press CTRL-P
+#     # expected: the command-line is populated with "echo a"
+#     # actual: the command-line is NOT populated with "echo a"
+#
+# For more info: `~/.config/containers/containers.conf`.
+#}}}
+# `EDITOR`: To use `vi(1)` instead of `nano(1)` when a program calls an editor (e.g. `$ sudo qmv`).
+# `PAGER`: To use `less(1)` instead of `more(1)` when reading a long mail with `$ sudo mail`.
+# `TERMINFO_DIRS`: Necessary  in a  kitty terminal, to  not break  some readline
+# commands like `C-u` after becoming root with `$ sudo --login`.
+Defaults env_keep += "CONTAINERS_CONF EDITOR PAGER TERMINFO_DIRS"
+
+# Don't send a local mail to the root user if we give a wrong password 3 times consecutively.{{{
+#
+# By default, a mail is sent because `/etc/sudoers` sets the `mail_badpass` flag.
+# We don't want that because it pollutes the mailbox of the root user, making it
+# harder to spot an important mail (i.e. which we need to act upon).
+#}}}
+Defaults !mail_badpass
+
+# Provide visual feedback when we type our password (i.e. add/remove an asterisk
+# for each inserted/deleted character).
+Defaults pwfeedback
+
+# After we  give our password,  don't ask us again  before 30 minutes  (which is
+# more than the default 15 minutes).
+Defaults timestamp_timeout=30
+
+# How to prevent a given command from prompting us for a password?{{{
+#
+#     lgc ubuntu = (root) NOPASSWD: /path/to/cmd
+#     lgc ubuntu = (root) NOPASSWD: /path/to/cmd subcmd
+#     lgc ubuntu = (root) NOPASSWD: /path/to/cmd subcmd *
+#
+# Examples:
+#
+#     lgc ubuntu = (root) NOPASSWD: /usr/bin/ls
+#     lgc ubuntu = (root) NOPASSWD: /usr/bin/apt update
+#     lgc ubuntu = (root) NOPASSWD: /usr/bin/apt install *
+#
+# You can also specify several values separated by commas:
+#
+#     lgc ubuntu = (root) NOPASSWD: /usr/bin/apt install *,/usr/bin/apt purge *
+#                                                         ^
+#}}}
+ALL ALL = (root) NOPASSWD: /usr/bin/apt update
+ALL ALL = (root) NOPASSWD: /usr/bin/apt upgrade

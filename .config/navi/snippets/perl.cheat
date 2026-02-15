@@ -1,0 +1,9 @@
+% perl
+
+# test regex
+printf '%s' '<text>' | perl -n -w -e 'm/<regex>/ and exit 0 or exit 1'
+    # Warning: Don't separate `-e` from the command.
+
+# extract range of lines between given patterns
+perl -ne 'print if m/<start>/ .. m/<end>/ and not m/<start>/ and not m/<end>/' <file>
+    # `and not ...`: exclude the boundaries

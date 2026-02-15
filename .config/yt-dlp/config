@@ -1,0 +1,3 @@
+# Don't download 4K videos; it's too hard to decode for our CPU.
+# Besides, we don't have a 4K monitor, and 1920x1080 is enough for our needs.
+--format='best[height<=1080]'

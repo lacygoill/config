@@ -1,0 +1,28 @@
+% bat
+
+# highlight given line ranges with different background color
+bat --highlight-line=12:34
+    # The option can be passed multiple times.
+    #
+    # ---
+    #
+    # Other syntaxes:
+    #
+    #     # highlight single line
+    #     --highlight-line=123
+    #
+    #     # highlight from given line to end of file
+    #     --highlight-line=123:
+    #
+    #     # use positive offset for end of range
+    #     --highlight-line=12:+34
+
+# replace STDIN filename
+bat --file-name=<name>
+    # note that the provided filename is also used for syntax detection
+
+# fix garbled output
+bat --color=never --wrap=never
+    # The input file might contain color  codes, other ANSI escape sequences, or
+    # control  characters.   Those  can  cause  issues  when  performing  syntax
+    # highlighting and text wrapping.  Disabling both features might help.

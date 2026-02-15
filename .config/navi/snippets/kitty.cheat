@@ -1,0 +1,7 @@
+% kitty
+
+# start kitty without config
+kitty --config NONE -o shell_integration=disabled
+
+# start kitty without config (except for a few options)
+kitty --config NONE -o optname=value ...

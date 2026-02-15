@@ -1,0 +1,57 @@
+#!/bin/bash -
+
+# If the update fails, and you need help:{{{
+#
+#     $ git clone https://git.code.sf.net/p/bashdb/code bashdb
+#     $ cd bashdb
+#
+# Then, read `README-git.md`.
+#}}}
+# If you want to find out all the bash 5 versions available:{{{
+#
+#     $ lftp ftp://ftp.gnu.org/pub/gnu/bash/
+#     > ls bash-5*.tar.gz >/tmp/bash5_versions
+#
+# Then, read `/tmp/bash5_versions`.
+#}}}
+
+readonly -a DEPENDENCIES=(
+  'texinfo'
+)
+
+source "${0%/*}/_lib"
+_Install_Dependencies "${DEPENDENCIES[@]}"
+_Extract_Archive 'bashdb' 'https://sourceforge.net/projects/bashdb/
+
+The version of the locally installed bashdb and bash must match.'
+
+./autogen.sh
+
+# Don't install the binary locally:{{{
+#
+#     $ ./configure --prefix=$HOME/.local
+#                   ^-------------------^
+#
+# It would prevent you from invoking the debugger with `$ bash --debugger`:
+#
+#     Location    : /usr/bin/bash
+#     Prefix      : /home/user/.local
+#     bash says prefix should be /usr. You gave /home/user/.local
+#     Warning: prefix doesn't match what is in bash for 'bash --debugger ...' to work
+#}}}
+# If you get an error about `bashdb-main.inc`, try to use `--with-bashdb-main`:{{{
+#
+#     # ./configure: line 2407: /usr/local/bashdb/bashdb-main.inc: No such file or directory
+#     $ ./configure --with-bashdb-main=/usr/share/bashdb/bashdb-main.inc ...
+#}}}
+./configure \
+  && make \
+  && sudo make install
+# Most files are installed in `/usr/share/bashdb/`.{{{
+#
+# There are also:
+#
+#    - `/usr/bin/bashdb`
+#    - `/usr/share/info/bashdb.info`
+#    - `/usr/share/man/man1/bashdb.1`
+#}}}

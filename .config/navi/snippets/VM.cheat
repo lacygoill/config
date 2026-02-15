@@ -1,0 +1,17 @@
+% VM
+
+# list systems which can be virtualized
+osinfo-query os
+
+# test hardware enables virtualization support
+grep --quiet [vmx | svm] /proc/cpuinfo
+    # Use the `vmx` flag for an Intel CPU, and `svm` for an AMD one.
+    # `vmx` stands for **V**irtual **M**achine e**X**tensions.
+    # `svm` stands for **S**ecure **V**irtual **M**achine.
+    #
+    # ---
+    #
+    # If the test fails,  access the BIOS of your machine,  and look for entries
+    # such as  “Intel Virtualization Technology”/“Intel VT-x”  or “SVM
+    # mode”  (AMD).  They're  usually found  in the  CPU configuration  in the
+    # Advanced section.

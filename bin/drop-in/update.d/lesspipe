@@ -1,0 +1,13 @@
+#!/bin/bash -
+
+# `lesspipe` is  included by  default in  the `less`  package on  a Debian-based
+# distro, but the script is extremely old compared to github.
+
+sudo --validate
+
+source "${0%/*}/_lib"
+_Extract_Archive 'lesspipe' 'https://github.com/wofr06/lesspipe/releases'
+
+./configure --prefix="$HOME/.local" \
+  && make \
+  && sudo make install

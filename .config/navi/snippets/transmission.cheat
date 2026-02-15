@@ -1,0 +1,60 @@
+% transmission
+
+$ ID: transmission-remote --list | sed '$ d' \
+    --- --column 2 \
+        --header-lines 1 \
+        --map 'sed "s/*//" | paste --serial --delimiters=","' \
+        --multi
+
+$ file_ID: transmission-remote --torrent=$ID --info-files \
+    --- --header-lines 2 \
+        --map 'sed -E "s/[^0-9]*([0-9]+).*/\1/" | paste --serial --delimiters=","' \
+        --multi
+
+# start downloading torrent via magnet info hash (or torrent file)
+transmission-remote --add '<magnet_or_file>'
+    # magnet:?xt=urn:btih:❬infohash❭
+
+# pause torrent
+transmission-remote --torrent=<ID> --stop
+
+# start torrent after pause
+transmission-remote --torrent=<ID> --start
+
+# get the list of files in a torrent
+transmission-remote --torrent=<ID> --info-files | less
+
+# remove torrent (but keep downloaded files)
+transmission-remote --torrent=<ID> --remove
+
+# remove torrent and downloaded files
+transmission-remote --torrent=<ID> --remove-and-delete
+
+# only download given file(s) inside hierarchy
+transmission-remote --torrent=<ID> --no-get=all --get=<file_ID>
+    # multiple files can be specified: 12,34
+    # ranges are supported: 12-34
+
+# ask for more peers
+transmission-remote --torrent=<ID> --reannounce
+
+% transmission, info
+
+# print version/config/limits of daemon
+transmission-remote --session-info
+
+# print upload/download statistics
+transmission-remote --session-stats
+
+# print details for given torrent
+transmission-remote --torrent=<ID> --info
+    # useful to retrieve the URL from which the torrent was obtained
+
+# monitor all torrent downloads in TUI
+watch --interval=3 "transmission-remote --list | cut --characters=1-$COLUMNS"
+
+# monitor all torrent downloads in GUI
+xdg-open 'http://localhost:9091/transmission/web/'
+    #                                           ^
+    # This slash is important to avoid an error:
+    # https://askubuntu.com/a/44696

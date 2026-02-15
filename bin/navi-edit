@@ -1,0 +1,31 @@
+#!/bin/bash -
+
+readonly NAVI_OUTPUT="$1"
+# navi's output  is delimited  with "braille pattern  blanks" (indistinguishable
+# from spaces).
+readonly NAVI_DELIMITER=$'\u2800'
+# The command description will be passed to Vim in a single-quoted string.
+# If it contains a single quote itself, we need to embed it by doubling it.
+readonly QUOTE="'"
+
+# shellcheck disable=SC2001
+snippet_file="$(sed "s/\([-_[:alnum:]]\+\).*/\1/" <<<"$NAVI_OUTPUT")"
+command_description="$(
+  awk -F"$NAVI_DELIMITER" '{ print $2 }' <<<"$NAVI_OUTPUT" \
+  | sed "s/\s*$//; s/$QUOTE/${QUOTE}${QUOTE}/g" \
+)"
+
+editor \
+  +"call search('^#\s*\V' .. escape('$command_description', '\') .. '\m$')" \
+  +'normal! zvzz' "$HOME/.config/navi/snippets/$snippet_file.cheat" \
+  >"$(tty)"
+  # ------^
+# To handle the case where navi has been started from a command substitution.{{{
+#
+# Which is  most of  the time  for us, since  we usually  invoke it  by pressing
+# `C-g C-g`, which runs the fish function `navi-snippets`, which calls navi like
+# this:
+#
+#     commandline --insert -- $(navi --path=$HOME/.config/navi/snippets/ --print)
+#                             ^^                                                ^
+#}}}
