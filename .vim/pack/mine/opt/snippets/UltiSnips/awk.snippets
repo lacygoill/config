@@ -1,0 +1,398 @@
+# control flow {{{1
+# selection statements {{{2
+
+snippet t01 "if block" Am
+if ($1) {
+	$2
+} else if {
+	$3
+} else {
+	$0
+}
+endsnippet
+
+# loop statements {{{2
+
+snippet t02 "while loop" Am
+while ($1) {
+	$0
+}
+endsnippet
+
+snippet t03 "do-while loop" Am
+do {
+	$0
+} while ($1)
+endsnippet
+
+snippet t04 "for loop" Am
+for (i in ${1:arr}) {
+	$0
+}
+endsnippet
+
+snippet t05 "for loop (C-style)" Am
+for (i = ${1:1}; i <= ${2:23}; i++) {
+	$0
+}
+endsnippet
+
+snippet t06 "iterate over fields of given record" Am
+for (i = 1; i <= NF; i++) {
+	$0
+}
+endsnippet
+# }}}1
+# data types {{{1
+# number {{{2
+
+# string {{{2
+
+snippet t07 "get length of given string or array" Am
+# The argument is optional.  If omitted, it defaults to \`\$0\`.
+#
+# ---
+#
+# If \`$1\` is a variable name which hasn't been set so far, it's forced to be a
+# scalar:
+#
+#     $ awk '{ x[1] = 1 }' <<<''
+#     # no error
+#
+#     $ awk '{ length(x); x[1] = 1 }' <<<''
+#     # ...: illegal reference to variable x
+length("${1:str | arr}")
+endsnippet
+
+snippet t08 "get formatted string" Am
+# Example:
+#
+#     $ awk '{ print sprintf("%s + %s - %s", \$1, \$2, \$3) }' <<<'1 2 3'
+#     1 + 2 - 3
+#
+# ---
+#
+# Contrary  to \`printf()\`,  \`sprintf()\` does  not print  anything.  It  just
+# returns a formatted string.
+sprintf(${1:fmt},${2:expr-list})
+endsnippet
+
+snippet t09 "get index of first character of given substring in given string" Am
+# returns 0 if \`$2\` is not included in \`$1\`
+index(${1:str}, ${2:substr})
+endsnippet
+
+snippet t10 "extract substring matching given regex out of given string" Am
+# \`match()\` returns the index of the first character of the substring; or 0 if
+# there is no match.
+#
+# ---
+#
+# \`$3\` is optional.
+#
+# ---
+#
+# If \`$2\`  contains capturing subexpressions,  matching texts are used  to set
+# elements in \`$3\`  (after the element 0  which holds the text  matched by the
+# whole regex).
+#
+# ---
+#
+# The  predefined variables  \`RLENGTH\` and  \`RSTART\`  are set  to resp.  the
+# length of the substring and the index of its first character.
+#
+# More generally, \`$3[N, "length"]\` holds the  length of the text matching the
+# N-th  subexpression;  and \`$3[N, "start"]\`  holds  the  index of  its  first
+# character.
+match(${1:str}, /${2:regex}/, ${3:arr}); print $3[0]
+endsnippet
+
+snippet t11 "extract substring starting from given index and with given length" Am
+# \`$3\` is optional; if omitted, the substring terminates at the end of \`$1\`.
+substr(${1:str}, ${2:start}, ${3:length})
+endsnippet
+
+snippet t12 "replace – in-place – text matching given regex in given target" Am
+# In \`$2\`, \`&\` can be used to stand for the text matched by the whole regex.
+#
+# ---
+#
+# \`$3\` is meant  to be assignable, so  that \`sub()\` has a  location to store
+# the modified value; i.e. it usually is a variable, field, or array element.
+#
+# ---
+#
+# \`$3\` is optional; it defaults to \`\$0\`.
+#
+# ---
+#
+# To replace all occurrences, invoke \`gsub()\` instead of \`sub()\`.
+#
+# ---
+#
+# The position of the target/string parameter inside an invocation to \`sub()\`,
+# and \`gsub()\` is different compared  to other string-related functions.  It's
+# at the end, instead of the start.
+#
+# ---
+#
+# Returns the number of substitutions (0 or 1).
+sub(${1:regex}, ${2:rep}, ${3:target})
+endsnippet
+
+snippet t13 "split given string on FS or on given separator" Am
+# \`$2\` is set with the split pieces.
+#
+# ---
+#
+# Assuming that FS/the given separator is  present \`N\` times in \`$1\`, \`$2\`
+# *always*  contains \`N+1\`  elements; even  if  some separators  have no  text
+# in-between them (in which case awk uses null strings to set array elements):
+#
+#     $ awk '{ split("a|b", arr, "|"); print length(arr) }' <<<''
+#     2
+#
+#     $ awk '{ split("|||", arr, "|"); print length(arr) }' <<<''
+#     4
+#
+# ---
+#
+# \`$3\` is optional; it defaults to \`FS\`.
+#
+# ---
+#
+# \`$3\` can be a string or a regex constant.
+#
+# ---
+#
+# If \`$3\` is the  null string, each character in \`$1\` is  split into its own
+# array element.
+#
+# ---
+#
+# \`$4\`  is  optional;  it  should  be  an array  meant  to  hold  the  matched
+# separators.
+#
+# ---
+#
+# Returns the number of split pieces.
+split(${1:str}, ${2:arr}, ${3:fs}, ${4:seps})
+endsnippet
+
+# array {{{2
+
+snippet t14 "get last element of given array" Am
+# This assumes that \`$1\` is indexed with  1, 2, 3, ... (that's not necessarily
+# the case, but – as an example – it is, for an array set with \`split()\`).
+${1:arr}[length($1)]
+endsnippet
+# }}}1
+# fields/records {{{1
+# splitting {{{2
+
+snippet t15 "iterate over NULL-separated records" Am
+# On the command-line, you can use \`-v RS='\0'\` instead:
+#
+#     $ find ~/.config/etc -type f -print0 | awk -v RS='\0' '{ print \$0 }'
+#                                                ^--------^
+BEGIN { RS = '\0' }
+$0
+endsnippet
+
+# selection {{{2
+
+snippet t16 "select records whose first character comes after given letter" Am
+\$0 > "${1:char}"
+endsnippet
+
+snippet t17 "select records matching given pattern and not other given pattern" Am
+# This shows that you can combine regexes with logical operators.
+/${1:pat1}/ && !/${2:pat2}/
+endsnippet
+
+snippet t18 "select last but one field" Am
+# \`NF - 1\`  is an  expression evaluated  into the  index of  the last  but one
+# field,  and  \`$\` is  an  operator  converting a  field  index  into a  field
+# contents.
+#
+# You need  to surround the  expression with parentheses, otherwise  \`$\` would
+# consider  that \`NF\`  is  its operand,  instead of  \`NF - 1\`  (\`$\` has  a
+# greater precedence than \`-\`).
+$(NF - 1)
+endsnippet
+
+# processing {{{2
+
+snippet t19 "append field to record" Am
+$(NF + 1) = "${1:text}"
+$0
+endsnippet
+
+snippet t20 "print input records, reversing the order of their fields" Am
+for (i = NF; i >= 1; i--)
+	printf("%s ", $i)
+
+# Add newline at the end of a record.
+#
+# If  you  haven't reset  \`ORS\`,  you  can omit  \`\n\`,  and  just write  the
+# null  string.  That's  because  at  the end  of  an  output record,  \`print\`
+# automatically adds the contents of \`ORS\`, whose default value is a newline:
+#
+#    > print expr-list      Print expressions.  Each expression is  separated
+#    >                      by the value of OFS.  **The output record is termi‐**
+#    >                      **nated with the value of ORS.**
+#
+# Still, better be explicit.
+print "\n"
+$0
+endsnippet
+
+snippet t21 "process multiline records" Am
+# Fields will be actually lines (because of \`FS = "n"\`).
+# Records will be paragraphs (sequences of non-empty lines).
+#
+# ---
+#
+# \`""\` is  a special value for  \`RS\`.  It's interpreted as  \`"\n+"\`.  IOW,
+# the input is split on sequences of empty lines.
+BEGIN { RS = ""; FS = "\n" }
+$0
+endsnippet
+
+snippet t22 "print records with missing field" Am
+# A  field  is  considered  to  be  missing  when  \`FS\`  can  be  found  twice
+# consecutively.
+#
+# If the  fields are separated with  spaces, reset \`FS\` to  the regex \`[ ]\`.
+# Its default value  is a single space character which  has a special semantics;
+# it's interpreted as any sequence of spaces/tabs/newlines.
+#
+#     $ tee /tmp/file >/dev/null <<'EOF'
+#       a b c
+#       d   f
+#       g h i
+#     EOF
+#
+#     $ tee /tmp/awk.awk >/dev/null <<'EOF'
+#       BEGIN { FS = "[ ]" }
+#       {
+#         for (i = 1; i <= NF && $i != ""; i++)
+#           # necessary empty statement
+#           ;
+#         if (i < NF) print \$0
+#       }
+#     EOF
+#
+#     $ awk -f /tmp/awk.awk /tmp/file
+#     d   f
+{
+	for (i = 1; i <= NF && $i != ""; i++)
+		;
+	if (i < NF) print \$0
+}
+$0
+endsnippet
+# }}}1
+# test {{{1
+
+snippet t23 "test array contains element at given index" Am
+${1:idx} in ${2:arr}
+endsnippet
+
+snippet t24 "test string expression contains a number" Am
+isnum(${1:expr})
+
+function isnum(n) {
+	# for an (optionally signed) integer:
+	return n ~ /^[+-]?[0-9]+$/
+
+	# for any kind of notation (integer like \`123\`, decimal fraction like \`1.2\`,
+	# and scientific notation like \`1.2e3\`):
+	sign = "[-+]?"
+	decimal = "[0-9]+[.]?[0-9]*"
+	fraction = "[.][0-9]+"
+	exponent = "[eE]" sign "[0-9]+"
+	number = "^" sign "(" decimal "|" fraction ")(" exponent ")?$"
+	return n ~ number
+
+	# Note that internally, all numbers are floats, even integers:
+	#
+	#     $ awk '\$1 == \$2' <<<'123 123.0'
+	#     123 123.0
+
+	# Also note that when a number is written in scientific notation, the
+	# significand can be bigger than 10:
+	#
+	#                                  v--v
+	#     $ awk '{ print \$1 + 1 }' <<<'1220e-1'
+	#     123
+	#
+	# So, what awk supports is not the *normalized* scientific notation.
+	# But it's still a scientific notation.
+	#
+	# For more info:
+	# https://en.wikipedia.org/wiki/Significand
+	# https://en.wikipedia.org/wiki/Scientific_notation#Normalized_notation
+}
+$0
+endsnippet
+
+# user-defined functions {{{1
+
+snippet t25 "user-defined function" Am
+function ${1:myfunc}(${2:mandatory parameters},    ${3:local variables}) {
+	# By default, a variable created inside  a function is global.  That is,
+	# once you call the function,  the variable remains visible outside.  If
+	# you want it to be local to the function, you need to include it inside
+	# the  function's signature.   By convention,  mandatory parameters  are
+	# separated from local variables with several spaces.
+	$0
+	return
+}
+endsnippet
+
+# redirections {{{1
+
+snippet t26 "write data to file" Am
+# Because the expression that  you use to close a file  or pipeline must exactly
+# match the  expression used to  open the  file or run  the command, it  is good
+# practice to use a variable to store the filename or command.
+fpath = "${1:/path/to/file}"
+print "${2:data}" >fpath
+close(fpath)
+$0
+endsnippet
+
+snippet t27 "append data to file" Am
+print "${1:data}" >>"${2:/path/to/file}"
+$0
+endsnippet
+
+snippet t28 "save output of shell command in variable" Am
+cmd = "${1:cmd}"
+cmd | getline ${2:var}
+close(cmd)
+$0
+endsnippet
+
+# miscellaneous {{{1
+
+snippet t29 "supported escape sequences" Am
+# A string can contain the following escape sequences:
+#
+#    - \`\b\`: backspace
+#    - \`\f\`: form feed; ask the printer to eject  the current page, and continue printing on a new page
+#    - \`\n\`: line feed
+#    - \`\r\`: carriage return; position the cursor at the beginning of the current line
+#    - \`\t\`: tab character
+#    - \`\123\`: character whose octal code is \`123\`
+#    - \`\x123\`: character whose hexadecimal code is \`123\`
+#    - \`\\\\\`: literal backslash
+#    - \`\"\`: literal double quote
+endsnippet
+
+snippet t30 "supported types of constants" Am
+#    - string
+#    - number
+#    - regex (\`/pat/\`)
+endsnippet
