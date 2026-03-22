@@ -1,0 +1,544 @@
+#!/bin/bash -
+
+# TODO: merge interesting PRs: https://github.com/clvv/fasd/pulls
+
+# TODO: Format the code with shfmt:{{{
+#
+#     $ shfmt --indent=2 --write ~/bin/frec
+#
+# Issue: shfmt formats this:
+#
+#     if true \
+#         && true; then
+#       :
+#     fi
+#
+# Into this:
+#
+#     if true \
+#       && true; then
+#       :
+#     fi
+#
+# That's confusing because  part of the header (the `&&`  line) is indented like
+# the body (the `:` line).  The original indentation was better.
+#}}}
+
+# TODO: Impose a limit on the number of entries in the database?
+# Remove the entries with lowest frequencies if necessary.
+
+# TODO: We need  a command  to inspect  and manually change  the frequency  of a
+# given entry.
+
+# Config {{{1
+
+# `frec-cd` is implemented here:{{{
+#
+#     ~/.config/fish/plugins/frec/functions/frec-cd.fish
+#
+# It needs to be  a separate shell function, because only  a function can change
+# the state of a running interactive shell;  and here, we need to change `$PWD`.
+# A script can't do that.
+#}}}
+# The abbreviations and the hook are installed here:{{{
+#
+#     ~/.config/fish/plugin/frec/conf.d/frec.fish
+#
+# The  hook  is responsible  for  `--add`ing  paths  from  a shell  command  run
+# interactively.
+#}}}
+# The completion is defined here:{{{
+#
+#     ~/.config/fish/plugin/frec/completions/frec.fish
+#}}}
+
+readonly DATABASE="$HOME/.local/share/frec"
+if ! [[ -f "$DATABASE" ]]; then
+  printf 'cannot find database file: %s\n' "$DATABASE" >&2
+  exit 1
+fi
+
+# TODO: Should we  group the  current script  and those  helper scripts  under a
+# dedicated directory?
+readonly ADD_SCRIPT="$HOME/bin/util/frec/add"
+if ! [[ -f "$ADD_SCRIPT" ]]; then
+  printf 'missing dependency: %s\n' "$ADD_SCRIPT" >&2
+  exit 1
+fi
+
+readonly QUERY_SCRIPT="$HOME/bin/util/frec/query"
+if ! [[ -f "$QUERY_SCRIPT" ]]; then
+  printf 'missing dependency: %s\n' "$QUERY_SCRIPT" >&2
+  exit 1
+fi
+
+# Terminology: "frequencies" are not "scores".{{{
+#
+# The frequencies are *written* in the third field of the database.
+# The scores (or  frecencies) are *computed* at runtime  by `$QUERY_SCRIPT` with
+# some formula which contains the frequencies:
+#
+#     printf "%-10s %s\n", frequency[path] * recency_factor(last_seen[path]), path
+#
+# They  are used  to  sort the  entries  by frecency  (which  combines both  the
+# frequency *and* the recency).
+#}}}
+
+# If  the  sum  of all  frequencies  in  the  database  goes beyond  this  given
+# threshold, `ADD_SCRIPT`  applies a malus to  each of them.  This  is what fasd
+# does with `_FASD_MAX`.  I guess the purpose is to prevent the frequencies from
+# increasing too much.
+#
+# TODO: Or maybe the purpose is to forget the least used paths.
+#
+#    > When the sum of ranks is over 5000 ($_ZL_MAXAGE), all ranks are multiplied by 0.9.
+#    > Entries with a rank lower than 1 are forgotten.
+#
+# Source: https://github.com/skywind3000/z.lua#features
+# Do we want such a mechanism?
+# Did fasd support such a mechanism?
+#
+# But wait.  Suppose  a path has just  been added with the frequency  1.  If the
+# frequency gets immediately multiplied  by 0.9, it will be lower  than 1 and be
+# forgotten, which is obviously not what anyone would want.  What gives?
+declare -i -r MAX_TOTAL_FREQUENCY=2000
+
+# separator between 2 consecutive fields inside the database
+readonly SEP=$'\t'
+# Separator between a path and its type (`f` for file, `d` for directory) when passed to `ADD_SCRIPT`.{{{
+#
+# Don't rename it into `SUBSEP`, because we can't use that name in an awk script
+# (reserved; used as the subscript separator for multi-dimensional arrays).
+# https://pubs.opengroup.org/onlinepubs/9699919799/utilities/awk.html#tag_20_06_13_03
+#}}}
+readonly SUB_SEP=','
+
+# Init {{{1
+
+readonly SCRIPT="${0##*/}"
+
+# Functions {{{1
+function Frec { #{{{2
+  if (( $# == 0 )); then
+    tee >&2 <<'EOF'
+frec [options] [query ...]
+  Options:
+    -f         match files only
+    -d         match directories only
+    -l         list all paths sorted by frecency
+    -e <cmd>   run given command on chosen path
+
+    --add      add paths
+    --delete   delete paths
+    --clean    remove stale paths from frec database
+
+  Examples:
+    # list frecent files
+    $ frec -l -f
+
+    # open a frecent file matching the query "linux"
+    $ frec -f -e xdg-open linux
+
+    # jump to a frecent directory matching the query "down"
+    $ frec-cd down
+EOF
+    return 1
+  fi
+
+  local opts
+  if ! opts="$(getopt \
+      --options=fdle: \
+      --long=add:,delete:,clean \
+      --name="$SCRIPT" \
+      -- "$@")"; then
+    return 1
+  fi
+  eval set -- "$opts"
+
+  while true; do
+    case $1 in
+    -*) #{{{3
+      shift
+    ;;&
+
+    --add) #{{{3
+      # find all valid path arguments, convert them to simplest absolute form
+      local paths
+      paths="$(Get_Paths "$@")"
+
+      # Warning: Don't replace `return 1` with `exit 1`.{{{
+      #
+      # We execute `frec --add` from this script, here:
+      #
+      #     for needle in $needles; do
+      #       ${cmd:-printf '%s\n'} "$needle"
+      #       frec --add "$needle"
+      #     done
+      #
+      # If for some reason `frec --add` fails, we don't want the loop to break.
+      # Anyway, I think you should rarely (never?) exit from a function.
+      # Exit at the script-level, and return from a function.
+      #}}}
+      if [[ -z "$paths" ]]; then
+        return 1
+      fi
+
+      # maintain the file
+      local tmp_file
+      tmp_file="$(mktemp "$DATABASE".XXXXXXXXXX)" || return
+      if ! "$ADD_SCRIPT" \
+          -F"$SEP" \
+          -v paths="$paths" \
+          -v SUB_SEP="$SUB_SEP" \
+          -v MAX_TOTAL_FREQUENCY="$MAX_TOTAL_FREQUENCY" \
+          "$DATABASE" >"$tmp_file" \
+          && [[ -f "$DATABASE" ]]; then
+        rm -f -- "$tmp_file"
+      else
+        mv -f -- "$tmp_file" "$DATABASE"
+      fi
+      return
+    ;;
+
+    --delete) #{{{3
+      # turn valid arguments into entry-deleting `sed(1)` commands
+      local delete_cmds
+      delete_cmds="$(
+        while [[ -n "$1" ]]; do
+          Canonicalize "$1"
+          shift
+        done \
+        | sed 's@\([.[\/*^$]\)@\\\1@g
+               s@^\(.*\)$@/^\1'"$SEP"'/d@')"
+
+      # maintain the file
+      local tmp_file
+      tmp_file="$(mktemp "$DATABASE".XXXXXXXXXX)" || return
+
+      local old_checksum
+      old_checksum="$(md5sum "$DATABASE" | awk '{ print $1 }')"
+
+      if ! sed "$delete_cmds" "$DATABASE" >"$tmp_file" \
+          && [[ -f "$DATABASE" ]]; then
+        rm -f -- "$tmp_file"
+      else
+        mv -f -- "$tmp_file" "$DATABASE"
+      fi
+
+      # The database should have changed.
+      # If it didn't, something probably went wrong; let us know.
+      local new_checksum
+      new_checksum="$(md5sum "$DATABASE" | awk '{ print $1 }')"
+      if [[ "$new_checksum" == "$old_checksum" ]]; then
+        return 1
+      fi
+      return
+    ;;
+
+    --clean) #{{{3
+      # remove from the database all the files/directories which no longer exist
+      # TODO: Remove more invalid entries.
+      # Check the frequency (3rd field) is a float (should it be bigger than 1?).
+      # Check the timestamp is a 10-digit number.
+      # Also, give some feedback: which entries do you remove, and why.
+
+      if ! command -v sponge >/dev/null; then
+        echo 'missing dependency: sponge; install moreutils package' >&2
+        return 127
+      fi
+
+      local line
+      while IFS= read -r line; do
+        local path
+        path="$(awk -F"$SEP" '{ print $1 }' <<<"$line")"
+        if [[ -e "$path" ]] && ! Is_Binary "$path"; then
+          printf '%s\n' "$line"
+        fi
+      done <"$DATABASE" | sponge "$DATABASE"
+      # Warning: Do *not* try to replace `sponge(1)` with `tee(1)`.{{{
+      #
+      #     done <"$DATABASE" | tee "$DATABASE" >/dev/null
+      #                         ^^^
+      #                          ✘
+      #
+      # `tee(1)` would write  into `$DATABASE` as soon as it  can read something
+      # on its STDIN.  That's not what you  want here.  You want a command which
+      # waits for the process on the left of the pipeline to terminate producing
+      # its output.  That's what `sponge(1)` does.
+      #}}}
+      return
+    ;;
+
+    -f) #{{{3
+      local type='f'
+    ;;
+
+    -d) #{{{3
+      local type='d'
+    ;;
+
+    -l) #{{{3
+      # We need to support `-l`.{{{
+      #
+      # It's useful to get the database from a script.
+      #
+      # We use it  in our Vim mapping  `gx`, which relies on  frec's database to
+      # guess where to find a book on a line such as:
+      #
+      #     // Reference: page 9 (paper) / 34 (ebook)
+      #
+      # The line is copied from this file:
+      #
+      #     ~/Wiki/C/code/C_Programming_A_Modern_Approach/ch02_C_Fundamentals/course/01_pun.c
+      #}}}
+      local listing='on'
+    ;;
+
+    -e) #{{{3
+      local cmd="$1"
+      shift
+    ;;
+
+    --) #{{{3
+      local query="$*"
+      break
+    ;;
+
+    *) #{{{3
+      printf '%s: invalid option: %s\n' "$SCRIPT" "$1" >&2
+      return 1
+    ;;
+      #}}}3
+    esac
+  done
+
+  local needles
+  # No need to pass any parameter as argument.
+  # `Query_Database` can access the local variables from its parent.{{{
+  #
+  #     $ bash <<'EOF'
+  #     function parent() {
+  #       local var='from parent'
+  #       child
+  #     }
+  #     function child() {
+  #       echo $var
+  #     }
+  #     parent
+  #     EOF
+  #
+  #     from parent
+  #}}}
+  needles="$(Query_Database)"
+  local -i status=$?
+  # frec has never seen this file
+  if (( status != 0 )); then
+    local last
+    last="$(awk '{ print $NF }' <<<"$query")"
+    # Let `xdg-open(1)` open the file even if we never opened it in the past.
+    if [[ -n "$cmd" ]] && [[ -f "$last" ]]; then
+      $cmd "$last"
+      Frec --add "$last"
+      return
+    fi
+    # This status code is shown in our fish status line.
+    # It's useful to let us know immediately when nothing is found.{{{
+    #
+    # Otherwise, we might needlessly wait, wondering whether a slow program is
+    # being started (e.g. `ebook-viewer` takes a few seconds to start).
+    #}}}
+    return "$status"
+  fi
+
+  if [[ -n "$listing" ]]; then
+    printf '%s\n' "$needles"
+    return
+  fi
+
+  # We might have selected several paths.
+  # And the `$cmd` program might not be able to handle more than one at a time.
+  local needle
+  for needle in $needles; do
+    # The parameter expansion for `$cmd` is useful in case we omit `-e` (e.g.
+    # `$ frec -f linux`).
+    ${cmd:-printf '%s\n'} "$needle"
+    Frec --add "$needle"
+  done
+}
+
+function Get_Paths { #{{{2
+  while [[ -n "$1" ]]; do
+    local path="$1"
+    shift
+
+    # Don't try to sanitize *before* the canonicalization.
+    # We tried in the past; it's too tricky to be reliable.
+    path="$(Canonicalize "$path")"
+
+    # Sanitization: assert what a usual valid filepath should look like.{{{
+    #
+    # `path` might contain special characters causing trouble later.
+    # For example, we use `|` as a delimiter in the database, so we don't want a
+    # path to contain one.
+    #}}}
+    # We don't accept spaces, brackets, bars, nor backslashes.{{{
+    #
+    # We rarely  have filenames with  those characters; except when  we download
+    # files (but we always rename them to remove spaces).
+    #}}}
+    # Also, ignore paths under `/dev`, `/proc/`, `/run`, `/tmp/`.{{{
+    #
+    # Because  they only  contain  temporary files,  or  pseudo-files which  are
+    # generated at runtime.  We're only interested in persistent files.
+    #}}}
+    # We accept `@` and `#` to support resp. systemd service files and WeeChat channel logs.
+    # Warning: WeeChat logs might still be ignored.{{{
+    #
+    # If you use tab-completion, `#` is escaped:
+    #
+    #     $ cd ~/.local/share/weechat/logs/
+    #     $ vim \#weechat_libera.log
+    #           ^
+    #           ✘
+    #
+    # This backslash  is necessary because `#`  is after a space.   But since we
+    # don't accept `\`,  the log file won't  be added to frec's  database.  As a
+    # workaround, prepend `./`, and remove `\`:
+    #
+    #     $ vim ./#weechat_libera.log
+    #           ^^^
+    #            ✔
+    #}}}
+    #
+    #                  Only characters that we accept in a filepath.
+    #                  v---------------v
+    if [[ "$path" =~ [^-_./@~#[:alnum:]$] ]] \
+        || [[ "$path" =~ ^/(dev|proc|run|tmp) ]]; then
+      continue
+    fi
+
+    if [[ -f "$path" ]] && ! Is_Binary "$path"; then
+      printf '%s%sf%s' "$path" "$SUB_SEP" "$SEP"
+    elif [[ -d "$path" ]]; then
+      printf '%s%sd%s' "$path" "$SUB_SEP" "$SEP"
+    fi
+  done
+}
+
+function Canonicalize { #{{{2
+  local path="$1"
+
+  # Alternative:{{{
+  #
+  #     eval path="$path"
+  #
+  # Don't use it though.  Evaluating arbitrary data is too unpredictable:
+  #
+  #     $ cd /tmp && touch file
+  #     $ path="$(rm /tmp/file)"
+  #     $ path="$(eval printf '%s' "$path")"
+  #     # expected:  file exists
+  #     # actual:  file has been removed
+  #}}}
+  # expand `~/`
+  path="${path/#\~\//"$HOME"/}"
+  # expand `$HOME/`
+  path="${path/#\$HOME\//"$HOME"/}"
+
+  # trim possible trailing slash
+  path="${path%%/}"
+
+  if ! [[ -e "$path" ]]; then
+    return
+  fi
+
+  local before_realpath="$path"
+  # resolve symbolic links, and simplify things like `./../file`
+  path="$(realpath -- "$path")"
+
+  if [[ -e "$path" ]]; then
+    printf '%s' "$path"
+  elif ! [[ "$before_realpath" =~ ^/ ]] \
+      && [[ "$PWD" =~ /${before_realpath#./}$ ]]; then
+    # If we `cd` into a directory using a relative path, `$path` does not exist:{{{
+    #
+    #     $ cd
+    #     $ mkdir foobar
+    #     $ cd foobar
+    #     # $path is:  foobar
+    #     # $PWD is:   /home/user/foobar
+    #
+    # `foobar` does not exist relative to `/home/user/foobar`.
+    # That is, `/home/user/foobar/foobar` does not exist.
+    #
+    # Same issue if  we execute `cd ./foobar` instead of  `cd foobar`; hence why
+    # we trim a possible `./` prefix in the second part of the previous test.
+    #}}}
+    printf '%s' "$PWD"
+  fi
+}
+
+function Is_Binary { #{{{2
+  local file_type
+  file_type="$(file --brief "$1")"
+  [[ "$file_type" == 'ELF '* ]]
+}
+
+function Query_Database { #{{{2
+  local paths
+  # `sort(1)` sorts the entries by their computed scores/frecencies.
+  paths="$("$QUERY_SCRIPT" -F"$SEP" -v type="$type" "$DATABASE" \
+    | sort --key=1bnr,1 \
+    | sed 's/^[[:digit:].]* *//'
+  )"
+
+  if [[ -z "$paths" ]]; then
+    # We need to return a non-zero status code to support:
+    #
+    #     $ frec -f -e xdg-open file_exists_but_was_never_seen_by_frec
+    return 1
+  fi
+
+  if [[ -n "$listing" ]]; then
+    printf '%s\n' "$paths"
+    return
+  fi
+
+  if ! command -v fzf >/dev/null; then
+    echo 'missing dependency: fzf' >&2
+    return 127
+  fi
+
+  # `ls(1)` to colorize the paths.
+  # `2>/dev/null` in case the database contains a path which no longer exists.
+  # `--bind`: do *not* surround the argument string with double quotes.{{{
+  #
+  #     --bind="alt-e:become(editor {+} >$(tty))" \
+  #            ^                                ^
+  #            ✘                                ✘
+  #
+  # It would not work.  Vim would hang while giving this error:
+  #
+  #     Vim: Warning: Output is not to a terminal
+  #}}}
+  # shellcheck disable=SC2012,SC2016
+  printf '%s\n' "$paths" \
+    | xargs --delimiter='\n' ls --color=always --directory --sort=none -- 2>/dev/null \
+    | fzf --ansi \
+        --bind='alt-e:become(editor {+} >$(tty))' \
+        --exit-0 \
+        --multi \
+        --no-sort \
+        --query="$query " \
+        --scheme=path \
+        --select-1
+    # `--no-sort` prevents FZF  from undo'ing frec's own  sorting (remember that
+    # the paths are already sorted by frecency in the database).
+    # Yes, this also prevents FZF from sorting the remaining paths by relevance,
+    # but it's less important than the frecency.  In practice, `--no-sort` makes
+    # it a bit faster to select the path we're looking for.
+}
+#}}}1
+# Execution {{{1
+
+Frec "$@"

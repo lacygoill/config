@@ -1,0 +1,2974 @@
+# delete/reset {{{1
+
+# Unset all core options.
+# Warning: Make sure this command is executed *before* `/key resetall -yes`.{{{
+#
+# Unsetting  `weechat.key.*` breaks  some  fundamental keys  like Backspace  and
+# Enter.  `/key resetall -yes`  needs   to  fix  them  for   WeeChat  to  remain
+# functional.
+#}}}
+/unset -mask weechat.*
+
+# Unset     all     options     from     the     `logger`     plugin,     except
+# `logger.level.core.weechat`.  Otherwise, when we reload the config by pressing
+# `C-g C-r`, some output would be logged in:
+# `~/.local/share/weechat/logs/core.weechat.weechatlog`
+/unset -mask logger.color.*
+/unset -mask logger.file.*
+/unset -mask logger.level.irc.*
+/unset -mask logger.look.*
+/unset -mask logger.mask.*
+
+# unset all remaining plugin options
+/unset -mask alias.*
+/unset -mask buflist.*
+/unset -mask charset.*
+/unset -mask exec.*
+/unset -mask fset.*
+/unset -mask irc.*
+/unset -mask python.*
+/unset -mask script.*
+/unset -mask trigger.*
+/unset -mask xfer.*
+
+# delete all filters
+/filter del -all
+
+# empty ignore list
+/ignore del -all
+
+# delete all triggers and restore default ones
+# Do *not* execute `/trigger del -all`.{{{
+#
+# It would delete default triggers.  We want to preserve some of them:
+#
+#     $ weechat --temp-dir --no-connect --run-command='/trigger list'
+#     List of triggers:
+#       beep: print =? /1
+#       cmd_pass: modifier(5000|input_text_display;5000|history_add;5000|irc_command_auth) ~1
+#       cmd_pass_register: modifier(5000|input_text_display;5000|history_add;5000|irc_command_auth) ~1
+#       msg_auth: modifier(5000|irc_message_auth) ~1
+#       server_pass: modifier(5000|input_text_display;5000|history_add) ~1
+#}}}
+/trigger default -yes
+
+# restore bindings to the default values and delete *all* personal bindings
+/key resetall -yes
+# }}}1
+
+# Scripts {{{1
+# Leave this section at the top.{{{
+#
+# We might execute a command installed by  a third-party script.  If so, we want
+# the guarantee that the script has  already been installed; otherwise, an error
+# will be given.
+#}}}
+
+# Warning: `/script install` does not install a script immediately.
+# Always delay the execution of a command installed by a third-party plugin.
+# And don't disable `script.scripts.download_enabled` immediately.{{{
+#
+# If you do, and the script was not already installed, an error is given:
+#
+#     $ tee /tmp/conf.conf <<'EOF'
+#     /set script.scripts.download_enabled on
+#     /script install some_script.py
+#     /set script.scripts.download_enabled off
+#     EOF
+#
+#     $ weechat --temp-dir --run-command='/exec -oc cat /tmp/conf.conf'
+#     ...
+#     script: download of scripts is disabled by default; see /help script.scripts.download_enabled
+#}}}
+
+# To suppress error when we run `/script install`:{{{
+#
+#     =!= │ script: download of scripts is disabled by default; see /help script.scripts.download_enabled
+#}}}
+/set script.scripts.download_enabled on
+
+# autoload our scripts
+/script autoload \
+    autosort.py \
+    bufsave.py \
+    change_case.py \
+    jump_smart.py \
+    transpose_words.py
+
+# (re-)generate tags for all Python scripts
+/eval /exec -bg -sh cd ${weechat_data_dir}/python ; ctags *.py{,i}
+
+# Need a Python stub to suppress errors given by mypy because of `import weechat`:{{{
+#
+#     script.py:1: error: Cannot find implementation or library stub for module named "weechat"  [import]
+#     script.py:1: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports
+#
+# Fortunately, WeeChat provides one:
+#
+#    > A Python stub for WeeChat API is available in the repository: weechat.pyi ↗.
+#
+# Source: https://weechat.org/files/doc/weechat/stable/weechat_scripting.en.html#python_module
+#}}}
+# Do *not* create a symlink from `weechat.py` to `weechat.pyi`!{{{
+#
+# It might be tempting to fix an error with pydoc:
+#
+#     $ pydoc /path/to/script.py
+#     ... ModuleNotFoundError: No module named 'weechat'
+#
+#     $ ln --symbolic weechat.pyi weechat.py
+#
+# But it would cause pylint to give false errors.  For example:
+#
+#     E1111: Assigning result of a function call, where the function has no return (assignment-from-no-return)
+#
+# Besides, it only works if  pydoc is run from `~/.config/weechat/python/`.  For
+# pydoc to find the stub (via the symlink) from any directory, you would need to
+# include `~/.config/weechat/python` in `PYTHONPATH` (or `sys.path`):
+#
+#     $ PYTHONPATH=~/.config/weechat/python pydoc /path/to/script.py
+#
+# BTW, don't set `PYTHONPATH` in a shell init file:
+#
+#    > PYTHONPATH will affect all installed Python versions/environments.
+#    > **Be wary of setting this in your shell profile or global environment variables.**
+#    > The site module offers more nuanced techniques as mentioned below.
+#
+# Source: https://docs.python.org/3/library/sys_path_init.html#the-initialization-of-t
+#}}}
+/eval /exec -bg \
+    curl --fail --location --silent --output ${weechat_data_dir}/python/weechat.pyi \
+    'https://raw.githubusercontent.com/weechat/weechat/master/src/plugins/python/weechat.pyi'
+
+# We have a `BufNewFile` Vim autocmd which automatically sets the executable bit
+# on a new Python script file.  It's  not needed for WeeChat Python scripts, and
+# it's inconsistent with third-party scripts which don't have it.  Remove it.
+/eval /exec -bg find ${weechat_data_dir}/python/ \
+    -name '*.py' \
+    -type f \
+    -exec chmod -- -x '{}' \+
+
+# Now that we no longer need to install any script, disable the option.
+# It is by default "for privacy considerations"; might be more secure.
+/wait 1s /set script.scripts.download_enabled off
+
+# Networks {{{1
+# Default options {{{2
+# Leave this section at the top, so that network-local options can inherit values of the default ones.{{{
+#
+# To check their current values:
+#
+#     /fset irc.server.*.<option>
+#
+# For example:
+#
+#     /fset irc.server.*.nicks
+#     /fset irc.server.*.usermode
+#}}}
+
+# nicks
+# `${username}` is replaced by system username (`$USER`).
+/set irc.server_default.nicks "${username},${username}_"
+
+# user modes
+# `i`: Hide us from global `/who` by normal users, and show only shared channels in `/whois` output.
+/set irc.server_default.usermode "i"
+
+# Addresses {{{2
+# This section should  come before other any network-local setting,  so that the
+# necessary `irc.server.<server>.` namespaces exist.
+
+# Before adding a server, make sure the domain name you specify is known.{{{
+#
+#     $ sudo apt install gnutls-bin
+#     $ gnutls-cli --port=6697 irc.abjects.com
+#     ...
+#     Cannot resolve irc.abjects.com:6697: Name or service not known
+#     ✘
+#}}}
+# Don't pass `-option` to `/server add`.{{{
+#
+#     /server add SERVER irc.SERVER.net -option=value
+#                                       ^-----------^
+#                                             ✘
+#
+# Instead, set the option separately:
+#
+#     ✔
+#     /server add SERVER
+#     /server irc.server.SERVER.option value
+#
+# Rationale: Doing several things on a single line makes the code harder to read
+# and maintain.
+#}}}
+
+# When I connect to a server, I get the error: "The certificate is NOT trusted." {{{
+#
+# You might  have specified a domain  alias which the certificate  is not issued
+# for:
+#
+#                                    ✘
+#                              v------------v
+#     $ gnutls-cli --port=6697 irc.debian.org
+#     ...
+#     - Status: The certificate is NOT trusted. The name in the certificate does not match the expected.
+#
+# If so, try to find the primary domain:
+#
+#     $ gnutls-cli --port=6697 irc.oftc.net
+#                              ^----------^
+#                                   ✔
+#
+# If that doesn't help:
+#
+#     /set irc.server.SERVER.tls_verify off
+#
+# The connection  will still be encrypted,  but you lose the  guarantee that the
+# server is really who it claims to be.
+#
+# See:
+# https://github.com/weechat/weechat/issues/972#issuecomment-298149968
+# https://www.weechat.org/files/doc/stable/weechat_user.en.html#irc_tls_certificates
+# https://libera.chat/guides/connect#accessing-liberachat-via-tls
+#
+# ---
+#
+# Note that you can configure WeeChat to use a manually downloaded certificate with:
+#
+#     /set weechat.network.gnutls_ca_user "/path/to/SERVER.pem[:...]"
+#                                                             ^----^
+#                  multiple certificates must be separated by colons
+#
+# Unfortunately, some  IRC server operators  don't care about keeping  their TLS
+# certificates up-to-date – or even obtaining valid ones in the first place:
+#
+#     ✘ │ gnutls: the hostname in the certificate does NOT match "..."
+#
+# See: https://superuser.com/a/1370215
+#}}}
+
+# `/mute` to suppress errors when we press `C-g C-r` to reload our config.
+/mute /server add abjects irc.abjects.net
+/mute /server add highway irc.irchighway.net
+/mute /server add libera irc.libera.chat
+/mute /server add oftc irc.oftc.net
+/mute /server add rizon irc.rizon.net
+/mute /server add undernet irc.undernet.org
+
+# Necessary because we've executed  `/unset -mask irc.server.*` earlier.
+# I don't think the code duplication can be avoided here.{{{
+#
+# The first time `/server add` is executed, it actually does 2 things:
+#
+#    - it creates a whole set of `irc.server.<server>.*` options
+#    - it sets `/set irc.server.<server>.addresses` to the given value
+#
+# Afterward, it  fails (hence  why we  use `/mute`).  This  is an  issue because
+# `/unset -mask  irc.server.*`  undoes the  second  bullet  point.  Undoing  the
+# first bullet point is  not an issue; the options still exist,  and we set them
+# again later in our config.
+#}}}
+/set irc.server.abjects.addresses "irc.abjects.net"
+/set irc.server.highway.addresses "irc.irchighway.net"
+/set irc.server.libera.addresses "irc.libera.chat"
+/set irc.server.oftc.addresses "irc.oftc.net"
+/set irc.server.rizon.addresses "irc.rizon.net"
+/set irc.server.undernet.addresses "irc.undernet.org"
+
+# Do *not* add the Criten network.  It merged with Rizon.{{{
+#
+# We used to connect to Criten for the channels `#elite-chat` and `#ELITEWAREZ`;
+# but those  exist on Rizon  too.  And  if you try  to connect to  Criten, while
+# being already connected to  Rizon, the server will tell you  that your nick is
+# already taken, and give you an alternative one.  That's confusing and risky; I
+# don't want  to be  banned from  Rizon because my  user has  been flagged  as a
+# clone.
+#}}}
+
+# Authentication {{{2
+
+# Why should I authenticate with SASL (Simple Authentication and Security Layer)?{{{
+#
+# It lets you authenticate *before* announcing your user to the rest of the network.
+#
+# This prevents  race conditions  such as  your user  being visible  before your
+# vhost/cloak is applied, or trying to join registered-only channels before your
+# account name gets set.
+#
+# This might also let you authenticate even if your IP has been banned:
+# https://blog.wxm.be/2021/05/22/sasl-certfp-libera.html
+#}}}
+# How to determine whether a server supports SASL?{{{
+#
+#     # list capabilities supported by server
+#     /cap ls
+#     -- │ irc: client capability, server supports: ... sasl ...
+#
+# Alternatively,  in the  server buffer,  look for  the "server  supports" line.
+# Check whether it contains "sasl":
+#
+#     -- │ irc: client capability, server supports: ... sasl ...
+#                                                       ^--^
+#}}}
+# How to determine whether I've properly configured WeeChat to use SASL?{{{
+#
+#     # list capabilities currently enabled
+#     /cap list
+#     -- │ irc: client capability, currently enabled: ... sasl ...
+#                                                         ^--^
+#
+# ---
+#
+# Alternatively, in the  server buffer, look for the  "requesting" and "enabled"
+# lines.  Check whether they contain "sasl":
+#
+#                                                  v--v
+#     -- │ irc: client capability, requesting: ... sasl ...
+#     -- │ irc: client capability, enabled: ... sasl ...
+#                                               ^--^
+#
+# If SASL is not used, you'll read this kind of lines:
+#
+#     -- │ NickServ (...): This nickname is registered and protected.  If it is your
+#     -- │ NickServ (...): nick, type /msg NickServ IDENTIFY password.  Otherwise,
+#     -- │ NickServ (...): please choose a different nick.
+#}}}
+
+# Why should I authenticate with CertFP (Certificate FingerPrint) instead of a password?{{{
+#
+# With CertFP, you no longer need to provide a password:
+#
+#     /msg NickServ identify <password>
+#
+# Nor do you need to `/secure` it (so that it's not stored in plain text), which
+# requires you to manage an extra ad-hoc passphrase file.
+#}}}
+# How to determine whether a server supports CertFP?{{{
+#
+#     /msg NickServ identify <password>
+#     /msg NickServ help
+#
+# In the output of the last command, check the presence of the `cert` command.
+# Note that it's  important to be identified,  because `/msg NickServ help` only
+# lists commands which your user can  execute; and you can execute more commands
+# when you're identified.
+#
+# Note that  on Rizon, NickServ  does not recognize  the `cert` command,  but it
+# still supports CertFP.  It's just handled with a different command (`access`).
+#}}}
+# How to add my current fingerprint to the certificate list?{{{
+#
+# First:
+#
+#     # setting this  option *before* connecting to  the server lets you  add your
+#     # certificate without having to specify its fingerprint
+#     /set irc.server.<server>.tls_cert "${weechat_config_dir}/certs/<server>.pem"
+#
+#     /reconnect <server>
+#     /msg NickServ identify <password>
+#
+# Then, on most networks:
+#
+#     /msg NickServ cert add
+#
+# On OFTC:
+#
+#     /msg NickServ cert add <nick>
+#                            ^----^
+#     # Specifying your nick is not necessary, but still useful.
+#     # When  you connect  to OFTC,  providing the  current fingerprint,  you will
+#     # be automatically  identified, and  services will  change your  nickname to
+#     # <nick>.  This might be useful in the  case where <nick> is already used by
+#     # someone else (which  might happen because you can't  authenticate early on
+#     # OFTC; the network does not support SASL).
+#
+# On Rizon:
+#
+#     /msg NickServ access add fingerprint
+#                              ^---------^
+#     # "fingerprint" is meant to be typed literally; don't try to replace it with
+#     # an actual fingerprint
+#
+# Finally:
+#
+#     # use client side TLS certificate for SASL authentication
+#     /set irc.server.<server>.sasl_mechanism external
+#}}}
+# How to read the fingerprint of my certificate?{{{
+#
+# On most networks:
+#
+#     /msg NickServ cert list
+#     OR
+#     /whois
+#
+# On Rizon:
+#
+#     /msg NickServ access list
+#}}}
+# Which type of digest is used for the fingerprint?{{{
+#
+# Libera uses SHA512.
+# Abjects uses MD5.
+# IRCHighWay, OFTC and Rizon use SHA1.
+#}}}
+# What happens if I specify the fingerprint with a wrong type of digest?{{{
+#
+# It will be automatically converted (except on OFTC which just gives an error).
+#
+# Note that you do  *not* have to specify the fingerprint  at all (provided that
+# you've set `tls_cert` *before* connecting to the server):
+#
+#     # most networks
+#     /msg NickServ cert add [<fingerprint>]
+#                            ^             ^
+#
+#     # Rizon
+#     /msg NickServ access add fingerprint [<fingerprint>]
+#                                          ^             ^
+#}}}
+
+/set irc.server.abjects.sasl_mechanism external
+/set irc.server.abjects.tls_cert "${weechat_config_dir}/certs/abjects.pem"
+
+/set irc.server.highway.sasl_mechanism external
+/set irc.server.highway.tls_cert "${weechat_config_dir}/certs/highway.pem"
+
+# https://libera.chat/guides/sasl
+# https://libera.chat/guides/certfp
+/set irc.server.libera.sasl_mechanism external
+/set irc.server.libera.tls_cert "${weechat_config_dir}/certs/libera.pem"
+
+# OFTC does not support SASL (yet).
+# https://www.oftc.net/NickServ/CertFP/
+/set irc.server.oftc.tls_cert "${weechat_config_dir}/certs/oftc.pem"
+
+# https://wiki.rizon.net/index.php?title=SASL
+# https://wiki.rizon.net/index.php?title=CertFP
+/set irc.server.rizon.sasl_mechanism external
+/set irc.server.rizon.tls_cert "${weechat_config_dir}/certs/rizon.pem"
+
+# Undernet supports nothing: no SASL, no CertFP, no registration (NickServ).
+
+# TLS {{{2
+
+# Unfortunately, some servers don't have an up-to-date and valid certificate.
+# To connect to them, you need to turn off `tls_verify`.
+/set irc.server.abjects.tls_verify off
+/set irc.server.highway.tls_verify off
+
+# To *somewhat* mitigate the security risk it creates, pin their certificate.{{{
+#
+# The idea is to emulate the TOFU authentication scheme:
+# https://en.wikipedia.org/wiki/Trust_on_first_use
+#}}}
+# Unfortunately, the effect is still pretty limited.{{{
+#
+# If the  certificate's fingerprint does  not match,  you'll get a  warning, but
+# you'll still be connected.  If you've configured WeeChat to automatically send
+# your  password,  you  might  unwillingly  send  it  to  an  untrusted  server:
+# https://github.com/weechat/weechat/issues/1070
+#}}}
+# To get the fingerprints:{{{
+#
+#                                 example: irc.abjects.net
+#                                 v------v
+#     $ openssl s_client -connect=<domain>:6697 </dev/null 2>/dev/null \
+#           | openssl x509 -noout -fingerprint -sha256 \
+#           | sed 's/.*=\|://g'
+#
+# Caveat: There might be several fingerprints; so you need to re-run the command
+# regularly over the course of a few minutes/hours to get all of them.
+#}}}
+/set irc.server.abjects.tls_fingerprint "\
+0C38757BFC8E71362C8876A744F08109F6F0EE2F3880A66C98D3A7E8C8C85F36\
+,7D8B3DE6E8147D2448B68EDDBDB2FAF15EBDBDF2C808ACD1EF5595D093766DF6"
+
+/set irc.server.highway.tls_fingerprint "\
+14EB7414537BB50FACB4F10558CB4B007CFA21AB3B9053867F926330AB559CF8\
+,430A2290CDD55DBCDE5267BFD84F98C231FF9F2592C98F5E38477315E55D2175\
+,527C93465E26C075CE37070BA558AE52EA7FC82105D277AF0655E4C467D6367F"
+
+# Undernet does not support TLS at all: https://www.undernet.org/servers.php
+/set irc.server.undernet.tls off
+
+# autoconnect {{{2
+
+/set irc.server.abjects.autoconnect on
+/set irc.server.libera.autoconnect on
+/set irc.server.oftc.autoconnect on
+/set irc.server.rizon.autoconnect on
+
+# autojoin {{{2
+
+# Don't autojoin `#moviegods`; it makes us download too much data (a gigabyte every week).
+/set irc.server.abjects.autojoin "#mg-chat"
+
+/set irc.server.highway.autojoin "#ebooks"
+
+# Channel suggestions:{{{
+#
+#    - ##workingset
+#    - #awk
+#    - #debian
+#    - #debian-offtopic
+#    - #ffmpeg
+#    - #git
+#    - #imagemagick
+#    - #mpv
+#    - #openssh
+#    - #pypa
+#    - #python
+#    - #rsync
+#    - #sed
+#    - #systemd
+#    - #weechat
+#}}}
+/set irc.server.libera.autojoin "#debian"
+
+# Channel suggestions:{{{
+#
+#    - #debian
+#    - #virt (for libvirt, virt-manager, ...)
+#
+# For Debian-related channels:
+# https://wiki.debian.org/IRC#Debian_IRC_channels
+#}}}
+/set irc.server.oftc.autojoin "#debian"
+# The OFTC network does not support SASL; add a delay before autojoining a channel.{{{
+#
+# So that we have the guarantee to be authentified.
+#
+#    > If the server does not support SASL, you can add a delay (between command and join of channels):
+#    >
+#    > /set irc.server.libera.command_delay 5
+#
+# Source: https://weechat.org/files/doc/weechat/stable/weechat_faq.en.html#irc_sasl
+#}}}
+/set irc.server.oftc.command_delay 5
+# For the delay to work, we need a command to be run before.
+/set irc.server.oftc.command "/mute"
+
+# `#elite-chat` might have  movies that `#moviegods` doesn't; and  it might have
+# movies in english (!= german) earlier (remember Oppenheimer)
+/set irc.server.rizon.autojoin "#elite-chat,#subsplease"
+/set irc.server.undernet.autojoin "#bookz"
+
+# usermode {{{2
+# Documentation:{{{
+#
+# Abjects: https://docs.inspircd.org/3/user-modes/ (*)
+# Libera: https://libera.chat/guides/usermodes
+# OFTC: https://www.oftc.net/UserModes/
+# Rizon: https://wiki.rizon.net/index.php?title=User_Modes
+#
+# (*) There  is no documentation  for the available  user modes on  Abjects; the
+# website is empty since september 2021:
+# https://web.archive.org/web/20210919135735/http://abjects.net/index.php
+#
+# But when we connect, we can see that the server is running InspIRCd-2.0:
+#
+#     ...
+#     -- │ Your host is plague.ny.us.abjects.net, running version InspIRCd-2.0
+#     ...
+#
+# Unfortunately, I can't find any documentation for v2, but I can for v3.
+# Hopefully, both versions share the same user modes.
+#
+# BTW, IRCHighWay also runs InspIRCd-2.0.
+#}}}
+
+# Do *not*  set user modes  which ignores private  messages on servers  which we
+# connect to for warez.  It would  prevent us from receiving messages/files from
+# the bots.
+
+# https://libera.chat/guides/usermodes
+# `g:` Ignore private messages from unknown users.{{{
+#
+# You can still be notified that someone  is trying to send you a message, which
+# you can `/accept`.   If you send a  message to someone has  the side-effect of
+# `/accept`ing them.
+#}}}
+# `R`: Ignore private messages from users who are not identified with services.{{{
+#
+# `R` is not redundant  with `g`; a non-registered user is  ignored even if they
+# have been `/accept`ed.   IOW, if you have set  `gR`, for a user to  send you a
+# private message, they need to be `/accept`ed *and* registered.
+#}}}
+/set irc.server.libera.usermode "igR"
+
+# https://www.oftc.net/UserModes/
+# `g`: Block private message unless whitelisted.
+/set irc.server.oftc.usermode "ig"
+
+# https://wiki.rizon.net/index.php?title=User_Modes
+# `p`: Hide our non-common channels, as well as our sign-on and idle time in a `/whois lgc`.
+/set irc.server.rizon.usermode "ip"
+
+#}}}1
+# /fset {{{1
+
+# In the `/fset` buffer, some readline-like key bindings don't work, because of conflicting key bindings.{{{
+#
+# `M-f` doesn't jump to the next word on the input line:
+#
+#    > alt+f, alt+r      r       reset value
+#    > alt+f, alt+u      u       unset value
+#
+#    > alt+f, alt+n      n       set new value
+#    > alt+f, alt+a      a       append to value
+#
+# Source: `/help fset`
+#
+# And `M-p` doesn't recall the previous command because of this:
+#
+#    > alt+p             p       toggle plugin description options (plugins.desc.*)
+#}}}
+# Let's fix them.{{{
+#
+#    > key_unbind_xxx ... Unbind key xxx for this buffer.
+#
+# Source: https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_buffer_set
+#
+# ---
+#
+# The value `1` doesn't matter; what matters is that these buffer properties exist.
+#
+# ---
+#
+# If you need to unbind other keys, and you're looking for the correct syntax:
+# https://github.com/weechat/weechat/blob/2ad8a0d868b594204eb7199f6380b865ebf45c8b/src/plugins/fset/fset-buffer.c#L1506-L1526
+#}}}
+/set weechat.buffer.fset.fset.key_unbind_meta-f,meta-r ""
+/set weechat.buffer.fset.fset.key_unbind_meta-f,meta-u ""
+/set weechat.buffer.fset.fset.key_unbind_meta-f,meta-n ""
+/set weechat.buffer.fset.fset.key_unbind_meta-f,meta-a ""
+
+/set weechat.buffer.fset.fset.key_unbind_meta-p ""
+
+# make `M-m` toggle the mark on the current option
+/set weechat.buffer.fset.fset.key_bind_meta-m "/fset -mark; /fset -down"
+
+# make `C-l` unmark all options
+/set weechat.buffer.fset.fset.key_bind_ctrl-l "/_fset_unmark_all_options"
+/alias add _fset_unmark_all_options \
+    input move_end_of_line \
+    ; /input delete_beginning_of_line \
+    #    > $$      refresh options (unmark all options)
+    #
+    # Source: `/help fset`
+    ; /input insert $$ \
+    ; /input return
+
+# By default, `C-x` toggles the format of lines.
+# Let's make it also toggle the title bar, so that we can read more info.{{{
+#
+# In particular:
+#
+#    - the index of the currently selected option
+#    - the total number of options matching the filter
+#    - the filter
+#    - the fields used for sorting
+#
+# For example:
+#
+#     1/15 | Filter: weechat.bar.title. | Sort: type,-name
+#
+# ---
+#
+# The index is useful  when there are many options and we want  an idea of where
+# we are in the buffer.  Also, the bar  provides a good visual clue for when the
+# 2nd format is used.
+#
+# We could  also include `${index}`  in the value of  `fset.format.option2`, but
+# AFAICT there are no variables for  the other information provided by the title
+# bar.
+#}}}
+/set weechat.buffer.fset.fset.key_bind_ctrl-x "/mute /set weechat.bar.title.hidden toggle; /fset -format"
+
+# make sure the help bar is displayed
+/set weechat.bar.fset.items "fset"
+
+# how to color option name in help bar
+/set fset.color.help_name 99
+# how to color default value in help bar
+/set fset.color.help_default_value 99
+
+# how to color background of selected line (`_bg2` is for when you press `C-x`)
+/set fset.color.line_selected_bg1 159
+/set fset.color.line_selected_bg2 159
+# how to color foreground of selected line
+/set fset.color.name_selected black
+/set fset.color.value_selected 27
+
+# how to color option whose value is changed from the default
+/set fset.color.name_changed 94
+/set fset.color.value_changed 94
+
+# how to color quotes around string value of selected option whose value was changed
+/set fset.color.quotes_changed_selected black
+
+# In the second format, replace `${value2}` with `${description}`.{{{
+#
+# `${description}` is useful when the description is too long to fit in the fset
+# bar, and we want to scroll it horizontally to read its end.
+#
+# Remember that the second format is accessible by pressing `C-x`.
+#}}}
+# Variables in `fset.format.option[1|2]` can be prefixed with:{{{
+#
+#    - `_`: with color, but without padding of spaces on the right
+#    - `__`: without color, and without padding of spaces on the right
+#    - `empty_`: all characters in the variable's value are replaced with spaces
+#}}}
+/set fset.format.option2 "  ${name}  ${type}  ${if:${selected_line}?${description}:${value2}}"
+
+# /xfer {{{1
+
+# No notification in `xfer.list` buffer (created whenever we start downloading a
+# file); otherwise it would be displayed in the hotlist as long as a download is
+# running.  We still get a notification once a download can be started, and once
+# it ends.  In both cases, we get messages in the core and server buffers.
+/set weechat.notify.xfer.xfer.list none
+
+# how to color download progress bar
+/set xfer.color.text_selected default
+
+# If you want to automatically accept files from given nicks:
+#     /set xfer.file.auto_accept_nicks "some,nicks,..."
+
+# set the destination of XDCC downloads
+/set xfer.file.download_path "~/Downloads"
+# }}}1
+
+# Aliases {{{1
+# Note: you can use an alias inside the RHS of another alias, recursively.{{{
+#
+#     /alias add foo bar
+#     /alias add bar baz
+#     /alias add baz version
+#
+#     /foo
+#     WeeChat X.Y.Z ... [compiled on ...]
+#}}}
+
+# restore some useful default aliases
+/alias add aaway allserv /away
+/alias add j join
+/alias add v command core version
+
+# typing `/h topic` makes it quicker to get help for a given topic
+/alias add h help
+
+# Used  by  `~/.vim/pack/mine/opt/tmux/autoload/tmux/formatCapture.vim` when  we
+# press `M-c` in bare display mode, then `<CR>` on a "link" in the Vim buffer.
+# Syntax:{{{
+#
+#     /getpack [moviegods | ELITEWAREZ] <msg>
+#
+# Usually, `<msg>` follows the template `<bot name> XDCC SEND #<pack number>`.
+#}}}
+# `/wait` is not blocking.{{{
+#
+# It only delays its command argument:
+#
+#           this is delayed
+#           v---v
+#     /wait /cmd1; /cmd2
+#                  ^---^
+#                  this is NOT delayed
+#}}}
+/alias add getpack join -noswitch $1 \
+    ; /wait 3s /buffer hide $1 \
+    ; /msg $2-
+
+# Open log of current channel in tmux popup.
+# About `${eval:...}`:{{{
+#
+# The value of `${logger.file.path}` contains  another expression which needs to
+# be evaluated (`${weechat_data_dir}`).
+#}}}
+# About the `{` and `}` shell keywords:{{{
+#
+# In Bash, `&&` and `||` have the same precedence (contrary to other programming
+# languages where `&&` has a higher one), so this command:
+#
+#     A && B || C && D || E
+#
+# Is implicitly grouped like this:
+#
+#     (((A && B) || C) && D) || E
+#
+# That's not how we want our commands to be run; we want this:
+#
+#     (A && B) || (C && D) || E
+#
+# That's why we need the second pair of `{}`.
+# The first one is useless, but we write it for better readability.
+#}}}
+# Semicolons need to be escaped in the shell command to be preserved from `/alias`'s parsing.{{{
+#
+# From `/help alias`:
+#
+#    > command: command name with arguments (**many commands can be separated by semicolons**)
+#
+# Our semicolons are not separating WeeChat commands, but shell commands.
+#}}}
+/alias add log eval /exec -bg -sh LOGFILE=${eval:${logger.file.path}}/${lower:${channel}}_${lower:${server}}.log \; \
+    { [[ -z "$TMUX" ]] && notify-send --icon=weechat '/log' 'missing runtime dependency: tmux' \;} \
+    || { ! [[ -f "$LOGFILE" ]] && notify-send --icon=weechat '/log' "cannot find log file: $LOGFILE" \;} \
+    || tmux display-popup \
+        -E \
+        -xC -yC \
+        -w75% -h75% \
+        -d '#{pane_current_path}' \
+        "editor $LOGFILE"
+
+# Filters {{{1
+# Tip: Press `M-=` or `M--` to toggle all filters in all buffers, or only in the current one.
+# Syntax for `/filter addreplace`:{{{
+#
+#                                      comma-separated lists
+#                                      v------------v v----v
+#     /filter addreplace <filter_name> <buffer_names> <tags> <regex>
+#                                      ^------------^
+#                                      as given by /buffer list
+#
+# The filter name is used to manage the filter later.
+# The buffer names are  matched against the full names of  the actual buffers in
+# your WeeChat instance.
+# Tags are matched against the lines tags (`/debug tags`).
+# The regex is matched against the contents of the lines themselves.
+#
+# After the filter name, all arguments can  include `*` to match any sequence of
+# characters.  And all arguments' items can  be prefixed by `!` to reverse their
+# semantics (including the  regex).  For example, `<buffer_names>`  might be set
+# to `*,!*#weechat*` to match any buffer except the ones containing `#weechat`.
+#
+# To specify that  multiple tags must be set simultaneously,  separate them with
+# `+` instead  of `,`. For example,  `foo,bar+baz` will match any  line with the
+# tag `foo` OR with the tags `bar` AND `baz`.
+#
+# The regex  is a POSIX  ERE.  Inside,  a literal `!`  and `|` must  be escaped.
+# Also, you  can write  2 regexes  separated by  `\t`: one  for the  prefix, and
+# another for the  message.  Finally, a regex is case  *in*sensitive; to make it
+# case sensitive, make it start with `(?-i)`.
+#}}}
+
+# Don't show noise when we join a channel:{{{
+#
+#    - channel creation date
+#    - topic
+#    - nick/date for topic
+#    - names count
+#}}}
+# `/filter` alternative:{{{
+#
+#     /filter addreplace topic * irc_329,irc_332,irc_333,irc_366 *
+#
+# Warning: Do *not* use the `irc_numeric` tag.
+#
+#     /filter addreplace topic * irc_numeric *
+#                                ^---------^
+#                                     ✘
+#
+# It would hide the output of `/who[is]`, as well as various information printed
+# by the  server when  you connect  to it (MOTD,  ports, rules,  useful NickServ
+# commands, ...).
+#}}}
+/set irc.look.display_join_message ""
+
+# Hide `/join`, `/part`, `/quit` messages.
+/filter addreplace join_part_quit * irc_join,irc_part,irc_quit *
+# Don't use the "smart filter" instead.{{{
+#
+#     ✘
+#     /filter addreplace smart_filter * irc_smart_filter *
+#
+# It only  hides messages  if the  nick whose  state has  changed did  not speak
+# recently (i.e. less than `irc.look.smart_filter_delay` minutes ago).
+# See: https://weechat.org/files/doc/stable/weechat_user.en.html#irc_smart_filter
+#
+# We don't want to filter those messages in a "smart" way, but indiscriminately.
+#}}}
+# But in  case we ever use  it in some  way (e.g. via `irc_smart_filter`  tag in
+# filter/trigger), let's make  sure it filters as much as  possible, by reducing
+# the default delay to the minimum:
+/set irc.look.smart_filter_delay 1
+
+#     circle43 is now known as circle
+# Necessary even though we disable the `chghost` capability in `irc.server_default.capabilities`.{{{
+#
+# For some  reason, we still had  a case of "is  now known as"; the  message had
+# these tags:
+#
+#     irc_nick
+#     irc_tag_time=2023-09-02T05:07:03.113Z
+#     irc_tag_account=ick
+#     irc_nick1_circle43
+#     irc_nick2_circle
+#     host_~circle@user/ick
+#     log2
+#}}}
+/filter addreplace changed_nick * irc_nick *
+
+#     Mode #debian [+l 921] by ChanServ
+#     Mode #mg-chat [-b *!*@abjects-o0t6o4.tx.comcast.net] by MovieGods
+/filter addreplace channel_modes_change * irc_mode *
+
+#     ⟵ │ MovieGods has kicked peerload12345 (Clone/Duplicate Blacklisted - use NICKSERV GHOST, search for
+#       │ mIRC_AutoIdentify if you use mIRC or see /ns help - (cRz^cCs))
+/filter addreplace mg-chat_kick irc.abjects.#mg-chat irc_kick *
+
+#     +Sapient │ /msg [MG]-MISC|EU|S|Bailey xdcc send #466
+#     Driek │ =/msg [mg]-longstores !queue
+/filter addreplace mg-chat_msg_xdcc irc.abjects.#mg-chat * [/]msg
+#                                                          ^ ^
+#                       suppress wrong Vim syntax highlighting
+
+#     !BotReign │ (REQUESTS) Bancroft.S01E01.HDTV.x264-ORGANiC.mkv was requested by chato - CREDITS: 200.00GiB Level 14
+/filter addreplace nick_botreign irc.abjects.#mg-chat nick_botreign *
+#     !BotReign2 │ ( #MOVIEGODS )-( Die.Strassen.von.San.Francisco.S04E24.German.DL.FS.1080p.BluRay.x264-WDC )-(
+#                │ TV-X264-DE-1080P x 3.2G )-( pred 27m31s ago )-( /msg [MG]-HDTV|EU|S|PowerEdge xdcc send #477 )
+/filter addreplace nick_botreign2 irc.abjects.#mg-chat nick_botreign2 *
+#     ~ls │ [SUBSCRIPTION] Found 5 Users With Subscriptions for iMPACT.Wrestling.2018.08.16.HDTV.x264-NWCHD
+#
+#     ~ls │  .: #MOVIEGODS :.  The Only Existing XDCC Channel That Is Truly Different From The Rest, e.g. The Only
+#         │ Chan That Supports SSL DCC SENDS.
+#
+#     ~ls │  .: #MOVIEGODS :.  Support.your.favorite.irc.channel... #moviegods Donations can be sent via / BITCOIN
+#         │ ONLY > 3PnwRa87rfXZfwvf4ed7yHDZ5ra7be3nsi - ETH ONLY > 0xeB4DE86e83cFD9B47C57cBf9Ba0FF20A192A23a3 LTC
+#         │ ONLY> LWkriD3QgBwipfN9UvDJVfkJeM4maUSnpA
+/filter addreplace nick_ls irc.abjects.#mg-chat nick_ls *
+
+# Do *not* replace the following `/filter`s with `/ignore`s.{{{
+#
+# It's not really what you want.
+#
+# First, you want to  ignore messages sent by a given  nick *and* messages where
+# that nick is mentioned.  `/ignore` can help with the former,  but not with the
+# latter.  Second, `/filter`s can be temporarily toggled; not `/ignore`s.
+#}}}
+
+# Discussions involving "birkoff" are not interesting to read.{{{
+#
+#    - they rarely (never?) thank anyone which helps them
+#    - they rarely (never?) help others
+#    - they often (always?) take a long time to answer a question (even
+#      a simple one), or to react to a piece of information given to them
+#
+# Since  they  barely   react  to  new  information,  it's  hard   to  know  how
+# relevant/useful the latter was.
+#}}}
+# No  specific buffer  because they're  present on  several channels  on several
+# networks (at least Libera and OFTC).
+/filter addreplace nick_birkoff * nick_birkoff *
+
+# "BillTorvalds" and "ursa" on the `#debian` channel of the Libera network often
+# post rants, which create noise.
+/filter addreplace nick_BillTorvalds irc.libera.#debian nick_BillTorvalds *
+/filter addreplace nick_ursa irc.libera.#debian nick_ursa *
+
+# Ignore messages which mention previous nicks (typically replies).
+# Careful with the tags and regex.{{{
+#
+# If they're too broad (e.g. `* nick`), the filter might unexpectedly hide lines
+# in the output of core commands (like `/ignore list`).
+#}}}
+/filter addreplace nick_birkoff_mentioned * irc_privmsg birkoff
+/filter addreplace nick_BillTorvalds_mentioned irc.libera.#debian irc_privmsg BillTorvalds
+/filter addreplace nick_ursa_mentioned irc.libera.#debian irc_privmsg ursa
+
+# In the hotlist, ignore messages from previous nicks.
+# https://weechat.org/files/doc/weechat/stable/weechat_user.en.html#max_hotlist_level_nicks
+# https://weechat.org/files/doc/weechat/stable/weechat_faq.en.html#disable_highlights_for_specific_nicks
+/set weechat.buffer.irc.libera.#debian.hotlist_max_level_nicks_add "BillTorvalds:-1,ursa:-1"
+/set weechat.buffer.irc.hotlist_max_level_nicks_add "birkoff:-1"
+
+# Ignores {{{1
+# Warning: Don't conflate `/ignore`s with `/filter`s.{{{
+#
+# There is some overlap between the two:  they both can prevent messages sent by
+# a  nick from  being displayed.   But  none of  them supersedes  the other.   A
+# `/filter` can hide a message where a nick is mentioned (typically in a reply);
+# not  an `/ignore`.   And an  `/ignore` can  prevent a  nick from  requesting a
+# private chat with you; not a `/filter`.
+#
+# A  filtered message  is  temporarily hidden;  it can  still  be displayed  (by
+# toggling the filter).  An ignored message  is permanently deleted; it can't be
+# recovered.
+#
+# *Any* message can be filtered; but only an IRC message can be ignored.
+#
+# See also:
+# https://weechat.org/files/doc/weechat/stable/weechat_faq.en.html#ignore_vs_filter
+#}}}
+# The first argument of `/ignore add` is actually a mask.{{{
+#
+# It's matched against user *and* host names.
+#
+# But if it's prefixed  by `re:`, it's parsed as a  POSIX extended regex instead
+# of a mask.
+#}}}
+# A mask can include the `*` wildcard (equivalent to `.*` in a regex).
+
+# "s4t4n" on Abjects insults people (might be a troll).
+/ignore add s4t4n
+
+# "coffeeiazo" on Rizon regularly sends us a  private message to tell us that we
+# have a "nice nick" (might be a spammer).
+/ignore add coffeeiazo rizon
+
+# Key Bindings {{{1
+# Tip: To find the LHS for a given key sequence: `/debug key`
+# If you need a long or complex RHS, hide it behind an alias.{{{
+#
+# This way, the output of `/key list` is more readable.
+# In particular, avoid `/eval`:
+#
+#     ✘
+#     /key bind <key> /eval ...
+#
+#     ✔
+#     /key bind <key> /_<my_cmd>
+#     /alias add _<my_cmd> eval ...
+#
+# To list all those "private" aliases (i.e. not meant to be typed interactively):
+#
+#     /alias list _
+#}}}
+# Do *not* install `/key bind meta-S /mute /spell toggle`.{{{
+#
+# Spurious spelling errors are often highlighted  when we paste code (!= prose),
+# which is distracting.
+#}}}
+
+# Warning: To combine `ctrl` and `meta`, write `meta-ctrl-`; not `ctrl-meta-`.{{{
+#
+#     ✘
+#     /key bind ctrl-meta-x /set weechat.bar.title.hidden toggle
+#
+#     ✔
+#     /key bind meta-ctrl-x /set weechat.bar.title.hidden toggle
+#}}}
+# Warning: In the LHS of a key binding, there is no difference between `ctrl-x` and `ctrl-X`.
+# But there is between `meta-x` and `meta-X`.{{{
+#
+# So, you can write something like this:
+#
+#     /key bind meta-x /set weechat.bar.title.hidden toggle
+#     /key bind meta-X /set weechat.bar.nicklist.hidden toggle
+#               ^----^
+#                 ✔
+#
+# But not this:
+#
+#     /key bind ctrl-x /set weechat.bar.title.hidden toggle
+#     /key bind ctrl-X /set weechat.bar.nicklist.hidden toggle
+#               ^----^
+#                 ✘
+#
+# The second key binding would just overwrite the first one.
+#
+# That's because the  terminal can't distinguish between  `ctrl-x` and `ctrl-X`,
+# but it  can between `meta-x`  and `meta-X`.  Check  out what the  shell prints
+# when you press these chords while `tee(1)` is running.
+#
+# *Some* terminals can be put in a  mode where keys with modifiers are sent with
+# a special  escape code, allowing  an application to distinguish  these chords.
+# But WeeChat  doesn't seem to  support this feature,  and last time  I checked,
+# tmux supported this only partially.
+#}}}
+
+#              remove unused default key bindings {{{2
+# Some key bindings can't be removed.  Disable them with an empty command.{{{
+#
+# That's because some of them are re-installed whenever WeeChat is re-started.
+#
+# For example, the `buflist` plugin binds `f1` here:
+# https://github.com/weechat/weechat/blob/ff4596e45ca9bff5995f912efb1f49d22823c82f/src/plugins/buflist/buflist.c#L428
+#
+# You  can't  simply  remove  it  with  `/key unbind f1`,  because  it  will  be
+# re-installed after WeeChat is  re-started.  The best you can do  is to bind it
+# to an empty command:
+#
+#     /key bind <key> ""
+#                     ^^
+#
+# To find the list of those keys:
+#
+#     $ tee /tmp/weechat.conf <<'EOF'
+#     /mute /set logger.level.core.weechat 9
+#     /key list
+#     /mute /set logger.level.core.weechat 0
+#     /eval /exec -bg cp ${weechat_data_dir}/logs/core.weechat.weechatlog /tmp/before
+#
+#     /key resetall -yes
+#     /eval /exec -bg -sh >${weechat_data_dir}/logs/core.weechat.weechatlog
+#
+#     /mute /set logger.level.core.weechat 9
+#     /key list
+#     /mute /set logger.level.core.weechat 0
+#     /eval /exec -bg cp ${weechat_data_dir}/logs/core.weechat.weechatlog /tmp/after
+#
+#     /wait 1s /quit
+#     EOF
+#
+#     $ weechat --temp-dir --run-command='/exec -oc sed "/^$/d" /tmp/weechat.conf'
+#
+#     $ vimdiff +'windo silent :% substitute/.*\t//e | update' /tmp/{before,after}
+#}}}
+
+# default context {{{3
+# Do not unbind `meta-left` nor `meta-right`.{{{
+#
+# They are useful  in combination with `meta-up`  and `meta-down` to move  a buffer in
+# the  buflist.  Note  that `ctrl-n`  and  `ctrl-p` do  the same,  but it's  too
+# inconvenient  to switch  between the  Ctrl  modifier (to  change the  selected
+# buffer) and the Meta one (to move the selected buffer).
+#}}}
+
+/key unbind ctrl-c,c
+/key unbind ctrl-down
+/key unbind ctrl-f11
+/key unbind ctrl-f12
+/key unbind ctrl-left
+/key unbind ctrl-right
+/key unbind ctrl-up
+/key unbind ctrl-x
+/key unbind ctrl-z
+/key unbind end
+/key unbind f10
+/key unbind f11
+/key unbind f12
+/key unbind f5
+/key unbind f6
+/key unbind f7
+/key unbind f8
+/key unbind f9
+/key unbind home
+/key unbind meta--
+/key unbind meta-/
+/key unbind meta-0
+/key unbind meta-R
+/key unbind meta-_
+/key unbind meta-backspace
+/key unbind meta-ctrl-k
+/key unbind meta-ctrl-u
+/key unbind meta-end
+/key unbind meta-f11
+/key unbind meta-f12
+/key unbind meta-h,meta-R
+/key unbind meta-h,meta-c
+/key unbind meta-h,meta-m
+/key unbind meta-h,meta-r
+/key unbind meta-home
+/key unbind meta-j,0,1
+/key unbind meta-j,0,2
+/key unbind meta-j,0,3
+/key unbind meta-j,0,4
+/key unbind meta-j,0,5
+/key unbind meta-j,0,6
+/key unbind meta-j,0,7
+/key unbind meta-j,0,8
+/key unbind meta-j,0,9
+/key unbind meta-j,1,0
+/key unbind meta-j,1,1
+/key unbind meta-j,1,2
+/key unbind meta-j,1,3
+/key unbind meta-j,1,4
+/key unbind meta-j,1,5
+/key unbind meta-j,1,6
+/key unbind meta-j,1,7
+/key unbind meta-j,1,8
+/key unbind meta-j,1,9
+/key unbind meta-j,2,0
+/key unbind meta-j,2,1
+/key unbind meta-j,2,2
+/key unbind meta-j,2,3
+/key unbind meta-j,2,4
+/key unbind meta-j,2,5
+/key unbind meta-j,2,6
+/key unbind meta-j,2,7
+/key unbind meta-j,2,8
+/key unbind meta-j,2,9
+/key unbind meta-j,3,0
+/key unbind meta-j,3,1
+/key unbind meta-j,3,2
+/key unbind meta-j,3,3
+/key unbind meta-j,3,4
+/key unbind meta-j,3,5
+/key unbind meta-j,3,6
+/key unbind meta-j,3,7
+/key unbind meta-j,3,8
+/key unbind meta-j,3,9
+/key unbind meta-j,4,0
+/key unbind meta-j,4,1
+/key unbind meta-j,4,2
+/key unbind meta-j,4,3
+/key unbind meta-j,4,4
+/key unbind meta-j,4,5
+/key unbind meta-j,4,6
+/key unbind meta-j,4,7
+/key unbind meta-j,4,8
+/key unbind meta-j,4,9
+/key unbind meta-j,5,0
+/key unbind meta-j,5,1
+/key unbind meta-j,5,2
+/key unbind meta-j,5,3
+/key unbind meta-j,5,4
+/key unbind meta-j,5,5
+/key unbind meta-j,5,6
+/key unbind meta-j,5,7
+/key unbind meta-j,5,8
+/key unbind meta-j,5,9
+/key unbind meta-j,6,0
+/key unbind meta-j,6,1
+/key unbind meta-j,6,2
+/key unbind meta-j,6,3
+/key unbind meta-j,6,4
+/key unbind meta-j,6,5
+/key unbind meta-j,6,6
+/key unbind meta-j,6,7
+/key unbind meta-j,6,8
+/key unbind meta-j,6,9
+/key unbind meta-j,7,0
+/key unbind meta-j,7,1
+/key unbind meta-j,7,2
+/key unbind meta-j,7,3
+/key unbind meta-j,7,4
+/key unbind meta-j,7,5
+/key unbind meta-j,7,6
+/key unbind meta-j,7,7
+/key unbind meta-j,7,8
+/key unbind meta-j,7,9
+/key unbind meta-j,8,0
+/key unbind meta-j,8,1
+/key unbind meta-j,8,2
+/key unbind meta-j,8,3
+/key unbind meta-j,8,4
+/key unbind meta-j,8,5
+/key unbind meta-j,8,6
+/key unbind meta-j,8,7
+/key unbind meta-j,8,8
+/key unbind meta-j,8,9
+/key unbind meta-j,9,0
+/key unbind meta-j,9,1
+/key unbind meta-j,9,2
+/key unbind meta-j,9,3
+/key unbind meta-j,9,4
+/key unbind meta-j,9,5
+/key unbind meta-j,9,6
+/key unbind meta-j,9,7
+/key unbind meta-j,9,8
+/key unbind meta-j,9,9
+/key unbind meta-j,meta-f
+/key unbind meta-j,meta-l
+/key unbind meta-j,meta-r
+/key unbind meta-j,meta-s
+/key unbind meta-m
+/key unbind meta-pgdn
+/key unbind meta-pgup
+/key unbind meta-return
+/key unbind meta-s
+/key unbind meta-w,meta-b
+/key unbind meta-w,meta-down
+/key unbind meta-w,meta-left
+/key unbind meta-w,meta-right
+/key unbind meta-w,meta-s
+/key unbind meta-w,meta-up
+/key unbind meta-z
+/key unbind pgdn
+/key unbind pgup
+/key unbind shift-down
+/key unbind shift-end
+/key unbind shift-home
+/key unbind shift-left
+/key unbind shift-right
+/key unbind shift-up
+
+/key bind meta-B ""
+/key bind f1 ""
+/key bind f2 ""
+/key bind ctrl-f1 ""
+/key bind ctrl-f2 ""
+/key bind meta-f1 ""
+/key bind meta-f2 ""
+
+# We sometimes accidentally insert a `ç` in an empty input bar.
+# I don't like that; I don't want it to be sent it to a channel.
+/set weechat.look.key_bind_safe off
+/key bind ç ""
+/set weechat.look.key_bind_safe on
+
+# cursor context {{{3
+
+/key unbindctxt cursor @chat:Q
+/key unbindctxt cursor @chat:l
+/key unbindctxt cursor @chat:m
+/key unbindctxt cursor return
+/key unbindctxt cursor down
+/key unbindctxt cursor up
+/key unbindctxt cursor left
+/key unbindctxt cursor right
+/key unbindctxt cursor meta-down
+/key unbindctxt cursor meta-up
+/key unbindctxt cursor meta-left
+/key unbindctxt cursor meta-right
+/key unbindctxt cursor meta-end
+/key unbindctxt cursor meta-home
+/key unbindctxt cursor meta-shift-down
+/key unbindctxt cursor meta-shift-up
+/key unbindctxt cursor meta-shift-left
+/key unbindctxt cursor meta-shift-right
+
+/key unbindctxt cursor @item(buffer_nicklist):K
+/key unbindctxt cursor @item(buffer_nicklist):b
+/key unbindctxt cursor @item(buffer_nicklist):k
+/key unbindctxt cursor @item(buffer_nicklist):q
+/key unbindctxt cursor @item(buffer_nicklist):w
+
+# search context {{{3
+
+/key unbindctxt search down
+/key unbindctxt search up
+/key unbindctxt search meta-c
+
+# mouse context {{{3
+
+/key unbindctxt mouse @bar(input):button2
+/key unbindctxt mouse @bar(nicklist):button1-gesture-down
+/key unbindctxt mouse @bar(nicklist):button1-gesture-down-long
+/key unbindctxt mouse @bar(nicklist):button1-gesture-up
+/key unbindctxt mouse @bar(nicklist):button1-gesture-up-long
+/key unbindctxt mouse @item(buffer_nicklist):button1
+/key unbindctxt mouse @item(buffer_nicklist):button1-gesture-left
+/key unbindctxt mouse @item(buffer_nicklist):button1-gesture-left-long
+/key unbindctxt mouse @item(buffer_nicklist):button2
+/key unbindctxt mouse @item(buffer_nicklist):button2-gesture-left
+/key unbindctxt mouse @bar:wheeldown
+/key unbindctxt mouse @bar:wheelup
+/key unbindctxt mouse @chat:button1
+/key unbindctxt mouse @chat:button1-gesture-left
+/key unbindctxt mouse @chat:button1-gesture-left-long
+/key unbindctxt mouse @chat:button1-gesture-right
+/key unbindctxt mouse @chat:button1-gesture-right-long
+/key unbindctxt mouse @chat:ctrl-wheeldown
+/key unbindctxt mouse @chat:ctrl-wheelup
+/key unbindctxt mouse @chat:wheeldown
+/key unbindctxt mouse @chat:wheelup
+/key unbindctxt mouse @*:button3
+
+/key bindctxt mouse @bar(buflist):ctrl-wheeldown ""
+/key bindctxt mouse @bar(buflist):ctrl-wheelup ""
+/key bindctxt mouse @chat(fset.fset):button1 ""
+/key bindctxt mouse @chat(fset.fset):button2* ""
+/key bindctxt mouse @chat(fset.fset):wheeldown ""
+/key bindctxt mouse @chat(fset.fset):wheelup ""
+/key bindctxt mouse @chat(irc.list_*):button1 ""
+/key bindctxt mouse @chat(irc.list_*):button2* ""
+/key bindctxt mouse @chat(irc.list_*):wheeldown ""
+/key bindctxt mouse @chat(irc.list_*):wheelup ""
+/key bindctxt mouse @chat(script.scripts):button1 ""
+/key bindctxt mouse @chat(script.scripts):button2 ""
+/key bindctxt mouse @chat(script.scripts):wheeldown ""
+/key bindctxt mouse @chat(script.scripts):wheelup ""
+/key bindctxt mouse @item(buflist):button1* ""
+/key bindctxt mouse @item(buflist):button2* ""
+/key bindctxt mouse @item(buflist2):button1* ""
+/key bindctxt mouse @item(buflist2):button2* ""
+/key bindctxt mouse @item(buflist3):button1* ""
+/key bindctxt mouse @item(buflist3):button2* ""
+/key bindctxt mouse @item(buflist4):button1* ""
+/key bindctxt mouse @item(buflist4):button2* ""
+/key bindctxt mouse @item(buflist5):button1* ""
+/key bindctxt mouse @item(buflist5):button2* ""
+# }}}2
+# C-g (prefix) {{{2
+# C-g C-e      type input in text editor {{{3
+
+# We  listen to  `VimLeavePre` so  that the  clipboard selection's  ownership is
+# transferred to `xsel(1x)` before  we quit Vim.  We do so  thanks to an autocmd
+# in our vimrc which listens to `VimLeave`;  we need to set the clipboard before
+# the latter is fired, hence `VimLeavePre`.
+#
+# After quitting Vim, you still need to paste the clipboard on Weechat's input line.
+/key bind ctrl-g,ctrl-e /exec -bg gvim +'autocmd VimLeavePre * let @+ = getline(1, "$")->join("\n")'
+
+# C-g [gG]     scroll the buffer to the top/bottom {{{3
+
+# If the buflist is displayed, jump to the first/last buffer.
+# Also, support the `/fset` buffer.
+/key bind ctrl-g,g /_scroll_top
+/key bind ctrl-g,G /_scroll_bottom
+
+/alias add _scroll_top eval ${if:${weechat.bar.buflist.hidden} == 0 \
+    ?/buffer - \
+    :${if:${buffer.name} == fset ?/fset -go 0 :/window scroll_top}}
+
+/alias add _scroll_bottom eval ${if:${weechat.bar.buflist.hidden} == 0 \
+    ?/buffer + \
+    :${if:${buffer.name} == fset ?/fset -go end :/window scroll_bottom}}
+
+# C-g C-l      clear buffer {{{3
+
+/key bind ctrl-g,ctrl-l /buffer clear
+
+# C-g C-q      close current window {{{3
+
+/key bind ctrl-g,ctrl-q /_close_window
+/alias add _close_window eval ${if: \
+    ${window.win_height_pct} == 100 && ${window.win_width_pct} == 100 \
+    ?/buffer close \
+    :/window close}
+
+# C-g C-r      reload our config {{{3
+
+# `/exec -oc`: send  output of our  `weechat-parse-config` script to  the buffer
+# and execute it as WeeChat commands
+# Alternative (no script):{{{
+#
+#                           one extra backslash because of /eval
+#                                                              v
+#     /key bind ctrl-g,ctrl-r /eval /exec -oc sed ':loop\; /\\\$/ { N\; s/\\\n//\; t loop }\; /^\//!d' ${weechat_config_dir}/config
+#                                                       ^            ^          ^          ^
+# Semicolons need to be escaped because they're removed by `/key`:
+#
+#    > command: command (**many commands can be separated by semicolons**); [...]
+#
+# ---
+#
+# We prefer  the script to avoid  code duplication.  Some of  our shell snippets
+# (to bisect or reset WeeChat config) also need to execute the commands from the
+# current file.
+#}}}
+/key bind ctrl-g,ctrl-r /exec -oc weechat-parse-config
+
+# }}}2
+# C-z (prefix) {{{2
+# C-z C-x      swap buffers {{{3
+
+/key bind ctrl-z,ctrl-x /window swap
+#                     ^
+#                     similar to `Zx` in Vim
+
+# C-z C-z      focus next window {{{3
+
+/key bind ctrl-z,ctrl-z /window +1
+#         ^
+#         similar to `C-w C-w` in Vim
+
+# C-z [jl]     split window {{{3
+
+/key bind ctrl-z,j /window splith; /wait 1ms /window down
+/key bind ctrl-z,l /window splitv
+
+# C-z o        merge windows {{{3
+
+/key bind ctrl-z,o /window merge all
+#                ^
+#                similar to `Zo` in Vim
+
+# C-z =        balance windows {{{3
+
+/key bind ctrl-z,= /window balance
+
+# C-z C-o      zoom window {{{3
+
+/key bind ctrl-z,ctrl-o /window zoom
+# }}}2
+# q            stop cursor mode {{{2
+
+# We don't  use the mouse,  so the  cursor mode is  useless for us.   That being
+# said, should we  enter it by accident  (e.g. via a broken script),  we want an
+# easy way to quit it.
+/key bindctxt cursor @chat:q /cursor stop
+
+# Up/Down      scroll {{{2
+
+# We often press `up` and `down` to  scroll the window or the nicklist bar.  But
+# by default,  those keys  recall past  commands from  the current  buffer input
+# history.  That's unexpected; make them scroll the window/nicklist bar.
+/key bind up /_scroll_up
+/key bind down /_scroll_down
+
+# The syntax for `/bar scroll` is:{{{
+#
+#     /bar scroll <name> <window> <scroll_value>
+#
+# `<window>` is  a window number,  but here, we use  `*` to specify  the current
+# window.
+#}}}
+/alias add _scroll_up eval ${if: \
+    ${weechat.bar.nicklist.hidden} == 0 && ${buffer.nicklist_nicks_count} >= 30 \
+    ?/bar scroll nicklist * -50% \
+    :/window scroll_up}
+
+/alias add _scroll_down eval ${if: \
+    ${weechat.bar.nicklist.hidden} == 0 && ${buffer.nicklist_nicks_count} >= 30 \
+    ?/bar scroll nicklist * +50% \
+    :/window scroll_down}
+
+# C-^          jump to last buffer displayed {{{2
+
+/key bind ctrl-^ /buffer jump last_displayed
+
+# C-j          insert newline in input bar {{{2
+
+# Useful to write multi-line message.{{{
+#
+# Example:
+#
+#                       vvv
+#     >> $ some command C-j some output C-m
+#     == $ some command
+#     == some output
+#}}}
+/key bind ctrl-j /input insert \n
+
+# C-[np]       select next/previous buffer {{{2
+
+# In the `/fset` buffer, we often mistakenly  press `C-n` or `C-p` to select the
+# next/previous *option* instead of `M-j` or  `M-k`.  In those cases, do what we
+# really meant;  but only if the  buflist is not  visible, because if it  is, we
+# probably wanted to select the next/previous *buffer*.
+/set weechat.buffer.fset.fset.key_bind_ctrl-n "/eval ${if: \
+    ${weechat.bar.buflist.hidden} \
+    ?/fset -down \
+    :/buffer +1}"
+
+/set weechat.buffer.fset.fset.key_bind_ctrl-p "/eval ${if: \
+    ${weechat.bar.buflist.hidden} \
+    ?/fset -up \
+    :/buffer -1}"
+
+/set weechat.buffer.script.scripts.key_bind_ctrl-n "/eval ${if: \
+    ${weechat.bar.buflist.hidden} \
+    ?/script down \
+    :/buffer +1}"
+
+/set weechat.buffer.script.scripts.key_bind_ctrl-p "/eval ${if: \
+    ${weechat.bar.buflist.hidden} \
+    ?/script up \
+    :/buffer -1}"
+
+# in "search context" (i.e. when we press `C-r`), jump to next/previous match
+/key bindctxt search ctrl-n /input search_next
+/key bindctxt search ctrl-p /input search_previous
+
+# C-v          dump `RHS` of a key binding on the input line {{{2
+
+/key bind ctrl-v /input grab_key_command
+
+# By default, `M-k` dumps the RHS (and its  LHS) of the key binding whose LHS is
+# pressed right afterward.  `C-v` is better:
+#
+#    - it's somewhat similar  to the function of the `C-v` key  in the shell
+#      and in Vim, which inserts a character literally
+#
+#    - `M-k`  and `M-j`  should be  bound to a  function which  can work  in
+#      two opposite directions
+
+# C-w          delete previous word {{{2
+
+# By default,  `C-w` is bound to  `/input delete_previous_word_whitespace` which
+# deletes too much.  We're used to more granular deletions because we bind `C-w`
+# to `backward-kill-word` in `$INPUTRC`.
+/key bind ctrl-w /input delete_previous_word
+
+# `C-w` might still delete too much.{{{
+#
+# Pressing `C-w` here:
+#
+#      space
+#      v
+#     a▫b.c-d_e|f
+#                ^
+#                cursor
+#
+# Gives this:
+#
+#     a▫b.
+#
+# Instead, we want this:
+#
+#     a▫b.c-d_e|
+#     a▫b.c-d_
+#     a▫b.c-
+#     a▫b.
+#     a▫
+#}}}
+# Let's make sure it only considers alphanumeric characters as part of a word.
+/set weechat.look.word_chars_input "alnum"
+#                                   ^---^
+#                                   man 3 isalpha /^\s*isalnum(
+#                                   man 3 wctype /alnum
+
+# M-up,down    move selected buffer in bufferlist {{{2
+
+# Useful in combination with `M-Left` and `M-Right` which select the buffer down or up.
+/key bind meta-down /buffer move +1
+# To suppress an error, we need to execute a no-op if the buffer is the 1st one:
+#     Buffer number "0" is out of range (it must be between 1 and 2147473647)
+/key bind meta-up /eval ${if:${buffer.number} == 1 ?/mute :/buffer move -1}
+
+# M-C          toggle nicklist {{{2
+
+# Don't use `M-c`, it's already taken by tmux
+/key bind meta-C /mute /set weechat.bar.nicklist.hidden toggle
+
+# M-F          toggle buflist {{{2
+
+/key bind meta-F /buflist toggle
+#                ^-------------^
+# Alternative: `/bar toggle buflist`
+#
+# I  prefer  `/buflist`  though,  because `/bar toggle buflist`  might  fail  to
+# display the buflist if `/buflist [toggle|disable]` was executed before.
+
+# M-J M-J      jump to server buffer {{{2
+
+/key bind meta-J,meta-J /server jump
+
+# M-[NP]       navigate in the highlights {{{2
+
+/key bind meta-N /window scroll_next_highlight
+/key bind meta-P /window scroll_previous_highlight
+
+# By default `M-n` and `M-p` were bound to:
+#
+#     /window scroll_next_highlight
+#     /window scroll_previous_highlight
+#
+# But we've just used these keys to navigate in the input history.
+# So, we need to restore the functions.
+
+# M-T          toggle title {{{2
+
+# `/bar toggle fset`:{{{
+#
+#     Other keys and input on fset buffer:
+#       ...
+#       alt+v             v       toggle help bar
+#
+# Source: `/help fset`
+#
+#     { "v",  "/bar toggle " FSET_BAR_NAME                    },
+#              ^----------^
+#
+# Source: https://github.com/weechat/weechat/blob/2ad8a0d868b594204eb7199f6380b865ebf45c8b/src/plugins/fset/fset-buffer.c#L1506-L1526
+#
+#     #define FSET_BAR_NAME "fset"
+#                            ^--^
+#
+# Source: https://github.com/weechat/weechat/blob/2ad8a0d868b594204eb7199f6380b865ebf45c8b/src/plugins/fset/fset.h#L27
+#}}}
+/key bind meta-T /_toggle_title
+/alias add _toggle_title eval ${if: \
+    ${buffer.name} == fset \
+    ?/bar toggle fset \
+    :/mute /set weechat.bar.title.hidden toggle}
+
+# M-a          jump to next buffer containing unread messages {{{2
+
+# Some options let us configure the contents of the hotlist, and how buffers are
+# sorted inside.  But they can't get us the desired sorting, so we implement our
+# own algorithm in a custom script.
+/key bind meta-a /jump_smart
+
+# M-[hjkl]     scroll {{{2
+
+# also support nicklist
+/key bind meta-j /_scroll_down
+/key bind meta-k /_scroll_up
+
+# `/fset` buffer
+/set weechat.buffer.fset.fset.key_bind_meta-j "/fset -down"
+/set weechat.buffer.fset.fset.key_bind_meta-k "/fset -up"
+
+# `/script` buffer
+/set weechat.buffer.script.scripts.key_bind_meta-j "/script down"
+/set weechat.buffer.script.scripts.key_bind_meta-k "/script up"
+
+/key bind meta-h /_scroll_left
+/key bind meta-l /_scroll_right
+
+/alias add _scroll_left eval ${if: \
+    ${buffer.name} == fset \
+    ?/fset -left 10 \
+    :/mute /window scroll_horiz -1}
+
+/alias add _scroll_right eval ${if: \
+    ${buffer.name} == fset \
+    ?/fset -right 10 \
+    :/mute /window scroll_horiz +1}
+
+# M-i          capitalize word {{{2
+
+/key bind meta-i /change_case capitalize
+
+# M-[np]       navigate in the input history {{{2
+
+# Don't use `history_next` and `history_previous`.{{{
+#
+# They can only cycle  in the history of the current  buffer.  And it's annoying
+# not to  be able  to recall  a past command  which we  executed in  a different
+# buffer.
+#}}}
+/key bind meta-n /input history_global_next
+/key bind meta-p /input history_global_previous
+
+# in "search context" (i.e. when we press `C-r`), jump to next/previous match
+/key bindctxt search meta-n /input search_next
+/key bindctxt search meta-p /input search_previous
+
+# M-o          lowercase word or toggle `/fset` buffer {{{2
+
+#              "o"ptions
+#              v
+/key bind meta-o /change_case lower
+
+# M-r          toggle bare display {{{2
+
+# `M-l` is the default LHS used by WeeChat for the `/window bare` cmd.
+# Don't unbind it:{{{
+#
+#     /key unbind meta-l
+#
+# We already override it:
+#
+#     /key bind meta-l /_scroll_right
+#}}}
+# Let's just bind it `M-r`.
+/key bind meta-r /window bare
+
+# M-t          transpose words or toggle timestamps {{{2
+
+/key bind meta-t /transpose_words
+
+# M-u          uppercase word or scroll to first unread message {{{2
+
+# By default `M-u` is bound to `/window scroll_unread`:
+# https://weechat.org/files/doc/devel/weechat_user.en.html#key_bindings_buffers
+#
+# Make  it smarter:  if  the input  is  empty, execute  `/window scroll_unread`,
+# otherwise uppercase till end of word.
+/key bind meta-u /change_case upper
+
+# M-x          jump to `/xfer` buffer {{{2
+
+# If we're already  in the `xfer` buffer, we  want to close it and  jump back to
+# the  previous buffer.   Don't worry;  closing it  doesn't interrupt  a running
+# download.
+/key bind meta-x /_toggle_xfer_buffer
+/alias add _toggle_xfer_buffer eval ${if:${buffer.name} != xfer.list ?/xfer :/buffer close}
+#}}}1
+# Logging {{{1
+# Tip: To list buffers being logged (+ loglevel, logfile): `/logger list`
+# files (location, rotation, compression) {{{2
+
+# The path is relative.{{{
+#
+# It's completed with the value of the `logger.file.path` option.
+# By default, it's `${weechat_data_dir}/logs` which evaluates to
+# `~/.local/share/weechat/logs`.
+#}}}
+# We want one directory per IRC server and one file per channel inside.{{{
+#
+# `$server`: name of the server (buffer-local variable)
+# `$channel`: name of the channel (buffer-local variable)
+#}}}
+/set logger.mask.irc "$channel_$server.log"
+#                ^^^
+#                plugin name
+
+# Ignore channel/server notices in logs.
+#
+#     PvNotice(ChanServ): Welcome to #awk. Please ask your question clearly, ...
+#     PvNotice(ChanServ): vim discussion .. www.vim.org, vim.sf.net, :help
+#
+# Inspiration: Two triggers on the wiki (look for `trigger.*delete_`).
+# Filter alternative:{{{
+#
+#     /filter addreplace chanserv_welcome * irc_notice+nick_chanserv *
+#
+# Pro: Can still read the notices by temporarily disabling filters.
+# Con: The notices are logged.
+#}}}
+/trigger add delete_pvnotice \
+    line \
+    # Semicolon-separated list of arguments passed to the hook.{{{
+    #
+    # The first `*` matches any buffer type (`formatted` or `free`).
+    #
+    # `irc.*` matches any buffer name starting with `irc.`.
+    #
+    # `irc_notice+nick_chanserv` matches  a message  tagged with  `irc_notice` *and*
+    # with `nick_chanserv`.
+    #
+    # For more info:
+    # https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_hook_arguments
+    #}}}
+    "*;irc.*;irc_notice+nick_chanserv" \
+    # Warning: If you need to refer to the tags in the conditions, do *not* use `${tg_tags}`, but `${tags}`.{{{
+    #
+    # Only `${tags}` is documented for the line hook:
+    #
+    #    > The "line" callback sets following variables in hashtable:
+    #    > Variable | Type   | Description
+    #    > [...]
+    #    > **tags**     | string | Tags of message (with comma added at beginning/end of string).
+    #
+    # Source: https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_data_line
+    #
+    # ---
+    #
+    # `${tg_tags}` is documented for the `weechat_print` modifier hook:
+    #
+    #    > For  the weechat_print modifier, variables  using message tags are  added (**see**
+    #    > **hook print** below) [...]
+    #
+    # Source: https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_data_modifier
+    #
+    #    > Variables set using tags in message:
+    #    > Variable | Type   | Description
+    #    > **tg_tags**  | string | Tags of message (with comma added at beginning/end of string).
+    #
+    # Source: https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_data_print
+    #}}}
+    "${type} == channel" \
+    # Make the name of the buffer empty so that the line is deleted.{{{
+    #
+    #    > The line is displayed on this buffer.
+    #    > [...]
+    #    > If the value is empty, the line is deleted [...]
+    #
+    # Source:
+    # https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_hook_line
+    #}}}
+    # `buffer_name`: appended to the substitution to update the `buffer_name` variable rather than `message`{{{
+    #
+    # The latter is the default for the `line` hook:
+    # https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_regex_variable
+    #
+    # For the syntax `s/pat/rep/var`, see:
+    # https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_regex
+    #}}}
+    "s/.*//buffer_name"
+
+# rotate log files whenever the last one reaches 10 megabytes
+/set logger.file.rotation_size_max "10m"
+
+# compress rotated log files with `zstd(1)`
+/set logger.file.rotation_compression_type zstd
+# The compression level can be set with `logger.file.rotation_compression_level`.
+# Its  value is  actually a  percentage  which is  converted into  a zstd  level
+# between 1 and 19.   We keep the default value (20  which is probably converted
+# into the zstd level 3 or 4) because:
+#
+#    > it offers a good compromise between compression and speed
+
+# logging level {{{2
+
+# don't log all buffers; only channels
+/set logger.file.log_conditions "${type} == channel && ${channel} !~ test"
+#                                                   ^-------------------^
+# but not throwaway channels which we sometimes create to test something
+
+# The default logging level is 9, which logs way too many irrelevant messages.
+# Don't log noise; just user messages and channel/server notices.{{{
+#
+# From `/help logger`:
+#
+#     Log levels used by IRC plugin:
+#       1: user message (channel and private), notice (server and channel)
+#       2: nick change
+#       3: server message
+#       4: join/part/quit
+#       9: all other messages
+#}}}
+/set logger.level.irc 1
+
+# Don't log anything on warez servers.
+# We only talk with bots over there; that's noise.
+# You could be more granular, and only disable logging for specific channels.{{{
+#
+#                       name of the plugin creating the buffer
+#                       vvv
+#     /set logger.level.irc.abjects.#mg-chat 0
+#     /set logger.level.irc.abjects.#moviegods 0
+#     /set logger.level.irc.highway.#ebooks 0
+#     /set logger.level.irc.rizon.#subsplease 0
+#     /set logger.level.irc.undernet.#bookz 0
+#                           ^-------------^
+#                           name of the buffer
+#
+# The case matters:
+# https://specs.weechat.org/specs/2023-001-case-sensitive-identifiers.html#changes
+#
+# Don't trust the case used in the buflist; use the one given by `/buffer list`.
+#}}}
+/set logger.level.irc.abjects 0
+/set logger.level.irc.highway 0
+/set logger.level.irc.rizon 0
+/set logger.level.irc.undernet 0
+
+# disable logging for main WeeChat buffer
+/set logger.level.core.weechat 0
+
+# disable logging for server buffers
+/set logger.level.irc.server 0
+
+# backlog {{{2
+
+# Display backlogs on channel and private buffers only.
+# This option doesn't control whether a type  of buffer is being logged; it only
+# affects the *display* of the backlog.
+# To find the type of a given buffer, execute `/buffer listvar` inside.
+/set logger.look.backlog_conditions "${type} == channel || ${type} == private"
+# }}}1
+# Security {{{1
+# https://weechat.org/files/doc/weechat/stable/weechat_faq.en.html#security
+
+/set irc.server_default.msg_part ""
+/set irc.server_default.msg_quit ""
+
+# Don't reply to CTCP queries.
+# https://weechat.org/files/doc/stable/weechat_user.en.html#irc_ctcp_replies
+/set irc.ctcp.clientinfo ""
+/set irc.ctcp.finger ""
+/set irc.ctcp.ping ""
+/set irc.ctcp.source ""
+/set irc.ctcp.time ""
+/set irc.ctcp.userinfo ""
+/set irc.ctcp.version ""
+
+# `.username` is used in join/part/quit messages:
+#
+#     │17:02 --> bob (~bob_user@some.host) has joined #weechat
+#                      ^------^
+#
+# And both `.username` and `.realname` are displayed in a `/whois`.
+/set irc.server_default.username "username"
+/set irc.server_default.realname "realname"
+
+# Triggers {{{1
+# Syntax of a trigger:{{{
+#
+#     /trigger add <name> <hook> ["<arguments>" ["<conditions>" ["<regex>" ["<command>"]]]]
+#
+# ---
+#
+# `<hook>` can be any name used as a suffix in a `hook_*()` function.
+#
+# See: https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#hooks
+#
+# ---
+#
+# The semantics of `<arguments>` depends on the hook.
+# If several arguments need to be passed, they must be separated with semicolons.
+#
+# https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_hook_arguments
+#
+# ---
+#
+# `<conditions>` determines whether the trigger is executed.
+#
+# https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_conditions
+# https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_callback_data
+# https://weechat.org/files/doc/stable/weechat_user.en.html#command_weechat_eval
+#
+# ---
+#
+# By default, `<regex>` is actually one or several substitution commands:
+#
+#     s/pat/rep/ [...]
+#
+# https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_regex
+#}}}
+# When a line is printed in a buffer, hooks are called in this order:{{{
+#
+#    - `line`: can change the buffer, prefix, message, tags, notify level, ...
+#      on any buffer (even one with free content)
+#
+#    - `modifier "weechat_print"`: can change the prefix and message on
+#      a buffer with formatted content
+#
+#    - `print`: called when the line has been added in a buffer with formatted
+#      content (can't change the line)
+#}}}
+# Tip: To debug triggers:{{{
+#
+#     # list all triggers
+#     /trigger list[full]
+#
+#     # monitor given trigger
+#     /trigger monitor <trigger_name>
+#
+#     # read arguments of given trigger
+#     /set trigger.trigger.<trigger_name>
+#
+# The output of `/trigger list[full]` might contain some special tokens:
+#
+#    - `=?`: the trigger depends on a condition
+#    - `~N`: the trigger executes N substitution (`s///`) or translation (`y///`) commands
+#    - `/N`: the trigger executes N WeeChat commands (`/cmd`; e.g. `/exec`)
+#}}}
+
+# Warning: Set priorities so that modifiers play nicely with each other.{{{
+#
+#     /trigger add <name> modifier "123|weechat_print" ...
+#                                   ^^^
+#                                   priority
+#
+# Hooks are executed in descending order of priority.
+#
+# The default priority is 1000.
+#
+# ---
+#
+# You want  modifiers which affect  the entirety of a  message to have  a higher
+# priority.  For example, we need to  set `color_url` with a lower priority than
+# `color_my_msg` so that when we paste a URL, it's colored in blue (not in pink).
+# More generally,  the more  "specific" a  modifier is,  the lower  its priority
+# should be:
+#
+#       modifier affecting single character
+#     < modifier affecting single word
+#     < modifier affecting whole message
+#
+# This  way, a  specific  modifier can  locally  undo the  effect  of a  general
+# modifier.
+#
+# Note that  a URL is  more specific than a  codespan, even though  in practice,
+# it's often  longer.  That's because  a URL can  be embedded inside  a codespan
+# (the reverse is not true).
+#}}}
+# Warning: Do not execute modifiers on backlog messages.{{{
+#
+# By default,  backlog messages are  dimmed; reading some colorized  text inside
+# (e.g. URL) would  be jarring.  Besides, you  would need to restore  the dimmed
+# color for the subsequent text (which seems tricky).
+#}}}
+
+# In a trigger's conditions, always bound a tag name with commas.{{{
+#
+#                    v              v
+#     ${tg_tags} !!- ,logger_backlog,
+#     ${tg_tags} !~ ,logger_backlog,|,irc_(join|part|quit),
+#                   ^              ^ ^                    ^
+#
+# That's probably more  reliable, because it avoids  a match in the  middle of a
+# different tag; we want an exact match  (same difference in a Vim regex between
+# the bounded `\<word\>` pattern and the unbounded `word`).
+#
+# Don't worry, these added commas won't prevent a match:
+#
+#    > Tags of message (**with comma added at beginning/end of string**).
+#
+# Source: https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_data_print
+#}}}
+#   And try to use `!!-` instead of `!~` when the LHS is `${tg_tags}` and the RHS is a literal tag name.{{{
+#
+# That's what the default `beep` trigger does:
+#
+#     >> /eval -n ${trigger.trigger.beep.conditions}
+#     == [${tg_displayed} && ${tg_tags} !!- ,notify_none, && ...]
+#                                       ^^^
+#
+# From `/help eval`:
+#
+#    > !!-  is NOT included, case sensitive
+# }}}
+# In a trigger's regex, the `s`ubstitution command can be omitted.{{{
+#
+# It's the default:
+#
+#    > if missing, default command is s and the first char is then used as the delimiter:
+#
+# Source: https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_regex
+#
+# Example:
+#
+#     /trigger add <name> modifier "weechat_print" "<condition>" "/pat/rep/"
+#                                                                 ^
+#                                                              ⇔ s/pat/rep/
+#
+# But better be explicit than implicit.
+#}}}
+# In the replacement field of a substitution, `${re:N}` is the captured group `N`.{{{
+#
+# https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_regex_replace
+#}}}
+
+# `tg_*`: https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_data_print
+# https://weechat.org/files/doc/stable/weechat_user.en.html#trigger_data_modifier
+#
+# `tg_displayed`: "1" if displayed, "0" if line filtered
+# `tg_highlight`: "1" if highlight, otherwise "0"
+# `tg_message_nocolor`: message without color codes
+# `tg_message`: message
+# `tg_msg_pv`: "1" for a private message, otherwise "0"
+# `tg_prefix`: prefix of message printed
+# `tg_prefix_nocolor`: prefix without color codes
+# `tg_string`: for `input_text_for_buffer`, holds original input text
+# `tg_tags`: tags of message (with comma added at beginning/end of string)
+#
+# A prefix is the text before "|".
+# A message is the text after "|".
+
+# print {{{2
+# https://weechat.org/files/doc/stable/weechat_plugin_api.en.html#_hook_print
+# desktop notification when our name is mentioned {{{3
+
+# We delete the default `beep` trigger because it's redundant with the one we're
+# going to install.
+/trigger del beep
+
+# We've copied the (complex) condition from the default `beep` trigger.
+#
+# ---
+#
+# The substitution  command does not change  the printed line (the  `print` hook
+# can't do  that), but it  resets `tg_message` which the  final `notify-send(1)`
+# command will print.  In particular, we want the message to include the prefix,
+# and we need to prevent an embedded quote from breaking the command:
+#
+#                                ✘
+#                                v
+#     $ notify-send 'summary' 'a ' b'
+#     $ notify-send 'summary' 'a &apos; b'
+#                                ^----^
+#                                  ✔
+# ---
+#
+# Source: https://github.com/weechat/weechat/wiki/Triggers#show-a-libnotify-desktop-notification-via-notify-send
+# See also: https://weechat.org/files/doc/weechat/stable/weechat_faq.en.html#highlight_notification
+/trigger add my_name_is_mentioned \
+    print \
+    "" \
+    "${tg_displayed}
+    && ${tg_tags} !!- ,notify_none,
+    && (${tg_highlight} || ${tg_msg_pv}) && ${buffer.notify} > 0
+    && ${tg_nick}!=BotReign" \
+    "s/.*/${tg_prefix_nocolor} ${tg_message_nocolor}/ s/'/&apos;/ s/\"/&quot;/" \
+    # `-norc`: don't display return code
+    # `-nosw`: don't switch to the buffer where our name is mentioned
+    #                   v---v v---v
+    "/print -beep;/exec -norc -nosw notify-send --icon=weechat -- '${buffer.full_name}' '${tg_message}'"
+    # ----------^
+    # The default `beep` trigger executed this command to ring the bell; let's do the same.{{{
+    #
+    # It's useful for tmux to print the name of the window where WeeChat runs in
+    # inverted colors in the status line.
+    # }}}
+# }}}2
+# modifier {{{2
+# The `weechat_print` modifier can modify the text of a message before it's printed.
+# The `input_text_for_buffer` modifier can modify the input text before it's executed.
+#
+# Multiple modifiers can be applied via a single `modifier` hook.
+# For example:
+#
+#     /server list
+#     ...
+#     server_pass: modifier(5000|input_text_display;5000|history_add) ~1
+#                           ^---------------------^ ^--------------^
+#
+# For more info:
+# https://weechat.org/files/doc/stable/weechat_plugin_api.en.html#_hook_modifier
+# https://weechat.org/files/doc/stable/weechat_plugin_api.en.html#hook_modifier_weechat_print
+# https://weechat.org/files/doc/stable/weechat_plugin_api.en.html#hook_modifier_input_text_for_buffer
+# color our message {{{3
+
+/trigger add color_my_msg \
+    modifier \
+    "400|weechat_print" \
+    "${tg_tags} =~ ,nick_${env:USER}_?," \
+    # Warning: Choose a color consistent with `weechat.color.chat_nick_self`.
+    # Warning: Don't use `${tg_message_nocolor}`.{{{
+    #
+    # Sometimes, we might use attributes (e.g. `C-c b`  for bold).  We want a visual
+    # feedback that it worked.
+    #}}}
+    "s/.*/${tg_prefix}\t${color:160}${tg_message}/"
+
+# color quoted text {{{3
+# > some quoted text
+
+# Source: https://github.com/weechat/weechat/wiki/Triggers#modify-messages-starting-with--to-display-green-text
+/trigger add color_quote \
+    modifier \
+    "300|weechat_print" \
+    "${tg_message_nocolor} =~ ^>[^>] && ${tg_tags} !!- ,logger_backlog," \
+    # `${color:66}` = `:highlight Statement`
+    "s/.*/${tg_prefix}\t${color:66}${tg_message_nocolor}/"
+
+# color codespan {{{3
+
+/trigger add codespan \
+    modifier \
+    "200|weechat_print" \
+    "${tg_tags} !!- ,logger_backlog," \
+    # `(^|\s|[(0-9])`: text before codespan{{{
+    #
+    # For  some reason,  `[0-9]`  is  necessary to  handle  the  case where  the
+    # codespan is written at the very start of the message.
+    #}}}
+    "s/(^|\s|[(0-9])(`[^`]+`)($|\s|[),.?!:;])/${re:1}${color:,250}${re:2}${color:,default}${re:3}/"
+
+# color URL {{{3
+
+# Source: https://github.com/weechat/weechat/wiki/Triggers#display-urls-in-color-32-blue
+/trigger add color_url \
+    modifier \
+    "100|weechat_print" \
+    "${tg_tags} !~ ,logger_backlog,|,irc_(join|part|quit)," \
+    # Around the regex, we use semicolons as delimiters:{{{
+    #
+    #     "s;[a-z]+://[^( ]\S*;${color:32}${re:0}${color:default};"
+    #       ^                 ^                                  ^
+    #}}}
+    # Some network protocols might contain a digit in their name.{{{
+    #
+    # For example:
+    #
+    #     socks5h://localhost:9050
+    #          ^
+    #
+    # Hence `[0-9]` in the regex:
+    #
+    #     [a-z0-9]+://[^ (`]+;
+    #         ^^^
+    #}}}
+    # Warning: Do *not* match the protocol with `[a-z0-9]+`.{{{
+    #
+    # It would break the display of a pasted link at the very start of the line:
+    #
+    #     broken color code (which shouldn't be displayed)
+    #     v---------v
+    #     032~0000124http://example.com/
+    #                ^-----------------^
+    #                not highlighted (it should be)
+    #
+    # That's  caused by  an  interaction between  the  triggers `color_url`  and
+    # `color_my_msg`.
+    #
+    # It  seems asserting  that  the first  character is  a  letter avoids  that
+    # pitfall.  That should be OK.  I  don't know any protocol whose name starts
+    # with a digit.
+    #}}}
+    "s;[a-z][a-z0-9]*://[^ ()<>`'\"]+;${color:32,default}${re:0}${color:default};"
+
+# jump to buffer by number (`/123`) {{{3
+
+# Replace something like `/123` with `/buffer *123`.
+# Adapted from: https://weechat.org/files/doc/weechat/stable/weechat_faq.en.html#jump_to_buffer_11_or_higher
+/trigger add buffer_jump_by_number \
+    modifier \
+    "100|input_text_for_buffer" \
+    "${tg_string} =~ ^/[0-9]+$" \
+    "s;/([0-9]+);/buffer *${re:1};"
+# }}}1
+# UI {{{1
+# Warning: Choose consistent colors for `buflist.format.hotlist_*` and `weechat.color.status_{data,count}_*`.{{{
+#
+# `*` being `highlight`, `private`, `message` or `other`.
+#
+# ---
+#
+# For example, it would be jarring for  a buffer containing an unread message to
+# be represented  with a  number in  green in the  hotlist, but  with a  name in
+# magenta in the buflist.
+#}}}
+
+# general {{{2
+
+# Display  pretty symbols  to let  us know  that  we can  scroll a  bar in  some
+# direction.  Useful, for example, in the  nicklist bar when there're many users
+# on the channel.
+/set weechat.look.bar_more_down "▼"
+/set weechat.look.bar_more_left "◀"
+/set weechat.look.bar_more_right "▶"
+/set weechat.look.bar_more_up "▲"
+
+# don't display time before each line in buffers
+/set weechat.look.buffer_time_format ""
+
+# how to indicate an error
+/set weechat.look.prefix_error "${color:red}✘"
+
+# how to separate the prefix and the message
+/set weechat.look.prefix_suffix "│"
+
+# how to indicate a person has joined
+/set weechat.look.prefix_join "⟶"
+# how to indicate a person has quit
+/set weechat.look.prefix_quit "⟵"
+
+# how to separate an  old (before we visited another channel)  and a new message
+# (after we came back)
+/set weechat.look.read_marker_string "─"
+
+# char used to draw horizontal separators around bars and windows
+# You can see it used after splitting a window horizontally:{{{
+#
+#     /window splith
+#
+# To merge the windows back:
+#
+#     /window merge
+#}}}
+/set weechat.look.separator_horizontal "─"
+
+# input bar {{{2
+
+# We no longer use the `spell` plugin.
+# But we keep this block for educational purpose.
+#
+#     # in the input bar, give 3 suggestions when we make a spelling error
+#     /set spell.check.suggestions 3
+#
+#     # look in the english dictionary
+#     /set spell.check.default_dict "en"
+#
+#     # put the suggestions at the end of the input line
+#     /set weechat.bar.input.items "[input_prompt]+(away),[input_search],[input_paste],input_text,[spell_suggest]"
+#                                   ^-----------------------------------------------------------^ ^-------------^
+#                                                      default option's value                        appended
+
+# status bar {{{2
+# colors {{{3
+
+# how to color lag indicator
+/set irc.color.item_lag_finished white
+
+# how to color background (`:highlight StatusLine`)
+/set weechat.bar.status.color_bg 95
+
+# how to color delimiters
+/set weechat.bar.status.color_delim 187
+
+# how to color "-MORE(123)-"
+/set weechat.color.status_more 253
+
+# how to color channel/network name to which we're not connected via TLS
+/set weechat.color.status_name_insecure 220
+
+# how to color default text{{{
+#
+#     4 #channel[123] [irc/server] [H: ...]
+#                      ^--------^   ^^
+#}}}
+/set weechat.bar.status.color_fg white
+# how to color number of people on the channel
+/set weechat.color.status_nicklist_count white
+# how to color time
+/set weechat.color.status_time white
+
+# contents {{{3
+
+# Let's remove some noise from the default status bar.{{{
+#
+# Inside the value, items must be  separated with commas (which will be replaced
+# with spaces), or with plus signs (which will be simply deleted).
+#
+# For the list of items you can use:
+# https://weechat.org/files/doc/devel/weechat_user.en.html#screen_layout
+#
+# See also: `/bar listitems`.
+#}}}
+/set weechat.bar.status.items " buffer_name+[buffer_nicklist_count]+buffer_zoom\
+,[hotlist],scroll,[lag],completion,spacer,buffer_plugin "
+
+# hotlist {{{3
+# What do the numbers mean in the hotlist?{{{
+#
+#     │ 3 server[abjects] [irc/abjects] [H: 11:rizon(52), 3:abjects(43), 8(2), ...]
+#                                           ^^       ^^   ^         ^^   ^ ^
+#
+# Outside parentheses, those are buffer numbers.
+# Inside  parentheses, those  are  counts; they  stand for  a  number of  unread
+# messages of a given category.  There are 4 categories:
+#
+#    - highlights (messages containing a highlighted word)
+#    - private messages
+#    - user messages
+#    - other messages
+#
+# Buffer numbers as well as counts are colorized with these options:
+#
+#    - `weechat.color.status_data_*`
+#    - `weechat.color.status_count_*`
+#
+# Private messages can be written into an ad-hoc buffer (named with the sender's
+# nick; e.g.  when we execute  `.search movie` in  `#mg-chat`) or into  a server
+# buffer (e.g. when we execute `!search movie` in `#mg-chat`).
+#
+# "Other" messages  are of low importance.   They're not sent by  any user; they
+# can be a server notice or the output of some WeeChat command (e.g. `/help`).
+#}}}
+
+# Options configuring the contents of the hotlist, and how buffers are sorted inside:
+# `weechat.look.hotlist_add_conditions`{{{
+#
+# Buffers which don't satisfy `weechat.look.hotlist_add_conditions` are ignored.
+# Inside the condition value, these variables can be used:
+#
+#    - `window` (current window pointer)
+#    - `buffer` (buffer pointer to add in hotlist)
+#    - `priority` (`0` = low, `1` = message, `2` = private, `3` = highlight)
+#
+# Default value:
+#
+#     "${away} || ${buffer.num_displayed} == 0 || ${info:relay_client_count,weechat,connected} > 0"
+#                 ^--------------------------^
+#                 check buffer is not visible on screen
+#}}}
+# `weechat.look.hotlist_sort`{{{
+#
+# Buffers are sorted according to `weechat.look.hotlist_sort`:
+#
+#    - `group_time_*`: group by notify level (highlights first) then sort by time
+#    - `group_number_*`: group by notify level (highlights first) then sort by number
+#    - `number_*`: sort by number
+#
+# `*` can be `asc` (ascending sort) or `desc` (descending sort).
+#
+# Default value: `group_time_asc`.
+#}}}
+# `weechat.look.buffer_notify_default`{{{
+#
+# A buffer is added  to the hotlist only if it contains  an unread message whose
+# importance is enough for `weechat.look.buffer_notify_default`.
+#
+# Default value: `all`.
+#
+#}}}
+#   In a given buffer, this option can be overridden by the `notify` property.{{{
+#
+# To set it in the current buffer, run:
+#
+#     # `setauto` makes the property persistent by creating `weechat.buffer.<buffer>.notify`
+#     /buffer set[auto] notify <value>
+#
+# To set it in an arbitrary buffer:
+#
+#    - `/set weechat.notify.<buffer> <value>`
+#    - `/set weechat.buffer.<buffer>.notify <value>`
+#
+# In the first command, `<buffer>` must match the start of the full buffer name;
+# but it  doesn't have to match  it entirely.  So,  to set the property  for all
+# buffers on a given server, you can write this:
+#
+#     /set weechat.notify.irc.<server> <value>
+#
+# To read the current value of the property:
+#
+#     # as an enum (e.g. "message")
+#     /buffer notify
+#
+#     # as an int (e.g. 2)
+#     /buffer get notify
+#}}}
+#   The buffer property `notify` is special because:{{{
+#
+#    - It can be printed or set via `/buffer notify [<level>]`;
+#      but `/buffer <property>` doesn't exist in the general case.
+#      BTW `<level>` must be an enum.
+#
+#    - `/buffer set notify <level>` creates `weechat.notify.<buffer>`; no
+#      option is created for other properties.  BTW, `<level>` can be an enum
+#      or an int (automatically converted into an enum).
+#}}}
+
+# In this block,  the `*_count_*` options control the color  of a possible count
+# of unread messages in parentheses.
+#
+# how to color buffer number containing unread highlight
+/set weechat.color.status_data_highlight 46
+/set weechat.color.status_count_highlight 46
+# how to color buffer number containing unread private message
+/set weechat.color.status_data_private 212
+/set weechat.color.status_count_private 212
+# how to color buffer number containing unread user message
+/set weechat.color.status_data_msg 111
+/set weechat.color.status_count_msg 111
+# how to color buffer number containing other unread message
+/set weechat.color.status_data_other 253
+/set weechat.color.status_count_other 253
+
+# Don't display messages count when it's too low.{{{
+#
+# Rationale: It makes  the hotlist hard  to read  (there is ambiguity  between a
+# number which stands for a buffer and one which stands for a count).
+#
+# `30` seems  like a  good minimum, because  for us it's  the minimum  amount of
+# lines to fill in an entire window.
+#}}}
+/set weechat.look.hotlist_count_min_msg 30
+# Don't display the name of the buffer in which we've received private messages.{{{
+#
+#     │ 3 server[abjects] [irc/abjects] [H: 11:rizon(52), 3:abjects(43), 8(2), ...]
+#                                             ^----^       ^------^
+#}}}
+/set weechat.look.hotlist_names_count 0
+
+# notify  me about  any  new message  in  any  channel of  the  Libera and  OFTC
+# networks, but ignore low importance messages
+# What does the value `message` mean?   What are the available values?{{{
+#
+#    ┌───────────┬──────────────────────────────────────────────────────────────────┐
+#    │ none      │ no message                                                       │
+#    ├───────────┼──────────────────────────────────────────────────────────────────┤
+#    │ highlight │ any message containing a highlighted word, or private            │
+#    ├───────────┼──────────────────────────────────────────────────────────────────┤
+#    │ message   │ any message from a user                                          │
+#    ├───────────┼──────────────────────────────────────────────────────────────────┤
+#    │ all       │ any message, even with low importance, i.e. “irc join/part/quit” │
+#    └───────────┴──────────────────────────────────────────────────────────────────┘
+#
+# For more info:
+# https://weechat.org/files/doc/stable/weechat_user.en.html#setup_notify_levels
+#}}}
+# To be more specific and operate at the channel level:{{{
+#
+#     /set weechat.notify.irc.<server>.#<channel> "message"
+#                                     ^---------^
+#}}}
+/set weechat.notify.irc.libera message
+/set weechat.notify.irc.oftc message
+# ATM, on startup, the "oftc" server buffer is the only one for which we have an
+# item for "other" messages, and no item for "private" messages.  I *guess* it's
+# somehow caused by the fact that we don't authenticate with SASL on OFTC, since
+# the latter doesn't support the former.
+
+# Warez channels are  noisy: notify us about  new messages in them  only if they
+# contain a highlighted word (typically our nick).
+/set weechat.notify.irc.abjects highlight
+/set weechat.notify.irc.highway highlight
+/set weechat.notify.irc.rizon highlight
+/set weechat.notify.irc.undernet highlight
+# What does the value `highlight` mean?   What are the available values?{{{
+#
+#    ┌───────────┬──────────────────────────────────────────────────────────────────┐
+#    │ none      │ no message                                                       │
+#    ├───────────┼──────────────────────────────────────────────────────────────────┤
+#    │ highlight │ any message containing a highlighted word, or private            │
+#    ├───────────┼──────────────────────────────────────────────────────────────────┤
+#    │ message   │ any message from a user                                          │
+#    ├───────────┼──────────────────────────────────────────────────────────────────┤
+#    │ all       │ any message, even with low importance, i.e. “irc join/part/quit” │
+#    └───────────┴──────────────────────────────────────────────────────────────────┘
+#
+# For more info:
+# https://weechat.org/files/doc/stable/weechat_user.en.html#setup_notify_levels
+#}}}
+# To be more specific and operate at the channel level:{{{
+#
+#                                    v-------v
+#     /set weechat.notify.irc.abjects.#mg-chat "highlight"
+#     /set weechat.notify.irc.abjects.#moviegods  "highlight"
+#     ...
+#}}}
+
+# highlights {{{3
+
+# You can control which text should be highlighted with various options:
+#     /fset *look*highlight*
+# Some of them can be overridden by buffer properties:{{{
+#
+#    - `highlight_words`         > `irc.look.highlight_{channel,pv,server}`
+#    - `highlight_tags_restrict` > `irc.look.highlight_tags_restrict`
+#
+#    - `highlight_regex`         > `weechat.look.highlight_regex`
+#    - `highlight_disable_regex` > `weechat.look.highlight_disable_regex`
+#    - `highlight_tags`          > `weechat.look.highlight_tags`
+#
+# Those can be set:
+#
+#    - temporarily with `/buffer set <property> <value>`
+#    - permanently with `/buffer setauto <property> <value>`
+#      or `/set weechat.buffer.<buffer_name>.<property> <value>`
+#
+# In this config file, use the `/set` command.
+# `/buffer set[auto]` must be executed in the context of the relevant buffer.
+#}}}
+
+# Disable highlight for our nick in server buffers.
+# Rationale: In practice, it's rarely (if ever) noteworthy, hence distracting.
+/set irc.look.highlight_server ""
+# }}}2
+# title bar {{{2
+
+# how to color background (`:highlight TabLine`)
+/set weechat.bar.title.color_bg 248
+
+# hide the bar by default
+/set weechat.bar.title.hidden on
+
+# Let the title bar occupy as many lines as necessary.
+# If you also want to enforce a limit, set the `weechat.bar.title.size_max` option.
+/set weechat.bar.title.size 0
+
+# buflist {{{2
+
+# How to color buffer name containing unread highlighted message.{{{
+#
+# Any    given   line    in   the    buflist   is    formatted   according    to
+# `buflist.format.buffer`.   The latter's  value can  contain `${color_hotlist}`
+# which controls how to color the buffer name.  And from `/help buflist`:
+#
+#    > - ${color_hotlist}: the color depending on the highest hotlist level for the buffer
+#    > (evaluation of option **buflist.format.hotlist_**xxx where xxx is the level)
+#}}}
+/set buflist.format.hotlist_highlight "${color:green}"
+# how to color buffer name containing unread private message
+/set buflist.format.hotlist_private "${color:163}"
+# how to color buffer name containing unread user message
+/set buflist.format.hotlist_message "${color:31}"
+# how to color buffer name containing other unread messages
+/set buflist.format.hotlist_low "${color:*246}"
+
+# how to color currently selected buffer
+/set buflist.format.buffer_current "${color:,159}${format_buffer}"
+
+# How to color unjoined channels.{{{
+#
+# See: https://github.com/weechat/weechat/wiki/buflist#change-color-of-unjoined-irc-channel-buffers
+#
+# The wiki uses `irc_channel.nicks_count` which is documented here:
+# https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#hdata_irc_channel
+#
+# But I  prefer `buffer.nicklist_nicks_count`  because it's  easier to  find its
+# documentation, and because  it can be `/eval`ed on the  (which makes it easier
+# to debug an issue).
+#}}}
+/set buflist.format.name "${if: \
+    ${type} == channel && ${buffer.nicklist_nicks_count} == 0 \
+    ?${color:245}\
+:}${name}"
+
+# how to color prefix buffer number
+/set buflist.format.number "${color:yellow}${number} "
+
+# Group channels under their respective server:
+# https://github.com/weechat/weechat/wiki/buflist#group-irc-channels-under-each-respective-server
+#
+# don't merge core and server buffers
+# Alternative:{{{
+#
+# Press `M-x` to zoom on one buffer in a set of merged buffers.
+# Press `C-x` to switch the zoomed buffer.
+#}}}
+/set irc.look.server_buffer independent
+# force position of new channel after last channel/pv of server
+/set irc.look.new_channel_position near_server
+# force position of new private after last channel/pv of server
+/set irc.look.new_pv_position near_server
+# At the start of the file, we've  unset all `irc.*` options.  This includes the
+# options in this  block, which has messed  up the original order  of buffers in
+# the buflist.   Now that  the options  are re-set, we  can restore  the correct
+# order:
+/autosort
+
+# enable automatic addition of temporary servers with `/connect`
+/set irc.look.temporary_servers on
+
+# hide the bar by default
+/set weechat.bar.buflist.hidden on
+
+# populate the bar
+/set weechat.bar.buflist.items "buflist"
+
+# limit its width to 18 characters
+/set weechat.bar.buflist.size_max 18
+# same thing when several buffers are merged with same number (`/buffer merge`)
+/set weechat.look.prefix_buffer_align_max 18
+# how to  indicate that a buffer  name is too  long to be fully  displayed (only
+# used when several buffers are merged with same number; `/buffer merge`)
+/set weechat.look.prefix_buffer_align_more "▹"
+
+# nicklist + prefixes {{{2
+# nicklist = vertical bar on the right which can be toggled
+# prefix = text printed before a message (usually contains a user's nick)
+
+# Unless explicitly mentioned otherwise, all these settings apply to prefixes in
+# the chat area.
+
+# hide the nicklist bar by default
+/set weechat.bar.nicklist.hidden on
+
+# how to color the nick of someone who has sent a message highlighting our nick
+/set weechat.color.chat_highlight_bg 219
+# same thing, but they've quit the channel since then
+/set weechat.color.chat_nick_offline_highlight_bg 247
+
+# The default value contains these colors:{{{
+#
+#     cyan
+#     magenta
+#     green
+#     brown
+#     lightblue
+#     lightcyan
+#     lightmagenta
+#     lightgreen
+#     31
+#     35
+#     38
+#     40
+#     49
+#     63
+#     70
+#     80
+#     92
+#     99
+#     112
+#     126
+#     130
+#     138
+#     142
+#     148
+#     160
+#     162
+#     167
+#     169
+#     174
+#     176
+#     178
+#     184
+#     186
+#     210
+#     212
+#     215
+#     248
+#}}}
+# But some of them were not readable on a light background.
+/set weechat.color.chat_nick_colors "\
+cyan\
+,magenta\
+,green\
+,brown\
+,lightblue\
+,lightcyan\
+,lightmagenta\
+,lightgreen\
+,31\
+,35\
+,38\
+,63\
+,70\
+,72\
+,99\
+,126\
+,130\
+,162\
+,167\
+,169\
+,199\
+"
+# If you want these colors to also be applied in the nicklist bar:
+#
+#     /set irc.look.color_nicks_in_nicklist on
+
+
+# How to color our nick (when used as a prefix before a message we post).
+# Warning: Be consistent with the color used in the `color_my_msg` trigger.
+/set weechat.color.chat_nick_self *160
+
+# How to color an offline nick *in a prefix*.
+# Useful to not waste time answering to someone who already left.
+/set weechat.look.color_nick_offline on
+/set weechat.color.chat_nick_offline 247
+# how to color an away nick *in the nicklist*
+/set weechat.color.nicklist_away 247
+# Commented for the moment, because I'm concerned with the impact on performance.{{{
+#
+# By default, `away_check` is set to 0, which means that there is no check.
+# But suppose we set it to 5, then join many small channels.
+# Every 5 minutes, there would be many checks.
+#
+# Besides, it doesn't make sense to set the option for *all* servers.
+# It might be useful on a server on which we would host a personal channel.
+#}}}
+#     # how often to check for an away nick (interval in minutes)
+#     /set irc.server_default.away_check 5
+#     # but only check on small channels (max number of users on the channel)
+#     /set irc.server_default.away_check_max_nicks 25
+
+# limit length of nicks in a prefix and in the nicklist
+/set weechat.look.prefix_align_max 10
+/set weechat.bar.nicklist.size_max 20
+# how to indicate that a nick is too long to be fully displayed
+/set weechat.look.prefix_align_more "▹"
+
+# Don't  show the  same nick  over  and over  again,  if a  user sends  multiple
+# consecutive messages.
+/set weechat.look.prefix_same_nick " "
+
+# chat area {{{2
+
+# When we execute `/away [<message>]`, don't print our status change in a channel's chat area:{{{
+#
+#     [lgc away: food]
+#     [lgc back: gone 00:12:34]
+#
+# By default,  it's only printed locally,  and not sent to  the channel, because
+# the option's value is `local`.  Still, it creates visual clutter, and we might
+# wrongly think that we sent an undesirable message (which is confusing).
+#
+# The status change is still reported in the server buffer though.
+#}}}
+/set irc.look.display_away off
+
+# `!account-notify`: Do not display "has (un) identified" messages.{{{
+#
+#     alice has identified as bob
+#     mallory has unidentified
+#
+# See:
+# https://weechat.org/files/doc/stable/weechat_user.en.html#irc_ircv3_account_notify
+# https://weechat.org/files/doc/stable/weechat_user.en.html#option_irc.server_default.capabilities
+#
+# Alternatives:
+#
+#     /filter addreplace identified * irc_account *
+#     /set irc.look.display_account_message off
+#}}}
+# `!chghost`: Do not display "has changed host to" and "is now known as" messages.{{{
+#
+# See: https://weechat.org/files/doc/stable/weechat_user.en.html#irc_ircv3_chghost
+#
+# Alternative:
+#
+#     /filter addreplace changed_host * irc_chghost *
+#     /filter addreplace changed_nick * irc_nick *
+#}}}
+# `!extended-join`: Do not send account and real name of whenever user join channel.{{{
+#
+# https://weechat.org/files/doc/stable/weechat_user.en.html#irc_ircv3_extended_join
+#}}}
+/set irc.server_default.capabilities "*,!account-notify,!chghost,!extended-join"
+
+# how to color name of a command in the output of `/help cmd`
+/set weechat.color.chat_buffer 99
+
+# How to color channel name when it's used in some messages.{{{
+#
+# E.g. tagged with `irc_topic`:
+#
+#     john has changed topic for #channel from "old topic" to "new topic"
+#                                ^------^
+#}}}
+/set weechat.color.chat_channel 99
+
+# how to color action prefix (asterisk prefix when a user executes `/me ...`)
+/set weechat.color.chat_prefix_action 99
+# }}}1
+# Miscellaneous {{{1
+
+# Get more info when querying a user via `/whois`.{{{
+#
+# When this  option is enabled, and  you do a `/whois some_nick`,  two nicks are
+# sent.  The result is that you have one additional info in the output:
+#
+#     -- | [some_nick] idle: 00 hours 02 minutes 15 seconds, signon at: Fri, 25 May 2018 13:49:41
+#
+# `idle`: for how much time the person has been idle.
+# `signon`: when they connected to the server.
+#}}}
+/set irc.network.whois_double_nick on
+
+# By default, tab completion suggests nicks and channels:
+#
+#     /set weechat.completion.default_template "%(nicks)|%(irc_channels)"
+#
+# See here for the complete list of completion codes (such as `%(nicks)` and `%(irc_channels)`):
+# https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_hook_command
+
+# A channel buffer might grow too big  over time; especially if it's very active
+# (like a  warez channel).  Limit its  size to avoid consuming  too much memory.
+# Note that filtered lines count.
+/set weechat.history.max_buffer_lines_number 1024
+
+# hide the timestamps in the bare display
+# What's the default value?{{{
+#
+#     "%H:%M"
+#}}}
+# How to prevent the bare mode from being left when a key is pressed?{{{
+#
+#     /set weechat.look.bare_display_exit_on_input off
+#}}}
+#   Why don't you do it?{{{
+#
+# When unset,  all the keys you  press will still  be inserted in the  input bar
+# once you leave the bare display.  You  could even send some garbage message in
+# the current channel, without knowing it.
+#}}}
+/set weechat.look.bare_display_time_format ""
+
+# Don't show the  same time over and  over again, if multiple  messages are sent
+# simultaneously.
+/set weechat.look.buffer_time_same " "
+
+# save layout on exit
+/set weechat.look.save_layout_on_exit all
+
+# Don't load all plugins (to reduce memory consumption).
+# About the `relay` plugin:{{{
+#
+#    > The Relay plugin is used to relay data via network, using different protocols:
+#    >
+#    > irc: IRC proxy: used to share connections to IRC servers with one or many other IRC clients
+#    >
+#    > weechat: protocol used by remote interfaces to display and interact with WeeChat ...
+#
+# Source: https://weechat.org/files/doc/stable/weechat_user.en.html#relay
+#}}}
+# About the `typing` plugin:{{{
+#
+#    > The typing  plugin is used to  inform other users you are  typing messages and
+#    > show a list of users currently typing a message on the buffer.
+#
+# Source: https://weechat.org/files/doc/stable/weechat_user.en.html#typing_notifications
+#}}}
+# We already disable all of them at compile time.  Why do it again at runtime?{{{
+#
+# To  avoid  WeeChat loading  an  old  `.so`  plugin  which we  compiled  during
+# a  past  installation, but  then  forgot  to  remove.  Unless  blacklisted  in
+# `weechat.plugin.autoload`, WeeChat loads  any `.so` plugin file  that it finds
+# in `~/.local/lib/weechat/plugins/`.
+#}}}
+/set weechat.plugin.autoload \
+    "*,!fifo,!guile,!lua,!perl,!php,!ruby,!relay,!spell,!tcl,!typing"
+
+# reduce noise after startup
+/set weechat.startup.display_logo off
+/set weechat.startup.display_version off
+
+# To enable core files of unlimited sizes (useful to debug crash):
+#
+#     /set weechat.startup.sys_rlimit "core:-1"
+#
+# To get the list of all possible resources, see `man getrlimit /^\s*RLIMIT_`.{{{
+#
+# For each  occurrence, take the  name after the underscore,  and use it  in its
+# lowercase form.  For example, from the `RLIMIT_CPU` occurrence, you can derive
+# the `cpu` resource name.
+#}}}
+# `-1` is a special value which stands for the absence of any limit.
+# You can specify limits for multiple resources:{{{
+#
+#     "resource1:limit1,resource2:limit2,..."
+#
+# ---
+#
+# As an example, to  set an unlimited size for core files  and limit the virtual
+# memory to 1GB, you would execute:
+#
+#     /set weechat.startup.sys_rlimit "core:-1,as:1000000000"
+#                                              ^^
+#                                              Address Space
+#}}}

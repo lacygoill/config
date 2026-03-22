@@ -1,0 +1,216 @@
+% git
+
+$ branch: git branch --all \
+    | grep -v 'HEAD\|^\s*\*' \
+    | sed 's/^\s*//'
+; `grep(1)` filters out the current branch.
+;
+; If you  want to keep  it, but  still remove the  leading asterisk in  case you
+; select it, append this to the definition:
+;
+;     ... --- --map 'sed "s/^\s*\*\?\s*//"'
+
+$ commit: git log --oneline --- --map "awk '{ print $1 }'"
+
+# print current branch
+git branch --show-current
+
+# list branches
+git branch --all
+    # Without `--all`, you would only get local branches.
+    # With `--all`, you also get remote ones.
+
+# list branches matching given glob pattern
+git branch --all --list <glob>
+
+# list untracked files
+git ls-files --others --directory --exclude-standard
+
+# list version-controlled files in current repo
+cd "$(git rev-parse --show-toplevel)" \
+    && git ls-tree --full-tree -r --name-only HEAD
+    # `--full-tree` prints the files from the top level of the repo, no matter
+    # the current directory. `-r` recurses into subdirectories.
+
+# list staged files
+git diff --cached --name-only
+
+# debug why file is ignored
+git check-ignore --verbose <file>
+    # This can also be used to test if  a file is ignored, because if it is, the
+    # command exits with the status code 0.
+
+% git, bisect
+@ git
+
+$ rev_new: git tag
+$ rev_old: git tag
+
+# start bisecting
+git bisect reset \
+    ; git bisect start --term-old=<term_old> --term-new=<term_new> \
+    ; git bisect <term_new> <rev_new> \
+    && git bisect <term_old> <rev_old> \
+    && chmod u+x <bisecting_script> \
+    && git bisect run <bisecting_script>
+
+# during bisect, check remaining commits
+git bisect visualize --oneline
+
+% git, checkout
+@ git
+
+# existing branch
+git checkout --force <branch>
+
+# new branch
+git checkout -b <new_branch>
+
+# last commit (and abandon changes)
+git checkout .
+
+# latest tag (hopefully it's a stable release)
+git checkout "$(git describe --tags --abbrev=0)"
+    # https://stackoverflow.com/a/7261049
+    #
+    # `--tags` is useful to avoid this kind of error:
+    #
+    #     fatal: No annotated tags can describe 'ab18673731522c18696b9b132d3841646904e1bd'.
+    #
+    # From `man git-describe`:
+    #
+    #    > --tags
+    #    >    Instead of  using only the annotated  tags, use any tag  found in refs/tags
+    #    >    namespace. This option enables matching a lightweight (non-annotated) tag.
+    #
+    # ---
+    #
+    # `--abbrev=0` is useful to truncate a long tag.
+    # For example, in the Vim repository, sometimes, `$ git describe --tags` outputs:
+    #
+    #     v8.1.0648-1-gc8c884926
+    #
+    # That happens when the latest commit was not tagged, which is the case when
+    # Bram commits lots of changes in `$VIMRUNTIME`.
+    #
+    # With `--abbrev=0`, the output is truncated to:
+    #
+    #     v8.1.0648
+
+% git, commit
+@ git
+
+# squash two commits
+git rebase --interactive HEAD~2 && git push --force
+
+# stage and commit in single command
+git commit --all --message='some message'
+
+# restore latest checked out commit (to undo all changes since then)
+git reset --hard $(git rev-parse HEAD)
+
+# checkout initial commit
+git checkout --force $(git rev-list --max-parents=0 HEAD)
+
+% git, config
+@ git
+
+; `sed(1)` trims heading whitespace (and the asterisk of the current branch)
+$ scope: printf '%s\n' 'local' 'global'
+
+# print value of option
+git config --get <option>
+
+# set value of option
+git config --<scope> <option> <value>
+
+# print URL of remote
+git remote get-url <remote>
+    # as an example, remote could be "origin"
+
+# (re-)set URL of remote
+git remote set-url <remote> <URL>
+
+# create bare repo for your config
+git init --bare "$HOME/.cfg" \
+    ; git --git-dir="$HOME/.cfg" --work-tree="$HOME" config --local status.showUntrackedFiles no \
+    ; git --git-dir="$HOME/.cfg" --work-tree="$HOME" remote add origin 'https://github.com/lacygoill/config' \
+    ; git --git-dir="$HOME/.cfg" --work-tree="$HOME" add --force "$HOME/.vim/vimrc" \
+    ; git --git-dir="$HOME/.cfg" --work-tree="$HOME" commit --message='first commit' \
+    ; git --git-dir="$HOME/.cfg" --work-tree="$HOME" push --set-upstream origin main
+    # For `git-push(1)` to succeed, I think we need to add at least a file, and commit.
+    # Hence why we add the vimrc file.
+
+# restore deleted directory
+git archive --remote=./.cfg main <path_to_dir> | tar -x
+
+% git, log
+@ git
+
+# print log, one line per commit, with ASCII-art
+git log --oneline --graph
+    # `--oneline`  is a shorthand for `--pretty=oneline --abbrev-commit`.
+
+# search for first commit introducing given string
+git log --reverse -S <string>
+
+# search commits in date range
+git log --pretty=format:'%h - %an, %ar : %s' --after='<date1>' --before='<date2>'
+
+# trace evolution of range of lines
+git log -L <line1>,<line2>:<file>
+
+% git, fork
+@ git
+
+# update fork
+git clone https://github.com/<your_username>/<your_forked_repo> \
+    && cd <your_forked_repo> \
+    && git remote add upstream https://github.com/<original_dev_username>/<repo_you_forked_from>.git \
+    && git fetch upstream \
+    && git pull upstream master \
+    && git push
+
+# push commit to forked repo
+git push origin <branch>
+
+% git, patch
+@ git
+
+# generate patch from last N commits up to given commit
+git format-patch -<N> <commit> --stdout > <file>.patch
+    # You can replace ❬commit❭ with `HEAD`, in which case the commits go up
+    # to the very last one.
+
+# apply git patch
+git apply --check <file>.patch
+    && git am < <file>.patch
+    # This also checks for error before applying.
+
+% git, test
+@ git
+
+# directory is version-controlled
+git -C <dir> rev-parse --is-inside-work-tree
+
+# there are unstaged changes
+git diff --exit-code
+
+# there are staged but not committed changes
+git diff --cached --exit-code
+
+# there is a master branch
+git show-ref --verify --quiet refs/heads/master
+    # https://stackoverflow.com/q/5167957
+
+# pull request (PR)
+git remote add upstream https://github.com/<original_dev_username>/<repo_you_forked_from>.git \
+    ; git fetch upstream pull/<PR_ID>/head:<PR_branch> \
+    ; git checkout --force <PR_branch>
+
+% git, gh
+@ git
+
+# ask copilot to explain some shell command
+gh copilot explain '<cmd>'
+

@@ -1,0 +1,47 @@
+#!/bin/bash -
+
+readonly DIR="${0%/*}"
+readonly SCRIPT="${0##*/}"
+readonly DROP_IN_DIR="$DIR/$SCRIPT.d"
+
+function _Get_Script_Path {
+  if ! [[ -d "$DROP_IN_DIR" ]]; then
+    return 1
+  fi
+
+  # The  filenames  of   scripts  in  a  drop-in  directory   might  follow  the
+  # `123_script`  scheme,  or match  anything  else  with  the exception  of  an
+  # underscore at the start.  To support  both schemes, we test the existence of
+  # a `1_script` file.
+  local file
+  for file in "$DROP_IN_DIR/1_"*; do
+    local pattern
+    local with_nth
+    if [[ -e "$file" ]]; then
+      pattern='^[[:digit:]]\+_'
+      with_nth='2..'
+      break
+    else
+      pattern='^[^_]'
+      with_nth='1..'
+    fi
+  done
+
+  local chosen_script
+  if ! chosen_script="$(find "$DROP_IN_DIR" -maxdepth 1 -type f -execdir /usr/bin/basename '{}' \; \
+        | grep "$pattern" \
+        | sort \
+        | fzf --bind="alt-e:execute(editor $DROP_IN_DIR/{} >\$(tty))" \
+          --delimiter='_' \
+          --prompt="$SCRIPT ${FZF_PROMPT:?}" \
+          --with-nth="$with_nth" \
+      )"; then
+    return 1
+  fi
+
+  if ! [[ -x "$DROP_IN_DIR/$chosen_script" ]]; then
+    return 1
+  fi
+
+  echo "$DROP_IN_DIR/$chosen_script"
+}
