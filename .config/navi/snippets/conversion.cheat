@@ -1,0 +1,45 @@
+% conversion
+
+$ epub: find . -maxdepth 1 -name '*.epub' -printf '%P\n' 2>/dev/null \
+    | sed 's/\.epub$//'
+
+# convert number between different bases
+python -q -i -c 'import math'
+    # To express a binary/octal/hexadecimal number, prefix it with `0b`/`0o`/`0x`.
+    # To convert a number into binary/octal/decimal/hexadecimal, call `bin()`/`oct()`/`int()`/`hex()`.
+
+# convert EPUB into PDF
+ebook-convert <epub>.epub <epub>.pdf
+    # Alternative:
+    #     $ pandoc --from=epub --to=latex --pdf-engine=xelatex --output=❬epub❭.pdf ❬epub❭.epub
+    #
+    # `ebook-convert` is more powerful than pandoc though.
+    # For example, it supports `.azw3` files.
+    # For more info:
+    #     $ ebook-convert --help
+    #     $ ebook-convert ❬input_file❭ ❬output_file❭ --help
+
+# convert image into text (OCR)
+tesseract <image> <out>
+
+# convert file from Unix format to DOS format
+unix2dos <file>
+    # require the `dos2unix` package
+
+# convert file from DOS format to Unix format
+dos2unix <file>
+    # require the `dos2unix` package
+
+# turn markdown document into man page about given command
+pandoc --standalone --from=markdown-smart --to=man <doc> --output=<cmd>.1 \
+    && cp ./<cmd>.1 ~/.local/share/man/man1/
+    # That's how `translate-shell(1)` generates its man page:
+    # https://github.com/soimort/translate-shell/blob/1e3f901c479fc4f838b290f11e1b547b86bdadd4/build.awk#L49
+    #
+    # Once you have a man page, ask fish to generate a completion out of it:
+    #
+    #     $ fish_update_completions
+    #
+    # The fish completion should be put in:
+    #
+    #     ~/.local/share/fish/generated_completions/

@@ -1,0 +1,8 @@
+[Unit]
+Description=Invalidate grep(1) exclude cached files whenever .cvsignore is modified
+
+[Path]
+PathChanged=%h/.cvsignore
+
+[Install]
+WantedBy=paths.target

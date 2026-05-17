@@ -1,0 +1,110 @@
+#!/bin/bash -
+
+# For help:
+# https://support.mozilla.org/en-US/kb/install-firefox-linux#w_local-firefox-installation-in-users-account
+# https://wiki.debian.org/Firefox#From_Mozilla_binaries
+
+# NOTE: If for  some reason you can  no longer install from  a tarball, consider
+# the mozilla PPA: https://launchpad.net/~mozillateam/+archive/ubuntu/ppa
+
+# NOTE: If the Firefox  icon is not properly integrated in  the XFCE application
+# menu, try to run this:
+#
+#     # require the `menu` package
+#     $ update-menus
+#
+# But first, try to log out (or reboot).
+
+# Where we'll install Firefox.
+# We put its directory in `~/.local/bin/`, just like the TOR browser.
+readonly INSTALL_DIR="$HOME/.local/bin/firefox-browser"
+
+# Firefox  updates  itself  automatically.   You  can  check  it's  up  to  date
+# by  clicking  on the  triple  bar  icon,  then `Help`,  then  `About Firefox`.
+# Installing it once is enough.
+if [[ -d "$INSTALL_DIR" ]]; then
+  printf 'Found existing installation at %s.  Bailing out.\n' "$INSTALL_DIR" >&2
+  exit 1
+fi
+
+if ! [[ -f "$HOME/.local/share/applications/firefox.desktop" ]]; then
+  printf 'Missing dependency: %s.  Bailing out.\n' "$HOME/.local/share/applications/firefox.desktop" >&2
+  exit 1
+fi
+
+source "${0%/*}/_lib"
+# You can find this URL with the developer tools.{{{
+#
+# Visit the Firefox website as if you were to manually download the tarball; you
+# should end up here: https://www.mozilla.org/en-US/firefox/download/
+# Don't click on the "Download Firefox" button.
+#
+# Instead, press `Ctrl-Shift-i` to open the developer tools.
+# Select the  "Network" tab, click on  the "Console Settings" wheel,  and inside
+# the menu, tick "Persist Logs".  From there, initiate a manual download.
+# The real download URL should be printed in blue at the bottom of the console:
+#
+#     Navigated to https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64&lang=en-US
+#}}}
+_Extract_Archive 'firefox' 'https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64&lang=en-US'
+
+# If  Firefox is  already installed  as  a deb  package,  get rid  of it.   It's
+# probably too old for  some extensions.  Besides, on Debian, it  pulls in a lot
+# of packages (mainly `l10n`).
+if dpkg-query --show --showformat='${Status}' firefox-esr 2>/dev/null \
+      | grep --quiet 'ok installed'; then
+  sudo apt-get --assume-yes purge --autoremove firefox-esr
+fi
+
+# install Firefox
+mkdir -p "$INSTALL_DIR"
+cp -R ./* "$INSTALL_DIR"
+
+# Make  sure  the  firefox  binary  is  in  the  PATH.   Also,  make  sure  that
+# `{x,gnome}-www-browser`  (alternatives  system)  start  Firefox,  as  well  as
+# `sensible-browser`.
+for name in 'firefox' 'x-www-browser' 'gnome-www-browser' 'sensible-browser'; do
+  ln --symbolic --force "$INSTALL_DIR/firefox" "$HOME/.local/bin/$name"
+done
+
+# In a desktop  file, there is no  special token which can be  expanded into our
+# home, so  we can't  write something like  `~`, `$HOME`, or  `%h`.  We  have to
+# hard-code our user name.  Let's make sure it's correct.
+sed -i "s@/home/[^/]*/@$HOME/@" "$HOME/.local/share/applications/firefox.desktop"
+
+# tell applications which web browser they should invoke if they need one
+xdg-settings set default-web-browser firefox.desktop
+
+# let the system know that Firefox can handle some relevant MIME types
+_Set_App_As_Mimetype_Handler 'firefox'
+
+# If asked "Make Firefox your default browser?", do *not* accept!{{{
+#
+# Otherwise, Firefox will create a file such as `userapp-Firefox-Q8YQ61.desktop`
+# in `~/.local/share/applications`.
+#
+# And it will edit `~/.config/mimeapps.list` to add a bunch of lines:
+#
+#     application/x-extension-htm=userapp-Firefox-Q8YQ61.desktop
+#     text/html=userapp-Firefox-Q8YQ61.desktop
+#     x-scheme-handler/http=userapp-Firefox-Q8YQ61.desktop
+#     ...
+#
+# We don't want nor need any of that.
+# Our  `~/.local/share/applications/firefox.desktop`   already  takes   care  of
+# letting the system know that Firefox can handle the relevant MIME types.
+#
+# Also,  the `userapp-*.desktop`  is missing  an  `Icon=` line,  and contains  a
+# `NoDisplay=true` line which causes our `omni-GUI`  script to ignore it when we
+# launch an application.
+#}}}
+tee <<'EOF'
+  - log out/log in back (to be able to start Firefox from GUI application launcher)
+  - start Firefox
+  - visit about:profiles to delete unused profiles (only "default-release" should remain)
+  - visit about:preferences#home to untick "Sponsored shortcuts"
+
+If you're asked: "Make Firefox your default browser?"
+Tick: "Don't show this message again"
+Click: "Not now"
+EOF
