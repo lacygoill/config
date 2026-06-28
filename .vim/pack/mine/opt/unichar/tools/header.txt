@@ -1,0 +1,9 @@
+vim9script
+
+# DO NOT RENAME THIS FILE!
+#
+# We want  it to  be named  `Session.vim` so that  utilities like  `grep(1)` and
+# `rsync(1)`  can  ignore it  (via  `~/.cvsignore`  which contains  the  pattern
+# `Session.vim`).
+
+var d: dict<string> = {

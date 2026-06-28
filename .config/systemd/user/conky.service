@@ -1,0 +1,61 @@
+# Install the `conky-all` package, NOT `conky`!{{{
+#
+# The `conky` package doesn't include the lua binding.
+# In that regard, `conky-all` is similar to `vim-gtk`, and `conky` to `vim-tiny`.
+#}}}
+
+[Unit]
+Description=system monitor that displays any kind of information on the desktop
+PartOf=graphical-session.target
+
+[Service]
+# Because of `--daemonize`.{{{
+#
+# We need  `--daemonize` to  be able to  start 2 conky  instances from  the same
+# service.  Otherwise, the 2nd one would  never start, because the 1st one would
+# never terminate.   And since we use  `--daemonize`, it makes sense  to specify
+# `Type=forking`.
+#
+# We  could keep  the default  `Type=simple`,  but then  we would  need to  pass
+# `--daemonize` to the  1st conky instance, and  not to the 2nd one,  which is a
+# bit inconsistent.
+#}}}
+Type=forking
+
+# Don't try to be clever, and use 2 directives (e.g. `ExecStartPre` + `ExecStart`) to start the 2 conky instances.{{{
+#
+#     ✘
+#     ExecStartPre=/usr/bin/conky --config=%E/conky/time.lua --daemonize
+#     ExecStart=/usr/bin/conky --config=%E/conky/system.lua --daemonize
+#
+# It would give a warning in the journal:
+#
+#     ... conky[5678]: conky: forked to background, pid is 9123
+#     ... systemd[1234]: conky.service: Found left-over process 9123 (conky) in control group while starting unit. Ignoring.
+#     ... systemd[1234]: This usually indicates unclean termination of a previous run, or service implementation deficiencies.
+#
+# I guess systemd can't track the  process started by the `ExecStartPre` command
+# as part of the main service  process.  Probably because it backgrounds itself,
+# and  `ExecStartPre`  is  not meant  to  start  a  process  which runs  in  the
+# background.
+#}}}
+ExecStart=/usr/bin/sh -c '/usr/bin/conky --config=%E/conky/system.lua --daemonize ; \
+    /usr/bin/conky --config=%E/conky/time.lua --daemonize'
+
+ExecStop=/usr/bin/killall -STOP conky
+
+#    > An easy way to force Conky to reload  your  ~/.config/conky/conky.conf:
+#    > "killall  -SIGUSR1  conky".
+#
+# Source: `man conky /YOU SHOULD KNOW`:
+ExecReload=/usr/bin/killall -USR1 conky
+
+# To support a path relative to `~/.config/conky/`.{{{
+#
+# Example:
+#
+#     # ~/.config/conky/system.lua
+#     lua_load = './system_rings.lua',
+#                 ^
+#}}}
+WorkingDirectory=%E/conky/

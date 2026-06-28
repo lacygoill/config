@@ -1,0 +1,23 @@
+#!/bin/bash -
+# Do *not* use `unclutter` instead of `xbanish`.{{{
+#
+# `unclutter`  interferes with  the `interSubs`  script which  lets us  read the
+# translation of subtitles.
+#
+# Besides, it could cause other issues:
+# https://wiki.archlinux.org/index.php/unclutter#Known_bugs
+#
+# And finally:
+#
+# >     ... the unclutter source code is terrible, so I wrote xbanish.
+#
+# And indeed the source code of `xbanish` is shorter.
+# Use `$ apt source` to get the source code of `unclutter`.
+#}}}
+
+source "${0%/*}/_lib"
+_Extract_Archive 'xbanish' 'https://github.com/jcs/xbanish/tags'
+
+PREFIX="$HOME/.local" make \
+  && PREFIX="$HOME/.local" make install \
+  && mv "$HOME/.local/man/man1/xbanish.1" "$HOME/.local/share/man/man1/xbanish.1"

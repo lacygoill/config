@@ -1,0 +1,55 @@
+toggle help window                      «C-h»
+
+select 'Top' node                       t
+select 'Up' node                        u
+
+open menu of recently visited nodes     «C-x» «C-b»
+
+clear and redraw screen                 «C-l»
+
+pipe node's contents to editor          E
+# Warning: After you quit  your editor, and/or `info(1)`, the  screen might need
+# to be redrawn.  Just press `C-l`.
+
+# Tip: The mode line contains useful information to bring you back where you are.{{{
+#
+# For example:
+#
+#     $ info find
+#     # press 't'
+#     # press 'Tab' until the cursor is on "Common Tasks"
+#     # press Enter on the hypertext link
+#     # The mode line contains:
+#     -----Info: (find)Common Tasks, 18 lines --Top---
+#                 ^^^  ^----------^
+#                file      node
+#
+# From the shell, you can visit this node directly with:
+#
+#     $ info '(find)Common Tasks'
+#
+# Or with:
+#
+#     $ info --node='Common Tasks' find
+#     $ info --file='find' --node='Common Tasks'
+#}}}
+# Tip: After executing `info(1)`, take the habit of pressing `u`.{{{
+#
+# To possibly find out related documents.
+#
+# For example:
+#
+#     $ info find
+#     # press 'u' to select 'Up' node: nothing interesting, but still relevant to find(1)
+#     # press 'u' again: *very* interesting hypertext links at the bottom:
+#     * Common Tasks::                Solutions to common real-world problems.
+#     * Worked Examples::             Examples demonstrating more complex points.
+#
+# Once you find an  interesting hypertext link, press Enter on  it, and copy the
+# `(file)node`  in the  mode  line.   Then, quit  `info(1)`,  and  pass it  back
+# `(file)node` on the shell's command-line, redirecting STDOUT to an editor or a
+# file.  The redirection  will make `info(1)` output the whole  node (instead of
+# just a menu of its sections).
+#}}}
+# You can learn some basic motions from this link:
+# http://www.informit.com/articles/article.aspx?p=597697&seqNum=8

@@ -1,0 +1,73 @@
+#!/bin/bash -
+
+# Config {{{1
+
+readonly WORDLIST_FILE="$HOME/.local/share/eff_large_wordlist.txt"
+readonly WORDLIST_URL='https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt'
+readonly DELIMITER='-'
+
+#    > We recommend selecting a minimum of  six words from our long wordlist, or
+#    > when using any other list of this size.
+#
+# Source: https://www.eff.org/dice
+declare -i -r MIN_WORDS=6
+declare -i -r MAX_WORDS=20
+
+# check the script was invoked with an argument {{{1
+
+readonly SCRIPT="${0##*/}"
+
+if (( $# == 0 )); then
+  tee >&2 <<EOF
+Usage: $SCRIPT <number between $MIN_WORDS and $MAX_WORDS>
+Example:
+  $ $SCRIPT 6
+  roman-swarm-audition-elevating-preflight-extrude
+EOF
+  exit 1
+fi
+
+# check the argument is a valid number {{{1
+
+declare -i -r NUM_WORDS="$1"
+if ! [[ "$NUM_WORDS" =~ ^[[:digit:]]+$ ]] \
+    || ! (( MIN_WORDS <= NUM_WORDS && NUM_WORDS <= MAX_WORDS )); then
+  printf 'Invalid number of words.  Please provide a number between %d and %d.\n' "$MIN_WORDS" "$MAX_WORDS" >&2
+  exit 1
+fi
+
+# check utilities are available {{{1
+
+if ! command -v curl >/dev/null 2>&1; then
+  printf 'The curl command is required but not available.  Aborting.\n' >&2
+  exit 1
+fi
+
+# make sure word list is available {{{1
+
+if ! [[ -f "$WORDLIST_FILE" ]]; then
+  printf '%s is not readable.  Let'\''s try to download it...\n\n' "$WORDLIST_FILE" >&2
+  curl --fail --location --show-error --silent "$WORDLIST_URL" > "$WORDLIST_FILE"
+  if ! [[ -f "$WORDLIST_FILE" ]]; then
+    printf 'Could not download %s.  Aborting.\n' "$WORDLIST_FILE" >&2
+    exit 1
+  fi
+fi
+
+declare -i wordlist_size
+wordlist_size="$(wc --lines <"$WORDLIST_FILE")"
+
+# generate passphrase {{{1
+
+passphrase=''
+declare -i i
+for (( i = 1; i <= NUM_WORDS; i++ )); do
+  random_number="$(( RANDOM % wordlist_size + 1 ))"
+  word="$(awk -v random_number="$random_number" \
+    'NR == random_number { print $2; exit }' "$WORDLIST_FILE")"
+  passphrase+="${passphrase:+"$DELIMITER"}${word}"
+done
+
+# print passphrase {{{1
+
+echo "$passphrase"

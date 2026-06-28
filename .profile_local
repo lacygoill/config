@@ -1,0 +1,442 @@
+# shellcheck shell=sh
+# ------------------^
+# On Debian, this file is sourced by `/bin/sh` (see `/etc/X11/Xsession`).
+# Warning: If  you change  the file,  make sure  you don't  introduce errors  in
+# `~/.xsession-errors`.
+# You can't replace this file with `~/.bash_profile`.{{{
+#
+# For some  reason, the latter  is not sourced when  we log in  graphically (but
+# `~/.profile` is).
+#}}}
+
+# Here, export variables which you want to be set in any shell (bash, fish, ...) and in your `--user` systemd instance.{{{
+#
+# But  note that  they  also end  up  in the  environment  of processes  started
+# graphically (e.g.  whisker menu).   So you  might want to  set a  *minimum* of
+# variables in this file.
+#}}}
+#
+# cargo {{{1
+
+# If you install rust via `~/bin/drop-in/update.d/rust`, a line is automatically
+# appended at the end of `~/.bashrc`:
+#
+#     . "$HOME/.cargo/env"
+#
+# Our script removes that line.  Let's add it back here.
+if [ -f "$HOME/.cargo/env" ]; then
+  . "$HOME/.cargo/env"
+fi
+
+# less {{{1
+# LESS {{{2
+
+# `--ignore-case`: search case-insensitively{{{
+#
+# Note that  if your search  pattern contains  an uppercase character,  the case
+# WILL still be taken into account.
+#
+# It's like 'ignorecase' and 'smartcase' in Vim.
+#}}}
+# `--LONG-PROMPT`: make prompt more verbose{{{
+#
+# At  the bottom  of  the screen,  it  prints  info about  our  position with  a
+# percentage, and line numbers.
+#}}}
+# `--mouse`: enable mouse scrolling{{{
+#
+# This also has the side effect of disabling selecting text with the mouse.
+# As a workaround, hold `Shift` while moving the mouse.
+# Once your  text is  selected, press  the middle button  to paste  anywhere (in
+# Tmux, you need to simultaneously hold `Shift`).  In Vim's normal mode, use the
+# star register.
+#}}}
+# `--quit-if-one-screen`: exit if entire file can be displayed on first screen{{{
+#
+# This lets us avoid some quirk:
+#
+#    - open a file with fewer lines than the height of the terminal screen
+#      (actually just a few), with at least one of them longer than the
+#      terminal width
+#
+#    - press `L` to scroll horizontally and read the rest of the long line
+#
+# Expected: The lines scroll without their vertical position changing.
+# Actual: The lines are moved to the very top of the screen.
+# This makes us  lose whatever was printed on the  terminal before `less(1)` was
+# run, and uselessly appends a lot of empty lines at the bottom of the screen.
+#
+# ---
+#
+# Issue: `--quit-if-one-screen`  can cause an  issue if `less(1)` is  invoked by
+# another program.   In particular, if `less(1)`  is invoked by ranger  when you
+# open an archive file (e.g. `.tar.gz`), and  if the archive contains only a few
+# files,  `less(1)` will  quit immediately  and you  won't be  able to  read its
+# contents (unless  you enable the preview  feature for archive files,  but this
+# can cause another issue specific to ranger).
+#
+# As a  workaround, use `-+F` to  disable the option when  needed (actually it's
+# reset to its default value, which is disabled).
+#
+# ---
+#
+# Issue: `--quit-if-one-screen`  does not  work with  `--chop-long-lines` (which
+# prevents long lines from being wrapped).
+#}}}
+# `--RAW-CONTROL-CHARS`: do not display caret notation of control characters used in ANSI color escape sequences{{{
+#
+# Instead, they're sent in raw form to the terminal which will interpret them to
+# set the colors of the text appropriately.
+#
+# This is useful for commands such as `$ git log`.
+# Without, you would see things like `ESC[33m ... ESC[m`.
+#
+# If you still see control characters, you can use `r` instead of `R`.
+# However, from `man less`:
+#
+# >     Warning: when the  -r option is used,  less cannot keep track  of the actual
+# >     appearance of the  screen (since this depends on how  the screen responds to
+# >     each type of control character).
+# >     Thus, various display problems may result, such as long lines being split in
+# >     the wrong place.
+#}}}
+# `--tilde`: display lines after end of file as blank lines{{{
+#
+# Normally lines after end of file are displayed as a single tilde (~).
+#}}}
+export LESS='--ignore-case --LONG-PROMPT --mouse --quit-if-one-screen --RAW-CONTROL-CHARS --tilde'
+# How to make the cursor jump at the bottom of the screen, on startup?{{{
+#
+# Set the `+G` option:
+#
+#     set --export LESS '... +G ...'
+#                            ^^
+#}}}
+# If you want to prevent the  screen from being cleared when quitting `less(1)`,
+# use `--no-init`.
+
+# LESSHISTFILE {{{2
+
+# don't pollute our home to save history; do it in `~/.local/share/`
+export LESSHISTFILE="$HOME/.local/share/less/history"
+
+# LESSOPEN / LESSCLOSE {{{2
+
+# Make `less(1)` able to read archives and PDFs.
+
+# How does `lesspipe` work?{{{
+#
+# It's a utility which, without argument, outputs 2 `export` statements:
+#
+#     export LESSOPEN="| /usr/bin/lesspipe %s";
+#     export LESSCLOSE="/usr/bin/lesspipe %s %s";
+#
+# You can adapt the statements to fish:
+#
+#     set --export LESSOPEN '| /usr/bin/lesspipe %s'
+#     set --export LESSCLOSE '/usr/bin/lesspipe %s %s'
+#
+# Now, when you'll  try to open an archive file,  `lesspipe` will pre-process it
+# and write its uncompressed text on a pipe which `less(1)` will read.
+#
+# For more information, see `man lesspipe` or `man lessopen`.
+#}}}
+
+# But we prefer `lesspipe.sh`: https://github.com/wofr06/lesspipe/releases
+# Because it supports more types of archives  (e.g. `.lz4` which you can find in
+# `/var/lib/apt-file/lists/`).
+export LESSOPEN="|$HOME/.local/bin/lesspipe.sh %s"
+#}}}1
+# EDITOR {{{1
+
+# shellcheck disable=SC2155
+#
+# Historically, `EDITOR` and `VISUAL` are meant to set resp. your preferred line
+# editor (e.g. `sed(1)`), and your preferred TUI/GUI editor (e.g. `vim(1)`):
+# https://unix.stackexchange.com/a/334022/289772
+export VISUAL="$HOME/.local/bin/vim"
+export EDITOR="$VISUAL"
+# Used by `sudoedit(8)` and `visudo(8)`; has priority over the previous ones.
+export SUDO_EDITOR="$VISUAL"
+
+# INPUTRC {{{1
+
+# Move `readline(3)`'s config from `~/.inputrc` to `~/.config/inputrc`.
+# `bash(1)`, `gdb(1)`, and `rlwrap(1)`  read this environment variable (possibly
+# others).
+export INPUTRC="$HOME/.config/inputrc"
+
+# PAGER {{{1
+
+# Some scripts/programs might rely on this variable to determine which pager they should invoke.{{{
+#
+# If `PAGER` is not set, they might fall back on `more(1)`.
+# We don't want that, because we're not used to its key bindings, and it's too limited.
+# We always want `less(1)` to be invoked.
+#}}}
+export PAGER='less'
+
+# PATH {{{1
+
+# Add the path to the ruby gems installed in our home via `--user-install`.{{{
+#
+# As an example of a locally installed gem:
+#
+#     $ gem install --user-install heytmux
+# }}}
+# We use a cache for better performance.
+if ! [ -s "$HOME/.cache/bash/gem_bin" ]; then
+  # shellcheck disable=SC2016
+  # https://wiki.archlinux.org/index.php/ruby#Setup
+  # `-e`: script to run {{{
+  #
+  # Also  tell Ruby  not  to search  the  rest  of the  arguments  for a  script
+  # filename.  See `man ruby /^\C\s*-e\>`.
+  # }}}
+  # `puts`: ruby command similar to `printf`
+  # `Gem.user_dir`: path for gems in user's home directory {{{
+  #
+  # https://www.rubydoc.info/github/rubygems/rubygems/Gem.user_dir
+  # }}}
+  printf '%s/bin' "$(ruby -e 'puts Gem.user_dir')" >"$HOME/.cache/bash/gem_bin"
+fi
+
+# shellcheck disable=SC2155
+# Don't try to append/prepend/remove paths.  Just set the variable once.{{{
+#
+# The way `PATH` is built by default is too complex.
+# You would only add more complexity.
+# We want something easy to read and maintain.
+#
+# In particular:
+#
+#    - we want a particular order
+#    - we don't want duplicates
+#
+#    - we don't want `/bin`, nor `/sbin` (those are only symlinks;
+#      see `man 7 file-hierarchy /COMPATIBILITY SYMLINKS`)
+#
+#         # you would need to run something like this
+#         for symlink in '/bin' '/sbin'; do
+#           PATH="${PATH/:"$symlink":/:}"
+#         done
+#
+#    - we want the guarantee that `/usr/sbin` and `/usr/local/sbin` are included (*)
+#
+# (*) They're missing in Debian, which is  annoying, because it forces us to use
+# `sudo(8)` (and give our password) even for  a command which does not alter the
+# system (e.g. `modinfo(8)`).
+#
+# There is no reason for it to be missing.
+# From the debian policy:
+#
+#    > The location of all files and directories must comply with the Filesystem Hierarchy Standard (FHS) ...
+#
+# Source: https://www.debian.org/doc/debian-policy/ch-opersys.html
+#
+# From the FHS:
+#
+#    > The division between /bin and /sbin was not created for security reasons
+#    > or to prevent users from seeing the operating system, but to provide a good
+#    > partition between binaries that everyone uses and ones that are primarily
+#    > used for administration tasks. **There is no inherent security advantage in**
+#    > **making /sbin off-limits for users.**
+#
+# Source: https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch03s16.html#purpose16
+#}}}
+# Rules (in descending order of priority):{{{
+#
+#    - `$HOME/bin` first
+#    - `$HOME` before `/usr`
+#    - `[.]local` (local compilation like Vim or pre-built download like ffmpeg) before anything else
+#    - `sbin` before `bin` before `games` before anything else
+#
+# ---
+#
+# These  rules are  partly inspired  from  the default  value of  `PATH` in  the
+# systemd manager:
+#
+#     $ systemctl show-environment | grep PATH
+#     PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+#
+# ---
+#
+# Note that `$HOME/.local/go/bin` is for the  `go` package manager; it's not for
+# local compilations  or pre-built  downloads (as is  `$HOME/.local/bin`).  Same
+# thing for `/usr/local/go/bin`.   And in those paths, `bin`  doesn't come right
+# after  `[.]local`.  So,  with  regard to  the  last rule,  they're  not to  be
+# considered as being part of the `bin` group, but "anything else".
+#}}}
+export PATH="$HOME/bin\
+:$HOME/.local/bin\
+:$HOME/.local/go/bin\
+:$HOME/.cargo/bin\
+:$HOME/.fzf/bin\
+:$HOME/.luarocks/bin\
+:$(cat "$HOME/.cache/bash/gem_bin")\
+:/usr/local/sbin\
+:/usr/local/bin\
+:/usr/local/games\
+:/usr/local/go/bin\
+:/usr/sbin\
+:/usr/bin\
+:/usr/games"
+
+# SHELL {{{1
+
+# We don't need to export `SHELL`.{{{
+#
+#     export SHELL="$(type --path bash)"
+#
+# bash already does it automatically:
+#
+#    > SHELL  The full pathname to the shell is kept in this **environment vari‐**
+#    >        **able**.  If it is not set when the shell starts, bash  assigns  to
+#    >        it the full pathname of the current **user's login shell**.
+#
+# Source: `man bash /PARAMETERS/;/Shell Variables/;/^\s*SHELL\>`
+#
+# Basically, it's as if sh executed something like:
+#
+#     $ export SHELL="$(awk -F: '$1 == ENVIRON["USER"] { print $NF }' /etc/passwd)"
+#}}}
+# That said, we keep this section to remember how important `$SHELL` is.{{{
+#
+# In  particular, make  sure it's  never set  to your  usual interactive  shell.
+# `$SHELL`  is often  used to  run scripted  code, for  which bash  is the  most
+# sensible choice.
+#
+# For example, whenever we use fzf to run some shell code:
+#
+#     ... --preview='shell code'
+#
+# fzf uses `$SHELL` as the interpreter:
+#
+#    > On unix systems, **fzf runs the command with $SHELL -c if SHELL is set**, [...]
+#
+# Source: `man fzf /KEY/EVENT BINDINGS/;/COMMAND EXECUTION/;/SHELL`
+#
+# And we  often write bash  scripts invoking fzf.  If  we set `$SHELL`  to fish,
+# then  we would  need to  write fish  code inside  bash scripts,  which is  too
+# confusing.  Alternatively, we could write this at the top of our scripts:
+#
+#     SHELL=/usr/bin/bash
+#
+# But it  seems too cumbersome  and unreliable (easy  to forget, then  get weird
+# errors).
+#
+# Same  deal  with  various  Vim  commands/functions  (`!`,  `:!`,  `:terminal`,
+# `system()`, ...).
+#
+# ---
+#
+# It's also useful to start a terminal, with a given shell:
+#
+#     $ SHELL="$(type --path fish)" xterm & disown
+#                            ^--^
+#}}}
+
+# TERM {{{1
+
+# In a console, we want programs to be able to use colors 0-15, and not just 0-7.
+if [ "$TERM" = 'linux' ]; then
+  export TERM='linux-16color'
+fi
+
+# TMPDIR {{{1
+
+# Let's leverage `TMPDIR` to isolate temporary files created for our user into a
+# dedicated directory under `/tmp`.
+# To avoid any conflict with another user, we use `$UID` as a unique identifier.{{{
+#
+# And we  put it  at the  start, so  that the directory  name is  at the  top of
+# `ls(1)` output (digits sort before alphabetical characters).
+#}}}
+# Warning: Do *not* use `$XDG_RUNTIME_DIR`.{{{
+#
+#     export TMPDIR="${XDG_RUNTIME_DIR:=}"
+#                      ^-------------^
+#                             ✘
+#
+# You might be tempted to do it  so that those applications put their junk under
+# an  isolated location,  which is  specific to  our user.   But the  filesystem
+# mounted on `$XDG_RUNTIME_DIR` is too small:
+#
+#                                                                     v--------------v
+#     $ findmnt --noheadings --output=OPTIONS -- $(df --output=target $XDG_RUNTIME_DIR | grep '^/')
+#     rw,nosuid,nodev,relatime,size=368564k,mode=700,uid=1000,gid=1000,inode64
+#                                   ^-----^
+#                                   10% of RAM
+#                                   as per RUNSIZE in /etc/initramfs-tools/initramfs.conf
+#
+# This can be an  issue for an installation script which needs  to extract a big
+# archive into a temporary directory.  Or for `mkinitramfs(8)`.
+#
+# ---
+#
+# If you really wanted to use `$XDG_RUNTIME_DIR`, you could increase the size of
+# the  filesystem  mounted  on  `/run`  by re-setting  the  value  of  `RUNSIZE`
+# in  `/etc/initramfs-tools/conf.d/99-local.conf`.   Then,  you  would  need  to
+# re-generate `/boot/initrd.img`:
+#
+#     $ sudo update-initramfs -u
+#
+# Finally, you  would need  to increase  the size of  the filesystem  mounted on
+# `$XDG_RUNTIME_DIR`  by  re-setting  the  value  of  `RuntimeDirectorySize`  in
+# `/etc/systemd/logind.conf.d/99-local.conf` (see `man 5 logind.conf`):
+#
+#     [Login]
+#     RuntimeDirectorySize=...
+#
+# Also, you  would need to make  sure that `RuntimeDirectorySize` is  lower than
+# `RUNSIZE`; otherwise, no filesystem is mounted on `$XDG_RUNTIME_DIR`.
+#
+# But all of this seems too  complex.  Besides, `$XDG_RUNTIME_DIR` is mounted as
+# a "tmpfs" instance (see `man 5 filesystems`).  That is, its contents reside in
+# virtual  memory.  IOW,  it  consumes  your RAM,  and  if  necessary your  swap
+# space.  To keep a stable system, don't increase the default value of `RUNSIZE`
+# (`10%`).
+#}}}
+export TMPDIR="/tmp/$(id --user)-user"
+
+# For some reason,  tmux ignores `$TMPDIR`, and uses  `$TMUX_TMPDIR` instead, to
+# decide where it should create its server sockets.  By default, it's unset, and
+# tmux falls back on  `/tmp`.  Let's make sure it honors  whatever we choose for
+# `$TMPDIR`.
+export TMUX_TMPDIR="$TMPDIR"
+# }}}1
+
+# Here, write code which only needs to be run once per session.
+# `bat(1)` {{{1
+
+# Not sure, but that might make `bat(1)` a bit faster.
+# For more info: `$ bat cache --help`.
+if ! [ -s "$HOME/.cache/bat/syntaxes.bin" ] \
+    || ! [ -s "$HOME/.cache/bat/themes.bin" ] \
+    && command -v bat >/dev/null; then
+  bat cache --build >/dev/null
+fi
+
+# `convert2text` {{{1
+
+if ! [ -f "$HOME/.cache/convert2text/supported-extensions" ]; then
+  convert2text --cache-supported-extensions
+fi
+
+# `mkdir(1)` {{{1
+
+# Let's split `$TMPDIR` further for some  common applications (for which we need
+# to create temporary files in our scripts).
+#
+# Warning: Do not remove tmux.{{{
+#
+# You   might  be   tempted  to   remove   it  because   tmux  already   creates
+# `$TMUX_TMPDIR/tmux-1000`.  But some of our scripts assume the existence of the
+# directory `tmux` (not `tmux-1000`).  And it would be cumbersome to remember to
+# use a different name just for tmux.
+#}}}
+for app in 'fish' 'fzf' 'test' 'tmux' 'vim' 'weechat'; do
+  if ! [ -d "$TMPDIR/$app" ]; then
+    mkdir -p -- "$TMPDIR/$app"
+  fi
+done

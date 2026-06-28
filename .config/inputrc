@@ -1,0 +1,230 @@
+# What's the purpose of this file?{{{
+#
+# When a program  using the readline library  starts up, this file  is read, and
+# the key bindings and variables are set.
+#}}}
+# Where to find information to configure it?{{{
+#
+#     info rluserman
+#     man 3 readline
+#}}}
+# NOTE: When  readline's documentation  uses the  "DEL" notation  for a  key, it
+# actually stands for the backspace key (the key just above Enter).
+
+# read commands/bindings from `/etc/inputrc`,
+# useful to enable motion with `C-left` and `C-right`
+$include /etc/inputrc
+
+# Variables {{{
+# Tip: to set a readline variable from an interactive bash shell:{{{
+#
+#     $ bind 'set VARIABLE VALUE'
+#}}}
+
+# never ring the bell (useful for ambiguous completions)
+set bell-style none
+
+# when we type a closing parentheses, don't make the cursor jump to the opening one
+set blink-matching-paren off
+
+# complete filenames case insensitively when hitting Tab
+set completion-ignore-case on
+
+# Don't echo a  character corresponding to a signal generated  from the keyboard
+# (e.g. `^C`).  Note  that bash  ignores this  variable when  we press  `C-c` to
+# interrupt a  foreground job (e.g. `sleep(1)`),  but respects it when  we press
+# `C-c` to interrupt an incremental search.
+set echo-control-characters off
+
+# prevent multi-line text, pasted in bash, from being run automatically
+set enable-bracketed-paste on
+
+# What does it do?{{{
+#
+# From `man 3 readline /enable-keypad`:
+#
+# >     When set to On, readline will try  to enable the application keypad when it is
+# >     called.  Some systems need this to enable the arrow keys.
+#
+# By default, when readline is called, the terminal is in normal mode.
+# But  when  `enable-keypad` is  set,  readline  makes  the terminal  enter  the
+# application mode temporarily.
+#
+# For more info about normal vs application mode:
+# http://invisible-island.net/xterm/xterm.faq.html#xterm_arrows
+# http://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-PC-Style-Function-Keys
+#
+# For more  info about  the delete  key issue, see  our comments  in `~/.zshrc`,
+# somewhere around the key binding which invokes `delete-char`.
+#}}}
+#   Why do you do this?{{{
+#
+# It's necessary to fix the delete key in the suckless terminal.
+# https://git.suckless.org/st/file/FAQ.html#l56
+#}}}
+set enable-keypad on
+
+# expand tilde in a filepath when we hit Tab
+set expand-tilde on
+
+# Prefix the command prompt with `*` whenever we modify a command which we've recalled from the history.{{{
+#
+# Example:
+#
+#     user@machine:~$ C-p
+#     user@machine:~$ old command
+#     *user@machine:~$ old command modified
+#     ^
+#     added because we've modified the command line by inserting 'modified' at its end
+#}}}
+# FIXME: This may corrupt the display.{{{
+#
+# MRE:
+#
+#     user@ubuntu:~$ printf 'foobar'
+#     foobaruser@ubuntu:~$˜
+#
+#     press up arrow key
+#     foobaruser@ubuntu:~$ printf 'foobar'˜
+#
+#     press left arrow key, 4 times, then insert `x` (between foo and bar)
+#     *user@ubuntu:~$ printf 'fooxbar'bar'˜
+#
+# The issue is due to  an interaction between `mark-modified-lines` and `printf`
+# when the string it prints doesn't end with a new line.
+# I think this is because, without trailing  newline, the start of the prompt is
+# shifted to the right.
+# In that regard, zsh is better, because, it never shifts the prompt.
+# If there's no trailing newline, it just adds a trailing percent (in standout style):
+#
+#     % printf 'foobar'
+#     foobar%˜
+#           ^
+#}}}
+set mark-modified-lines on
+
+# menu completion displays the common prefix of the list of possible completions
+# before cycling through the list
+set menu-complete-display-prefix on
+
+# Print all possible matches when we press Tab for the first time.
+set show-all-if-ambiguous on
+
+# In a listing, show the type of the matches by appending a trailing character.{{{
+#
+#     ┌───┬────────────────────┐
+#     │ / │ directory          │
+#     ├───┼────────────────────┤
+#     │ * │ executable file    │
+#     ├───┼────────────────────┤
+#     │ @ │ symbolic link      │
+#     ├───┼────────────────────┤
+#     │ | │ named pipe         │
+#     ├───┼────────────────────┤
+#     │ = │ unix domain socket │
+#     ├───┼────────────────────┤
+#     │ % │ character device   │
+#     ├───┼────────────────────┤
+#     │ # │ block device       │
+#     └───┴────────────────────┘
+#
+# FYI: A listing is printed  when you press `Esc =`, or when  you try to perform
+# an ambiguous completion.  That is when there are several matches.
+#}}}
+set visible-stats on
+# }}}
+$if mode=emacs
+# Key bindings whose RHS is a function {{{
+#
+# To get the  list of all available  functions (and what they're  bound to), run
+# `$ bind -p` in bash.
+
+# Bind `C-w` to delete a word (by default it deletes a WORD). {{{
+#
+# We prefer a word as it's more granular and lets us delete a single node inside
+# a long path, instead of the whole path (e.g.: `ls a/b/c/d`).
+#
+# Before  defining  the  binding,  we need  to  unset  `bind-tty-special-chars`,
+# otherwise  it will  be  impossible to  unbind `C-w`  which  readline binds  by
+# default to `unix-word-rubout`.
+# Source: http://shallowsky.com/blog/linux/bash-word-erase.html
+#}}}
+set bind-tty-special-chars Off
+"\C-w": backward-kill-word
+
+# bind M-DEL to delete a WORD (by default it deletes a word)
+"\e\C-?": unix-word-rubout
+
+# M-i / M-o
+"\ei": capitalize-word
+"\eo": downcase-word
+
+# M-n / M-p
+"\en": history-search-forward
+"\ep": history-search-backward
+
+# Tab / S-Tab: cycle through matches
+
+# Warning: This breaks `Tab Tab` which by default prints all the possible matches.{{{
+#
+# Test the option on this command:
+#
+#     $ echo $HO Tab Tab
+#                │   │
+#                │   └ cycle throught the matches (because of 'menu-complete')
+#                │
+#                └ prints all possible matches (because of 'show-all-if-ambiguous')
+#}}}
+TAB: menu-complete
+
+# the keyname `S-TAB` isn't recognized
+# but on my machine `S-TAB` produces the keycodes:  Esc [ Z
+# we can use the keycodes instead
+"\e[Z": menu-complete-backward
+# }}}
+# Key bindings whose RHS is a macro {{{
+# Tip: to manually expand the command-line as the shell does, use `\e\C-e`.{{{
+#
+# It does:
+#
+#    - arithmetic expansion
+#    - history expansion
+#    - parameter expansion
+#
+#    - command substitution
+#    - process substitution
+#
+#    - alias replacement
+#    - unquoting
+#
+# It doesn't do filename generation (globbing), or tilde expansion.
+#
+# ---
+#
+# It's documented here:
+# `man bash /READLINE/;/Commands for Manipulating the History/;/shell-expand-line`
+#
+# ---
+#
+# It's used in an example at `info rluserman /1.3.3 Sample Init File`:
+#
+#     # edit the path
+#     "\C-xp": "PATH=${PATH}\e\C-e\C-a\ef\C-f"
+#                           ^----^
+#
+# Another example:
+#
+#     # insert most recent directory
+#     "\e:": "\\\'$(ls --sort=time --time=ctime -1 -d */ | head --lines=1)\\\' \e\C-e"
+#                                                                              ^----^
+#}}}
+
+# quote current word or previous one if we're on a whitespace
+"\C-q": "\eb\"\ef\""
+#         │  │ │  │
+#         │  │ │  └ insert closing quote
+#         │  │ └ go to end of word
+#         │  └ insert opening quote
+#         └ go back to beginning of word
+# }}}
+$endif

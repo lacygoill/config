@@ -1,0 +1,12 @@
+create new GPT partition table          g
+create new DOS partition table          o
+
+add new partition                       n
+delete partition                        d
+
+write changes and exit                  w
+quit without saving changes             q
+
+print partition table                   p
+print information about partition       i
+list free unpartitioned space           F

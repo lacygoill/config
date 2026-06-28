@@ -1,0 +1,15 @@
+#!/bin/bash -
+
+# Don't rename this file into `universal-ctags`.
+# Vim would ignore it because we include the pattern `tags` in `'wildignore'`.
+
+# If you're looking for a missing dependency:
+# https://github.com/universal-ctags/ctags/blob/master/docs/autotools.rst
+
+source "${0%/*}/_lib"
+_Extract_Archive 'universal-ctags' 'https://github.com/universal-ctags/ctags/releases'
+
+./autogen.sh
+./configure --prefix="$HOME/.local" \
+  && make \
+  && make install

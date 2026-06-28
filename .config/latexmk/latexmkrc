@@ -1,0 +1,15 @@
+# move auxiliary files (.aux, .log, ...) inside the subdirectory `auxiliary/`
+#
+# FIXME:
+# Sometimes some auxiliary files are moved into `build/`
+# The explanation could be given in this excerpt from latexmk's documentation:
+#
+#         Important note:  The  effect of $aux_dir, if  different from $out_dir,
+#         is achieved by giving  (pdf)latex the -aux-directory.  Currently (Dec.
+#         2011 and later) this only works on the miktex version of (pdf)latex.
+#                         ^-------------------------------------------------^
+#
+$aux_dir = 'auxiliary';
+
+# move build files inside the subdirectory `build/`
+$out_dir = 'build';

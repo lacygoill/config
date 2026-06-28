@@ -1,0 +1,268 @@
+# Warning: This unit conflicts with a system-wide unit.
+# Make sure that the following command has been run:
+#
+#     $ sudo systemctl disable --now transmission-daemon.service
+
+# Purpose: Let us download torrents from the command-line.{{{
+#
+# The `transmission-daemon` package installs a service which is run by an ad-hoc
+# user (`debian-transmission`):
+#
+#     $ systemctl show transmission-daemon --property=User --value
+#     debian-transmission
+#
+# and which requires authentication:
+#
+#     $ sudo grep authentication /etc/transmission-daemon/settings.json
+#         "rpc-authentication-required": true,
+#
+# Because of this, whenever we want to interact with the daemon in any way (e.g.
+# start a download), we would need to authenticity, which is too cumbersome.
+# Why should we give credentials every time we want to download a torrent?
+# We don't need to do that when we use  the GUI, so we shouldn't have to do that
+# when we use the CLI.
+#}}}
+# Alternative: Disable the authentication.{{{
+#
+#     $ sudo sed -i'.bak' '/rpc-authentication-required/ s/true/false/' /etc/transmission-daemon/settings.json
+#     $ sudo systemctl restart transmission-daemon.service
+#
+# It works, but editing a file under `/etc` is an anti-pattern, because:
+#
+#    - it can make the system unstable
+#    - it can create a security vulnerability
+#    - it might be overwritten after a system update
+#}}}
+# Alternative: Start the system daemon as your regular user. {{{
+#
+#     $ sudo systemctl edit transmission-daemon.service
+#
+#     # Write and save these lines:
+#     [User]
+#     User=lgc
+#
+#     $ sudo systemctl restart transmission-daemon.service
+#
+# Source: https://wiki.debian.org/Transmission#Change_default_user_on_the_daemon
+#
+# It works, but I don't like hard-coding my username (ATM `lgc`) inside code.
+#}}}
+# Alternative: Authenticate with the system daemon.{{{
+#
+#     $ transmission-remote --auth=transmission:transmission --add 'torrent'
+#                           ^------------------------------^
+#
+# Or:
+#
+#     $ set --export TR_AUTH transmission:transmission
+#     $ transmission-remote --authenv --add 'torrent'
+#                           ^-------^
+#
+# But this is too cumbersome to type.
+# Besides, those  options need  to be  specified first; at  least, they  must be
+# before `--list` and `--session-info`.  See: `man transmission-remote /OPTIONS/;/--authenv`
+#
+# Finally, there is  no guarantee that the username and  password will always be
+# `transmission`.   They're not  even  documented, because  they're  set by  the
+# Debian devs.  We found them like this:
+#
+#     $ mkdir /tmp/test; cd /tmp/test
+#     $ apt download transmission-daemon
+#     $ ar x *.deb data.tar.xz
+#     $ tar --extract --file=data.tar.xz --xz ./etc/transmission-daemon/settings.json
+#     $ grep --recursive 'password\|username' etc/
+#     etc/transmission-daemon/settings.json:    "rpc-password": "transmission",
+#     etc/transmission-daemon/settings.json:    "rpc-username": "transmission",
+#
+# ---
+#
+# If you want to set the credentials, first stop the daemon:
+#
+#     $ sudo systemctl stop transmission-daemon.service
+#     # alternative:  $ transmission-daemon --exit
+#
+# That's  necessary because  you'll  need  to restart  the  daemon  for the  new
+# password  to  take effect.   But  whenever  it  exits (even  temporarily),  it
+# automatically overwrites the  config file; so whatever change  you apply would
+# be lost.
+#
+# Now you can edit the config file:
+#
+#     $ sudoedit /etc/transmission-daemon/settings.json
+#
+# Assign  the desired  username and  password  to resp.  the `rpc-username`  and
+# `rpc-password` keys.  Your password must not start with `{`:
+#
+#    > rpc-password: String. You can enter this  in as plaintext when Transmission
+#    > is not  running, and then Transmission  will salt the value  on startup and
+#    > re-save the salted version as a security measure. Note: Transmission treats
+#    > passwords starting with the character { as salted, so when you first create
+#    > your password, the plaintext password you enter must not begin with {.
+#
+# Source: <https://github.com/transmission/transmission/blob/main/docs/Editing-Configuration-Files.md#rpc>
+#
+# Finally, re-start the daemon:
+#
+#     $ sudo systemctl start transmission-daemon.service
+#
+# After the daemon starts, the password  is automatically replaced with a salted
+# hash inside the config file.
+# }}}
+
+# Note: There should be no risk in starting a daemon which doesn't require any authentication.{{{
+#
+# Because it only accepts requests from the local machine:
+#
+#     $ grep 'rpc-whitelist' ~/.config/transmission-daemon/settings.json
+#     "rpc-whitelist": "127.0.0.1",
+#     "rpc-whitelist-enabled": true,
+#
+# Besides, it's not enabled by default:
+#
+#     rpc-authentication-required: Boolean (default = false)
+#                                           ^-------------^
+#
+# Source: https://github.com/transmission/transmission/blob/87472672a6ff218502ecaaadf7484220eab1de48/docs/Editing-Configuration-Files.md#rpc
+#}}}
+
+# Known Issues:
+# I can't download any warez torrent from the GUI! {{{
+#
+# Make sure that  the daemon and GUI  application don't listen on  the same port
+# for incoming peers:
+#
+#     $ grep --only-matching --no-filename --perl-regexp '"peer-port": \K[0-9]+' \
+#         ~/.config/transmission/settings.json \
+#         ~/.config/transmission-daemon/settings.json
+#     51413
+#     51413
+#     ✘
+#
+# If they do, set a different port in the `ExecStart` directive:
+#
+#     ExecStart=/usr/bin/transmission-daemon --foreground --log-error --peerport=51414
+#                                                                                ^---^
+#
+# ---
+#
+# This issue does not affect the download of Linux ISOs, because those are often
+# distributed with a web seed.
+#}}}
+# The daemon's log contains errors: "Failed to set receive/send buffer"!{{{
+#
+#     ... UDP Failed to set receive buffer: requested 4194304, got 425984 ...
+#     ... UDP Failed to set send buffer: requested 1048576, got 425984 ...
+#     ... UDP Failed to set receive buffer: requested 4194304, got 425984 ...
+#     ... UDP Failed to set send buffer: requested 1048576, got 425984 ...
+#
+# They don't seem to break any feature, so I suggest you ignore them.
+# If you have a good reason to fix them, then try what the log suggests:
+#
+#     ... UDP Please add the line "net.core.rmem_max = 4194304" to /etc/sysctl.conf ...
+#     ... UDP Please add the line "net.core.wmem_max = 1048576" to /etc/sysctl.conf ...
+#     ... UDP Please add the line "net.core.rmem_max = 4194304" to /etc/sysctl.conf ...
+#     ... UDP Please add the line "net.core.wmem_max = 1048576" to /etc/sysctl.conf ...
+#
+# It tells you to re-set  the `net.core.rmem_max` and `net.core.wmem_max` kernel
+# parameters in `/etc/sysctl.conf`:
+#
+#     # note the original values in case you want to restore them later
+#     $ sysctl --values net.core.rmem_max net.core.wmem_max
+#     425984
+#     425984
+#
+#     $ sudo tee /etc/sysctl.d/98-transmission.conf <<'EOF'
+#     net.core.rmem_max = 4194304
+#     net.core.wmem_max = 1048576
+#     EOF
+#
+#     # load settings from all system configuration files
+#     $ sudo sysctl --system
+#
+# Not sure about the consequences on the system's stability.
+# To undo the previous commands:
+#
+#     $ sudo rm /etc/sysctl.d/98-transmission.conf
+#     $ sudo sysctl --write net.core.rmem_max=425984 net.core.wmem_max=425984
+#                                             ^----^                   ^----^
+#
+# Replace the given values with the original ones.
+#}}}
+# `--log-error` gives an error!{{{
+#
+# It has been deprecated at some point:
+# https://github.com/transmission/transmission/pull/3201
+#
+# Use `--log-level=error` instead.
+#}}}
+# I still have an issue!{{{
+#
+# Inspect the systemd journal:
+#
+#     $ journalctl --user --unit=transmission-daemon.service
+#
+# If that doesn't help, get some log:
+#
+#     $ systemctl --user edit --full transmission-daemon.service
+#     :/ExecStart/ substitute@--log-error@--log-debug --logfile /tmp/log@c
+#                                         ^---------^
+#                                         max verbosity level
+#
+#     $ systemctl --user daemon-reload
+#     $ systemctl --user restart transmission-daemon.service
+#
+# The daemon will then write all of its messages in `/tmp/log`.
+#
+# ---
+#
+# If the issue is specific to the GUI, start it from a terminal and redirect its
+# output streams to a log:
+#
+#     $ transmission-gtk >/tmp/log 2>&1
+#
+# Then `tail(1)` it.
+#}}}
+
+[Unit]
+Description=Transmission BitTorrent Daemon
+After=network.target
+
+[Service]
+# `Type=notify` is used by the Debian service:{{{
+#
+# `/etc/systemd/system/transmission-daemon.service`
+#
+# And by the upstream one:
+# https://github.com/transmission/transmission/blob/87472672a6ff218502ecaaadf7484220eab1de48/daemon/transmission-daemon.service#L8
+#
+# Let's do the same.
+#}}}
+Type=notify
+
+# Without `--foreground`, you would need `Type=forking`.
+# `--peerport=` sets a different port than the default to avoid breaking the GUI.{{{
+#
+# The default is `51413`.  See: `man transmission-daemon /OPTIONS/;/--peerport`.
+#}}}
+ExecStart=/usr/bin/transmission-daemon --foreground --log-error --peerport=51414
+ExecStop=/usr/bin/kill -STOP $MAINPID
+# The default system service uses that directive:{{{
+# `/lib/systemd/system/transmission-daemon.service`
+#
+# That being said,  I don't think the process reloads  its config when receiving
+# `SIGHUP`; I think it just contacts the tracker for more peers:
+#
+#    > In addition to these options, sending transmission-cli a SIGHUP signal
+#    > will contact the tracker for more peers.
+#
+# Source: `man transmission-cli /SIGNALS/;/SIGHUP`
+#}}}
+ExecReload=/usr/bin/kill -HUP $MAINPID
+
+# The upstream service uses the following directives.
+# Source: https://github.com/transmission/transmission/blob/87472672a6ff218502ecaaadf7484220eab1de48/daemon/transmission-daemon.service#L11-L14
+# Let's do the same.
+NoNewPrivileges=true
+MemoryDenyWriteExecute=true
+ProtectSystem=true
+PrivateTmp=true

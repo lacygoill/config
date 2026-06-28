@@ -1,0 +1,16 @@
+#!/bin/bash -
+
+# Extract an archive using the `atool(1)` command.
+# Then, cd into  the directory where the contents of  the archive was extracted.
+# The code is adapted from `man atool /^EXAMPLES/;/aunpack (`.
+
+tmp_file="$(mktemp)"
+
+# `--save-outdir` writes the name of the  directory in which the files have been
+# extracted inside the temporary file.
+atool --extract --save-outdir="$tmp_file" "$@"
+
+extraction_dir="$(<"$tmp_file")"
+cd "$extraction_dir" || exit 1
+
+rm -- "$tmp_file"

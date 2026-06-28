@@ -1,0 +1,30 @@
+#!/bin/bash -
+
+# See: https://github.com/tmux/tmux/wiki/Installing#from-source-tarball
+# ---
+# `libutf8proc-dev`: for `--enable-utf8proc`
+readonly -a DEPENDENCIES=(
+  'bison'
+  'libevent-dev'
+  'libncurses-dev'
+  'libutf8proc-dev'
+)
+
+bold="$(tput bold)"
+reset="$(tput sgr0)"
+source "${0%/*}/_lib"
+_Extract_Archive 'tmux' "https://github.com/tmux/tmux/releases
+
+${bold}Choose \"tmux-x.y.tar.gz\"; not the source code \"tar.gz\"${reset}."
+_Install_Dependencies "${DEPENDENCIES[@]}"
+
+# Uncomment this line if you need a backtrace with more information:
+#     sed -i 's/-O2/-O0/' Makefile.am
+
+# See: https://github.com/tmux/tmux/wiki/Installing#configure-options
+# ---
+# `--enable-utf8proc` might  fix various issues  in Vim when editing  a line
+# containing some emojis.
+./configure --prefix="$HOME/.local" --enable-utf8proc \
+  && make \
+  && make install

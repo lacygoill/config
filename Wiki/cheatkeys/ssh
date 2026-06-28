@@ -1,0 +1,30 @@
+Escape Sequences {{{1
+# An escape sequence is only recognized immediately after a newline.
+
+display list of escape characters       ~?
+
+terminate connection                    ~.
+# useful if remote server is hung
+
+suspend/background ssh(1)               ~«C-z»
+
+open a command-line                     ~C
+# To list valid commands:{{{
+#
+#     ssh> -h
+#
+# In particular, you can add port forwardings:
+# `-L <port>`, `-R <port>`, `-D <port>`
+#
+# Or cancel them:
+# `-KL <port>`, `-KR <port>`, `-KD <port>`
+#
+# `L`: local
+# `R`: remote
+# `D`: dynamic
+#}}}
+# After executing a command, you're back at the *shell* prompt (but it might not
+# be visible/redrawn).
+
+disable all escapes sequences           $ ssh -e none ...
+# For something permanent, set `EscapeChar` in `ssh_config`.

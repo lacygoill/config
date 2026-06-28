@@ -1,0 +1,197 @@
+# TODO: Find a good color scheme.
+# https://old.reddit.com/r/vim/comments/jrm2j5/cleaner_latex_in_vim/gbu9t59/
+# https://github.com/gennaro-tedesco/zathuraconf
+
+# Mappings {{{1
+
+# Adjust the width of the document to occupy the whole width of the window.
+
+map                a  adjust_window width
+map  [fullscreen]  a  adjust_window width
+#    ^----------^
+#    optional argument, to install the mapping in fullscreen mode
+#    in addition to the normal mode (see README)
+
+# Adjust the width of the document to best fit the window.
+map                A  adjust_window best-fit
+map  [fullscreen]  A  adjust_window best-fit
+
+# toggle “night” mode (C like in Vim's `coC`)
+map                C  recolor
+map  [fullscreen]  C  recolor
+
+# Purpose: {{{
+#
+# When we  want to scroll half  a screen down,  we often press `d`  by accident,
+# instead of `C-d`.
+# But by default, `d` is bound to the function `toggle_page_mode`.
+# This is distracting because it toggles the dual page view.
+# }}}
+map                d  scroll half-down
+map  [fullscreen]  d  scroll half-down
+map                u  scroll half-up
+map  [fullscreen]  u  scroll half-up
+
+# Tip: press `=` before or after `D` to get a sense of which new zoom size you need
+# for two pages to be fully visible side-by-side.
+map                D  toggle_page_mode
+map  [fullscreen]  D  toggle_page_mode
+
+# toggle the fullscreen mode when `F` is pressed
+map                F  toggle_fullscreen
+map  [fullscreen]  F  toggle_fullscreen
+
+# open a link in the browser
+map                f  follow
+map  [fullscreen]  f  follow
+
+# reload document (reduces memory consumption a little)
+map                r  reload
+map  [fullscreen]  r  reload
+
+map                R  rotate rotate-cw
+map  [fullscreen]  R  rotate rotate-cw
+
+# toggle the statusbar mode when `s` is pressed
+map                s  toggle_statusbar
+map  [fullscreen]  s  toggle_statusbar
+
+# Options {{{1
+# Colors {{{2
+
+# completion menu on the command-line (inputbar)
+# Inspiration:
+#         WildMenu guifg=#9A7372 guibg=#DEDC00
+set completion-fg '#FFFFFF'
+set completion-bg '#9A7372'
+
+# completion group elements
+#         Pmenu guifg=#565656 guibg=#FFDFDF
+set completion-group-bg '#FFDFDF'
+set completion-group-fg '#565656'
+
+# selected entry in the completion menu
+#         WildMenu guifg=#9A7372 guibg=#DEDC00
+set completion-highlight-fg '#9A7372'
+set completion-highlight-bg '#DEDC00'
+
+# margins on  the right and left  of the document,  when its width best  fit the
+# window
+set default-bg '#DBD6D1'
+
+# search results
+#         Search guifg=#F1F1F1 guibg=#70BDDF
+set highlight-color '#70BDDF'
+# current match
+#         Search guifg=#F1F1F1 guibg=#70BDDF
+set highlight-active-color '#FFDD00'
+
+# inputbar (command-line)
+#
+#           ┌ current font in terminal
+#           │
+set font 'dejavu sans mono normal 20'
+set inputbar-fg '#373B41'
+set inputbar-bg '#DBD6D1'
+#                   │
+#                   └ current background color in terminal
+
+# index (TOC)
+set index-fg '#373B41'
+set index-bg '#DBD6D1'
+set index-active-bg '#70BDDF'
+
+# errors on the command-line (inputbar)
+set notification-error-fg '#9B1300'
+set notification-error-bg '#DBD6D1'
+
+# statusbar
+# Taken from Vim, `:hi StatusLine`
+set statusbar-bg '#9A7372'
+set statusbar-fg '#DFDEBD'
+
+# Memory {{{2
+
+# Let's try to reduce the memory consumption.
+
+# Default value:  15
+set page-cache-size 5
+
+# Default value: {{{
+#
+#     4194304
+#
+# Divided by 2, 4, 8, 16:
+#
+#     2097152
+#     1048576
+#     524288
+#     262144
+#}}}
+set page-thumbnail-size 262144
+
+# Also, reload your document from time to time.
+
+# Miscellaneous {{{2
+
+# clear the search results on abort
+set abort-clear-search true
+
+# Suppress annoying messages:{{{
+#
+#     info: Opening plain database via sqlite backend.
+#     info: No plain database available. Continuing with sqlite database.
+#}}}
+set database 'sqlite'
+
+# Don't display any GUI element by default.{{{
+#
+# Set of flags.
+# Each flag stands for a GUI element which must be displayed:
+#
+#    ┌─────┬──────────────────────────┐
+#    │ 'c' │ command-line             │
+#    ├─────┼──────────────────────────┤
+#    │ 's' │ statusbar                │
+#    ├─────┼──────────────────────────┤
+#    │ 'h' │ the horizontal scrollbar │
+#    ├─────┼──────────────────────────┤
+#    │ 'v' │ vertical scrollbar       │
+#    └─────┴──────────────────────────┘
+#}}}
+set guioptions ''
+
+# don't reset the zoom level when we jump to an entry from the TOC
+set link-zoom false
+
+# don't display the whole path to the document, only its filename
+set statusbar-basename true
+
+# Copy the selected text inside the CLIPBOARD clipboard{{{
+#
+# By default, when  we select some text  in zathura, it's copied  in the PRIMARY
+# clipboard, which we  can access via the  `*` register.  We want to  use the `+`
+# register instead, because  it's more consistent with other  programs (like the
+# browser).
+#}}}
+# Where did you find this option?{{{
+#
+#     man zathurarc /selection-clipboard
+#
+# The  'selection-clipboard'   option  defines   the  X  clipboard   into  which
+# mouse-selected data  will be written.   When it is `clipboard`,  selected data
+# will be written to the CLIPBOARD clipboard, and can be pasted using the Ctrl+v
+# key combination.  When  it is `primary`, selected data will  be written to the
+# PRIMARY clipboard,  and can be  pasted using the  middle mouse button,  or the
+# Shift-Insert key combination.
+#
+# Default value: primary
+#}}}
+set selection-clipboard clipboard
+
+# don't display a notification after selecting text
+set selection-notification false
+
+# default geometry
+set window-height 400
+set window-width 1000

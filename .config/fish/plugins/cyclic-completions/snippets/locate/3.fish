@@ -1,0 +1,1 @@
+--statistics  # print database location

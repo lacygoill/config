@@ -1,0 +1,43 @@
+% urlscan
+
+# list URLs from given file
+urlscan --no-browser <file>
+    # Note that `urlscan(1)` can also read STDIN:
+    #
+    #     $ ❬cmd❭ | urlscan ...
+
+# automatically quit after interacting with any URL
+urlscan --single <file>
+
+# pass selected URL to given shell command
+urlscan --run='<cmd>' <file>
+    # Inside `❬cmd❭`,  you can  refer to  the selected  URL via  the special
+    # token `{}`.  Example: `--run='echo {} | xsel --input --clipboard'`
+
+# pass selected URL containing special characters to given shell command
+urlscan --run-safe='<cmd>' <file>
+    # This makes you lose shell syntaxes such as the redirection operator `>`.
+
+# pass selected URL to given shell command via a pipe
+urlscan --run-safe='<cmd>' --pipe <file>
+    # Example:
+    #
+    #     $ urlscan --run-safe='xsel --input --clipboard' --pipe ❬file❭
+    #
+    # Obviously, this only works if `❬cmd❭` reads STDIN.
+
+# avoid duplicated URLs
+urlscan --dedupe <file>
+
+# avoid “mailto:” URLs with invalid email addresses
+urlscan --regex='<regex>' <file>
+    # The issue  is that `urlscan(1)` uses  a default regex which  is too naive,
+    # and parses anything containing an `@` character as an email address:
+    #
+    #     $ echo 'foo@bar' | urlscan
+    #
+    # You need to specify a smarter regex.  For example:
+    #
+    #     $ urlscan --regex='https?://[^ "'')]+' ❬file❭
+    #
+    # Here, for example, the regex will only match URLs starting with `http`.

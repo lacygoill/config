@@ -1,0 +1,69 @@
+% weechat
+
+# compile WeeChat
+cd "$(git rev-parse --show-toplevel)" \
+    && begin \
+        ; rm -rf build \
+        ; mkdir build \
+        ; cd build \
+        ; cmake -D CMAKE_INSTALL_PREFIX:PATH="$HOME/.local" \
+                -D CMAKE_BUILD_TYPE:STRING=Release          \
+                -D ENABLE_FIFO:BOOL=OFF                     \
+                -D ENABLE_GUILE:BOOL=OFF                    \
+                -D ENABLE_LUA:BOOL=OFF                      \
+                -D ENABLE_MAN:BOOL=ON                       \
+                -D ENABLE_PERL:BOOL=OFF                     \
+                -D ENABLE_PHP:BOOL=OFF                      \
+                -D ENABLE_RELAY:BOOL=OFF                    \
+                -D ENABLE_RUBY:BOOL=OFF                     \
+                -D ENABLE_SPELL:BOOL=OFF                    \
+                -D ENABLE_TCL:BOOL=OFF                      \
+                -D ENABLE_TYPING:BOOL=OFF                   \
+                .. \
+        ; make \
+        ; tput bel \
+        ; notify-send 'WeeChat compilation finished' \
+    ; end
+    # To run the compiled binary:
+    #
+    #     $ ./src/gui/curses/normal/weechat --temp-dir
+    #
+    # ---
+    #
+    # To  compile a debug  build, set  `CMAKE_BUILD_TYPE` to `Debug`  instead of
+    # `Release`.  See: https://weechat.org/files/doc/devel/weechat_user.en.html#debug_build
+    #
+    # ---
+    #
+    # To enable the address sanitizer (which causes WeeChat to crash immediately
+    # in case of problem):
+    #
+    #     $ cmake -D CMAKE_BUILD_TYPE=Debug \
+    #             -D CMAKE_C_FLAGS=-fsanitize=address \
+    #             -D CMAKE_CXX_FLAGS=-fsanitize=address \
+    #             -D CMAKE_EXE_LINKER_FLAGS=-fsanitize=address \
+    #             ..
+    #
+    # Then, run WeeChat like this:
+    #
+    #     $ ASAN_OPTIONS='detect_odr_violation=0 log_path=asan.log' weechat
+    #
+    # In case of crash, the backtrace is in `asan.log`.
+    #
+    # See: https://weechat.org/files/doc/devel/weechat_user.en.html#address_sanitizer
+
+# bisect WeeChat config
+weechat-parse-config >/tmp/weechat.conf \
+    && weechat --temp-dir \
+    --no-connect \
+    --run-command='/exec -oc cat /tmp/weechat.conf'
+
+# reset WeeChat config
+rm --verbose ~/.config/weechat/*.conf \
+    ; weechat --no-connect --run-command='/exec -oc weechat-parse-config'
+
+# start WeeChat with MRE config
+weechat --temp-dir --no-connect --run-command="/exec -oc cat $HOME/.config/weechat/MRE"
+
+# print table of default colors
+weechat --colors

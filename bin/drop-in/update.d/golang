@@ -1,0 +1,31 @@
+#!/bin/bash -
+
+tmp_dir="$(mktemp --directory)"
+cd "$tmp_dir" || exit 1
+trap 'rm -rf "$tmp_dir"; tput bel' ABRT EXIT HUP INT QUIT TERM
+
+sudo --validate || exit 1
+
+# https://github.com/golang/go/issues/51135#issuecomment-1036043491
+# Alternative to `jq(1)`: `| grep --only-matching 'go.*.linux-amd64.tar.gz' | head --lines=1`
+
+GOLANG_LATEST_STABLE_VERSION="$(
+  curl --fail --location --show-error --silent 'https://go.dev/dl/?mode=json' \
+    | jq -r '.[0].files[] | select(.os=="linux" and .arch=="amd64") | .filename' \
+)"
+
+if command -v go >/dev/null; then
+  printf 'current version: %s\n\n' "$(go version)"
+fi
+
+# https://go.dev/doc/install
+# `--location` is necessary  here; without, you would not get  the real archive.
+# There is probably some kind of hidden redirection.
+curl --fail --location --show-error --silent --remote-name \
+  "https://go.dev/dl/$GOLANG_LATEST_STABLE_VERSION"
+
+sudo rm -rf /usr/local/go
+sudo tar --directory=/usr/local --extract --file="$GOLANG_LATEST_STABLE_VERSION" --gzip
+rm -- "$GOLANG_LATEST_STABLE_VERSION"
+
+printf 'new version: %s\n\n' "$(go version)"

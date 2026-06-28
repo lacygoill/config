@@ -1,0 +1,136 @@
+; See also: `~/bin/drop-in/update.d/_README.md`
+% compile, deb
+
+# print deb-src line with which given source package can be downloaded
+apt show <pkg> 2>/dev/null \
+    | awk '/^APT-Sources:/ { match($0, /http[^[:blank:]]+[[:blank:]]+[^[:blank:]]+/); print "deb-src " substr($0, RSTART, RLENGTH) }' \
+    | rev | sed 's@/@ @' | rev
+
+# download source package
+apt source <pkg>
+    # `❬pkg❭` can be the name of a binary or source package.
+    #
+    # If it's  the name of a binary  package, it will be replaced  by the source
+    # package from which it can be compiled:
+    #
+    #     $ apt source vim-gtk
+    #     ...
+    #     Picking 'vim' as source package instead of 'vim-gtk'
+    #
+    # ---
+    #
+    # Make sure to run this command in a dedicated directory.
+    # It will download the source code in a directory, as well as a few other files:
+    #
+    #     foo-1.2.3/
+    #     foo_1.2.3.orig.tar.gz
+    #     foo_1.2.3-*.debian.tar.xz
+    #     foo_1.2.3-*.dsc
+    #
+    # ---
+    #
+    # Also,  make sure  your `/etc/apt/sources.list`  specifies the  appropriate
+    # `deb-src`  line.   If  you  edit  the  file  to  add  a  new  source,  run
+    # `$ apt update` afterward.
+    #
+    # ---
+    #
+    # If  `$ apt policy`  reports  several  versions,  you  can  target  one  in
+    # particular with:
+    #
+    #     $ apt source ❬pkg❭=❬version❭
+    #
+    # ---
+    #
+    # `debian/rules` is useful to find  out the configuration options which were
+    # used to compile the source package.
+    #
+    # ---
+    #
+    # The  `.dsc`  file (Debian  Source  Control)  is  useful  to find  out  the
+    # dependencies of the source package:
+    #
+    #     $ grep -i build-depends: *.dsc
+    #
+    # You can also find the information in the `debian/control` file.
+
+# recompile source package
+dpkg-buildpackage --unsigned-source --unsigned-changes
+    # `--unsigned-source`: do not sign the source package
+    # `--unsigned-changes`: do not sign the `.changes` file
+    #
+    # You must  be in the  source code  tree when you  run the command,  and the
+    # `.deb` is written  in the parent directory (where the  `.dsc` file lives),
+    # not the current one.
+    #
+    # See   the   chapter   15   “Creating  a   Debian   Package”   in   The
+    # Debian  Administrator's   Handbook.   More  specifically   the  subchapter
+    # 15.1.3. “Starting the Rebuild”.
+    #
+    # ---
+    #
+    # No need to apply the Debian patches.
+    # They've been automatically applied by `$ apt source`.
+
+# list binary packages which can be compiled from given source package
+aptitude search '?source-package(^<pkg>$)' [--disable-columns]
+
+# install packages to satisfy build dependencies for given binary package
+sudo apt build-dep <pkg>
+    # Useful when the compilation fails because of some missing dependencies.
+    #
+    # Before that,  you might  need to edit  `/etc/apt/sources.list` to  add the
+    # `deb-src` line from which the source package can be downloaded.  Then, run
+    # `$ sudo apt update`.
+
+% compile, gcc
+
+# turn all warnings into errors, but make an exception for a given warning
+gcc -Werror -Wno-<warning> ...
+    # For example, if you get this error:
+    #
+    #     c.c:12:3: error: conversion from ‘float’ to ‘int’ [...] [-Werror=float-conversion]
+    #                                                                      ^--------------^
+    # Write this:
+    #
+    #     $ gcc -Werror -Wno-float-conversion
+    #                   ^-------------------^
+    #
+    # Note that this suppresses the error *and* the warning.
+    # If you want to suppress the error but still get a warning, use -Wno-error=❬warning❭:
+    #
+    #     $ gcc -Werror -Wno-error=float-conversion
+    #                   ^-------------------------^
+
+# add given directory to runtime library search path
+gcc ... -Wl,-rpath=<directory> -L<directory> -l<library>
+    # Useful to compile a program that needs an obscure library path.
+    #
+    # For   example,  suppose   that   you  need   to   link  `myprog`   against
+    # `/opt/obscure/lib/libweird.so.1`:
+    #
+    #     $ gcc -o myprog myprog.o -Wl,-rpath=/opt/obscure/lib -L/opt/obscure/lib -lweird
+    #                              ^-------------------------^ ^----------------^ ^-----^
+    #
+    # `-Wl,-rpath=...`: Make `ld(1)` include  `/opt/obscure/lib` into `myprog`'s
+    # runtime library  search path.   At runtime,  that path  will be  passed to
+    # `ld.so(8)` which will use it to locate `libweird.so.1`.
+    #
+    # `-L...`: Add `/opt/obscure/lib` to the list  of directories to be searched
+    # for `-l`.
+    #
+    # `-lweird`: Make `ld(1)` search the `weird` library when linking.
+    #
+    #    > on ELF and SunOS systems, ld will search a directory for a library
+    #    > called libnamespec.so
+    #
+    # Source: `man ld /OPTIONS/;/--library=`.
+    #
+    # ---
+    #
+    # You want `-l` to be at the end because:
+    #
+    #    > an undefined symbol in an object appearing later on the command-line
+    #    > will not cause the linker to search the archive again.
+    #
+    # Source: `man ld /OPTIONS/;/^\s*-l namespec`.

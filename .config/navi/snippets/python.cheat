@@ -1,0 +1,153 @@
+% python
+
+# create virtual environment
+python3 -m venv .venv \
+    && source ./.venv/bin/activate.fish \
+    && python3 -m pip install --upgrade pip
+
+# activate virtual environment
+source ./.venv/bin/activate.fish
+
+# deactivate virtual environment
+deactivate
+
+# print Zen of Python (Python community's philosophy)
+python3 -c 'import this'
+
+# run given script then enter interactive mode
+python3 -i <script>
+    # the effects of the script will persist in the interactive session
+
+# test regex
+python -c 'import re; print(re.search("<pattern>", "<text>"))'
+
+% python, pip
+
+; pip commands should only be run inside a venv.
+; Outside a venv, use pipx or `apt(8)`.
+; Also, inside a venv, pip does not support `--user`:
+;
+;     $ python3 -m pip install --user --upgrade pipdeptree
+;     ERROR: Can not perform a '--user' install. User site-packages are not visible in this virtualenv.
+
+# print details about given installed library
+python3 -m pip show <library>
+
+# print dependency tree of installed libraries
+pipdeptree
+
+# list installed libraries which have unsatisfied dependencies
+python3 -m pip check
+
+# list installed libraries in requirements format
+python3 -m pip freeze
+
+# list outdated libraries
+python3 -m pip list --outdated --format=json \
+    | jq --raw-output '.[] | "\(.name)==\(.latest_version)"'
+    # Source: https://discuss.python.org/t/pip-22-3-list-list-format-freeze-can-not-be-used-with-the-outdated-option/20061/3
+    #
+    # ---
+    #
+    # To update outdated libraries, add this line:
+    #
+    #     | xargs --delimiter='\n' --max-args=1 --no-run-if-empty python3 -m pip install --upgrade --
+    #
+    # `--max-args`: pass only one library name  at a time to `$ pip install`, so
+    # that if one installation fails, the other ones go on.
+    #
+    # `--no-run-if-empty`: don't run the command if  the input is empty (i.e. if
+    # no library needs to be updated).
+
+# install libraries listed in given requirements file
+python3 -m pip install --requirement=<requirement_file>
+    # Can be used to restore current state of libraries:
+    #
+    #     $ python3 -m pip freeze >/tmp/requirement
+    #     # install/remove/update libraries
+    #     $ python3 -m pip install --requirement=$TMPDIR/requirement
+
+# install given library from PyPI
+python3 -m pip install --upgrade <library>
+    # https://pip.pypa.io/en/stable/cli/pip_install/
+    #
+    # ---
+    #
+    # You might also be able to install from your Debian repositories.
+    #
+    # For example, to install `pyqt5`:
+    #
+    #     $ sudo apt install python3-pyqt5
+    #
+    # And to install `pyopenssl`:
+    #
+    #     $ sudo apt install python3-openssl
+    #
+    # Notice the scheme to derive the name of the Debian package from the Python
+    # package: *maybe* trim the `py` prefix, then add the `python3-` prefix.
+    #
+    # Pro: Can be accessed by system scripts.
+    # Con: Most probably  out-of-date which might  be an  issue, if you  need to
+    # install a  library with  a recent  version.  Also,  no guarantee  that the
+    # upstream `❬library❭` has been re-packaged as a deb.
+
+# install given library from GitHub repository
+python3 -m pip install --upgrade git+https://github.com/<dev>/<library>
+    # https://pip.pypa.io/en/stable/topics/vcs-support/
+
+# install given library from current local repository
+python3 -m pip install --upgrade .
+    # Useful if pip gets disconnected too often.
+    #
+    # You still  need to  clone files  with git beforehand,  but I've  never had
+    # issues with the latter;  I did have issues with pip (I  suspect our AS –
+    # Autonomous System  – was blacklisted  by some  servers which pip  had to
+    # connect to...).
+    #
+    # https://pip.pypa.io/en/stable/topics/local-project-installs/
+
+# remove given library
+python3 -m pip uninstall <library>
+    # This doesn't handle dependencies.
+    # To remove a library *and* its dependencies, use `pip-autoremove`:
+    #
+    #     $ python3 -m pip install pip-autoremove
+    #     $ pip-autoremove ❬library❭
+
+# run pip command verbosely (useful for debugging)
+python3 -m pip -vvv ...
+
+% python, pipx
+
+; An application is  a program which you  can call directly from  your shell.  A
+; library is not an application.
+
+# list installed applications
+pipx list --short
+
+# install given application
+pipx install <app>
+    # If  pipx cannot  find  the application,  or if  you  want a  bleeding-edge
+    # version, try `git+URL`:
+    #
+    #     $ pipx install git+https://gitlab.com/screenkey/screenkey
+    #                    ^----------------------------------------^
+    #
+    # ---
+    #
+    # If  pip needs  to access  a  tool outside  the  venv (e.g.  to build  some
+    # dependency), use `--system-site-packages`:
+    #
+    #     $ pipx install --system-site-packages git+https://gitlab.com/screenkey/screenkey
+    #                    ^--------------------^
+    #                    pip needs pkg-config(1) to build a dependency (pycairo)
+    #
+    # Warning: Don't use this option if  you're developing an application.  Your
+    # code would no  longer be reproducible; that is, you  might use some system
+    # package in your project that is missing in other developers' systems.
+
+# remove given application
+pipx uninstall <app>
+
+# upgrade all applications
+pipx upgrade-all

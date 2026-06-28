@@ -1,0 +1,105 @@
+#!/bin/bash -
+
+declare -g tmp_dir_extract
+
+function _Extract_Archive { #{{{1
+  if [[ "$LANG" == 'en_US.UTF-8' ]]; then
+    cd "$HOME/Downloads/" || exit 1
+  else
+    cd "$HOME/Téléchargements/" || exit 1
+  fi
+
+  local pgm="$1"
+  local URL="$2"
+
+  local file
+  local -a expansions=( ./"$pgm"-*.tar.* ./"$pgm".tar.* )
+  local -a archives
+  for file in "${expansions[@]}"; do
+    if [[ -e "$file" ]]; then
+      archives+=("$file")
+    fi
+  done
+
+  # take the latest version if several archives are present in the CWD
+  local archive
+  archive="$(printf '%s\n' "${archives[@]}" \
+    | sort --version-sort \
+    | tail --lines=1
+  )"
+
+  # check an archive was found
+  if ! [[ -e "$archive" ]]; then
+    echo 'Cannot find a relevant tar archive in the current working directory.  Bailing out.' >&2
+    tee <<EOF
+
+Download the latest release from here:
+$URL
+EOF
+    exit 1
+  fi
+
+  tmp_dir_extract="$(mktemp --directory)"
+  trap 'rm -rf "$tmp_dir_extract"; tput bel' ABRT EXIT HUP INT QUIT TERM
+
+  tar --directory="$tmp_dir_extract" --extract --file="$archive"
+  cd "$tmp_dir_extract/"* || exit 1
+}
+
+function _Install_Dependencies { #{{{1
+  # Don't ask for credentials unconditionally.
+  # It's useless (and annoying) if there is no dependency to install.
+  local dependency
+  for dependency in "$@"; do
+    if ! dpkg-query --show --showformat='${Status}' "$dependency" 2>/dev/null \
+        | grep --quiet 'ok installed' \
+        && ! sudo apt-get --assume-yes install "$dependency"; then
+      printf '%s: failed to install dependency: %s\n' "$0" "$dependency" 2>&1
+      exit 1
+    fi
+  done
+}
+
+function _Set_App_As_Mimetype_Handler { #{{{1
+  # Make a given  application the default mimetype handler for  various types of
+  # files, according to the `MimeType=` line of its `.desktop` file(s).
+
+  local app="$1"
+
+  local sed_cmd='s/;/ /g ; s/^mimetype=//ip'
+  # Firefox is a special case.{{{
+  #
+  # Since it's  a web  browser, it  can handle  a lot  of MIME  types; including
+  # images and videos.  That's why its desktop file declares that it can handle:
+  #
+  #     image/gif
+  #     image/jpeg
+  #     image/png
+  #     video/webm
+  #
+  # We don't want to remove those  MIME types from the `MimeType=` line, because
+  # they're correct: Firefox *can* handle images  and videos.  We should let the
+  # system be aware of that capability.
+  #
+  # But here,  we don't want to  make Firefox the *default*  application handler
+  # for images and videos.
+  #}}}
+  if [[ "$app" == 'firefox' ]]; then
+    sed_cmd="s/\(image\|video\)[^;]*;//g ; $sed_cmd"
+  fi
+
+  local desktop_file
+  find '/usr/share/applications/' \
+    '/usr/local/share/applications' \
+    "$HOME/.local/share/applications/" \
+    -name "$app.desktop" 2>/dev/null \
+    | while IFS= read -r desktop_file; do
+        if grep --quiet --ignore-case '^mimetype=' "$desktop_file"; then
+          sed -n "$sed_cmd" "$desktop_file" \
+            | xargs xdg-mime default "${desktop_file##*/}"
+            #                                       ^--^
+            # Only keep the filename; a full path is not a valid value.
+            # See `~/.config/README.md` (section about `mimeapps.list`).
+        fi
+      done
+}

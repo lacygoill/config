@@ -1,0 +1,231 @@
+// Most of these directives are currently commented or not used.
+// But we keep  them for educational purposes, and because  they might be useful
+// in the future.
+
+// Acquire {{{1
+// Options for the downloading routines.
+
+// Limit download speed to 100kb/sec.{{{
+//
+// For the  moment, we  don't set  this option, because  it would  interfere too
+// often when  we want to  manually download/install a  package (`apt download`,
+// `apt install`, `apt source`, `apt update`).
+//}}}
+//     Acquire::http::Dl-Limit "100";
+
+// APT::Periodic {{{1
+// These options are *read* by the script `/usr/lib/apt/apt.systemd.daily`.{{{
+//
+// That script is executed by systemd services:
+//
+//     /usr/lib/systemd/system/apt-daily{,-upgrade}.service
+//
+// Which themselves are started by timers:
+//
+//     /etc/systemd/system/timers.target.wants/apt-daily{,-upgrade}.timer
+//}}}
+// They are *not* boolean options.{{{
+//
+// The value `"1"` does not mean `"true"`; it's a number of days.
+//}}}
+// By default, they are not *set*; unless you install some package(s).{{{
+//
+// If   you   install   `unattended-upgrades`,   they're   set   to   `"1"`   in
+// `/etc/apt/apt.conf.d/20auto-upgrades`.
+//
+// The values written in the file can be reset to `"0"` or `"1"` by running:
+//
+//     $ sudo dpkg-reconfigure --priority=low unattended-upgrades
+//
+// ---
+//
+// If you install `apt-config-auto-update`, then `APT::Periodic::Update-Package-Lists`
+// is   set   to   `"1"`  via   `/etc/apt/apt.conf.d/10periodic`.    But   since
+// `20auto-upgrades`  comes *after*  `10periodic`, the  former wins.   Note that
+// these packages don't set `APT::Periodic::Unattended-Upgrade`; only these:
+//
+//     APT::Periodic::Update-Package-Lists "1"
+//     APT::Periodic::Download-Upgradeable-Packages "1"
+//     APT::Periodic::AutocleanInterval "0"
+//
+// Actually, the situation is a bit more complex.
+// In Ubuntu, `update-notifier-common` (pulled in by `update-notifier`) can also
+// install `10periodic` with the same variables, but with different values:
+//
+//     APT::Periodic::Update-Package-Lists "1"
+//     APT::Periodic::Download-Upgradeable-Packages "0"
+//     APT::Periodic::AutocleanInterval "0"
+//}}}
+
+// Run `$ apt-get update` automatically every day.
+// But `apt-daily.timer` is already triggered every day!{{{
+//
+// Yes, but  `apt.systemd.daily` executes  `$ apt-get update` only if  a certain
+// number  of days  have elapsed  since  the last  update.  That  number can  be
+// controlled by `APT::Periodic::Update-Package-Lists`.
+//}}}
+APT::Periodic::Update-Package-Lists "1";
+
+// Execute `/usr/bin/unattended-upgrade` every day.{{{
+//
+// Require  the   package  `unattended-upgrades`  and   will  write  a   log  in
+// `/var/log/unattended-upgrades`.
+//
+// The script's configuration is at `/etc/apt/apt.conf.d/50unattended-upgrades`.
+//
+// See `man unattended-upgrade(8)`.
+//}}}
+APT::Periodic::Unattended-Upgrade "1";
+
+// APT::Update {{{1
+
+// Let us  know when `$ apt-get update` is  being run, because it  can consume a
+// lot of bandwidth.
+//
+//     APT::Update::Pre-Invoke {
+//         "/usr/bin/notify-send 'APT: executing:  $ apt-get update'";
+//     };
+//
+// For  the moment,  we  don't  set this  option,  because  the notification  is
+// annoying when we execute `$ apt-get update` manually.
+
+// aptitude(8) {{{1
+
+// The default background color in aptitude's TUI is too dark; make it cyan.{{{
+//
+//     Aptitude::UI::Styles {
+//       Default { fg white; bg black; };
+//     };
+//
+// See: https://www.debian.org/doc/manuals/aptitude/ch02s05s03.en.html
+//}}}
+Aptitude::UI::Styles {
+  Default { fg white; bg cyan; };
+};
+
+// Unattended-Upgrade {{{1
+// This section deals with upgrades; not updates.
+// That is, with the installation of packages; not with their downloads.
+// These options are read by the script `/usr/bin/unattended-upgrade`.{{{
+//
+// That script is provided by the `unattended-upgrades` package, and is executed
+// by the script `/usr/lib/apt/apt.systemd.daily`, which  in turn is executed by
+// a systemd service:
+//
+//     /usr/lib/systemd/system/apt-daily-upgrade.service
+//
+// Which itself is started by a timer:
+//
+//     /etc/systemd/system/timers.target.wants/apt-daily-upgrade.timer
+//}}}
+
+// Install packages when the machine is shutting down instead of doing it in the
+// background while the machine is running.
+Unattended-Upgrade::InstallOnShutdown "true";
+
+// If an error is encountered during an upgrade, send a local mail to the root user.
+Unattended-Upgrade::Mail "root@localhost";
+Unattended-Upgrade::MailReport "only-on-error";
+
+// only upgrade on Sundays
+#clear Unattended-Upgrade::Update-Days;
+Unattended-Upgrade::Update-Days { "Sun"; };
+
+// only install updates from the main/stable and security archives
+// To be more future-proof, don't use `Allowed-Origins`.  It's a legacy option.{{{
+//
+//    > According to /usr/bin/unattended-upgrade, the Allowed-Origins variable
+//    > is a legacy variable, so presumbly unattended-upgrades should be using
+//    > its replacement, Origins-Pattern.
+//
+// Source: https://bugs.launchpad.net/ubuntu/+source/unattended-upgrades/+bug/1073138
+//
+// ---
+//
+//     """ legacy support for old Allowed-Origins var """
+//
+// Source: `/usr/bin/unattended-upgrade`
+//
+// ---
+//
+//    > This can be changed either with the
+//    > "Unattended-Upgrade::Allowed-Origins" or the
+//    > "Unattended-Upgrade::Origins-Pattern" apt configuration lists, which
+//    > are listed in /etc/apt/apt.conf.d/50unattended-upgrades.
+//
+// Source: `/usr/share/doc/unattended-upgrades/README.md.gz`
+//}}}
+#clear Unattended-Upgrade::Allowed-Origins;
+#clear Unattended-Upgrade::Origins-Pattern;
+// Only upgrade packages from the stable and security archives.{{{
+//
+// We need to specify the stable archive  to make sure we receive *all* security
+// upgrades.   In the  run-up to  a point-release,  some upgrades  which include
+// security fixes (notably the kernel) are pushed to the main repository as part
+// of the point-release; not to the security repository.
+//
+// Source: https://unix.stackexchange.com/a/586999
+//}}}
+Unattended-Upgrade::Origins-Pattern {
+    "o=${distro_id},a=${distro_codename}";
+    "o=${distro_id},a=${distro_codename}-security";
+    //     "o=${distro_id},a=${distro_codename}-updates";
+    //     "o=${distro_id},a=${distro_codename}-proposed";
+    //     "o=${distro_id},a=${distro_codename}-backports";
+    // Extended  Security  Maintenance;  doesn't  necessarily  exist  for  every
+    // release, and your system might not have it installed.
+    //     "o=${distro_id}ESMApps,a=${distro_codename}-apps-security";
+    //     "o=${distro_id}ESM,a=${distro_codename}-infra-security";
+};
+// This stanza is adapted from `/etc/apt/apt.conf.d/50unattended-upgrades`.{{{
+//
+// Note that the syntax for the items in the value of `Origins-Pattern` seems to
+// follow this syntax:
+//
+//     "field=value,...";
+//
+// Where `field` is the name of a field taken from the repository's Release file
+// (which should match `/var/lib/apt/lists/*_InRelease`):
+//
+//    - `suite`
+//    - `architecture`
+//    - `component`
+//    - `label`
+//    - `codename`
+//    - `origin`
+//    - `version`
+//
+// Or a short identifier as given in `$ apt policy`.
+//
+// To read their values, run:
+//
+//     $ grep -E '^(Suite|Architecture|Component|Label|Codename|Origin|Version):' /var/lib/apt/lists/*InRelease \
+//         | grep -v GnuPG
+//
+// Or `$ apt policy`:
+//
+//     a= Suite
+//     b= Architecture
+//     c= Component
+//     l= Label
+//     n= Codename
+//     o= Origin
+//     v= Version
+//
+// ---
+//
+// `Allowed-Origins` follows a different syntax:
+//
+//     "${distro_id}:${distro_codename}";
+//      ^----------^ ^----------------^
+//         origin         archive
+//}}}
+// If there is an issue:{{{
+//
+// wait for updates to be available, then run:
+//
+//     $ sudo unattended-upgrade --debug --dry-run
+//
+// and look at the resulting logfile in:
+// `/var/log/unattended-upgrades/unattended-upgrades.log`
+//}}}

@@ -1,0 +1,48 @@
+#!/usr/bin/awk -f
+
+# add path(s) into frec DB
+
+BEGIN {
+  cmd = "date +'%s'"
+  cmd | getline now
+  close(cmd)
+
+  #     paths = '/path/to/file,f	/path/to/dir,d	...'
+  #     array = { '/path/to/file,f', '/path/to/dir,d', ... }
+  split(paths, array, FS)
+  for (i in array) {
+    #     # "pt" = Path and Type
+    #     pt = { '/path/to/file', 'f' }
+    #     pt = { '/path/to/dir', 'd' }
+    #     ...
+    split(array[i], pt, SUB_SEP)
+    path = pt[1]
+    if (path == "")
+      continue
+    added[path] = path
+    frequency[path] = 1
+    time[path] = now
+    type[path] = pt[2]
+  }
+}
+
+$3 >= 1 {
+  if ($1 in added) {
+    frequency[$1] = $3 + 1 / $3
+    time[$1] = now
+  } else {
+    type[$1] = $2
+    frequency[$1] = $3
+    time[$1] = $4
+  }
+  total_frequency += $3
+}
+
+END {
+  if (total_frequency > MAX_TOTAL_FREQUENCY)
+    for (path in frequency)
+      print path FS type[path] FS 0.9 * frequency[path] FS time[path]
+  else
+    for (path in frequency)
+      print path FS type[path] FS frequency[path] FS time[path]
+}

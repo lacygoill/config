@@ -1,0 +1,33 @@
+#!/bin/bash -
+
+# `yt-dlp(1)` is the fork of  `youtube-dl(1)` recommended by the `/r/youtube-dl`
+# subreddit: https://www.reddit.com/r/youtubedl
+
+# For more info: https://github.com/yt-dlp/yt-dlp/wiki/Installation
+
+source "${0%/*}/_lib"
+_Extract_Archive 'yt-dlp' 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.tar.gz'
+
+if command -v yt-dlp >/dev/null; then
+  printf 'current version: %s\n' "$(yt-dlp --version)"
+else
+  echo 'yt-dlp is not currently installed'
+fi
+
+make >/dev/null 2>&1
+
+mkdir -p "$HOME/.local/bin" \
+  && mv yt-dlp "$HOME/.local/bin/yt-dlp"
+
+mkdir -p "$HOME/.local/share/fish/vendor_completions.d" \
+  && mv ./completions/fish/yt-dlp.fish \
+    "$HOME/.local/share/fish/vendor_completions.d/yt-dlp.fish"
+
+#    - https://askubuntu.com/a/244810/867754
+#    - https://askubuntu.com/a/633924/867754
+#    - `man 1 manpath`
+#    - `man 5 manpath`
+mkdir -p "$HOME/.local/share/man/man1" \
+  && mv yt-dlp.1 "$HOME/.local/share/man/man1"
+
+printf 'new version: %s\n' "$(yt-dlp --version)"

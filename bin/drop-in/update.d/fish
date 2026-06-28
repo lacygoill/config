@@ -1,0 +1,58 @@
+#!/bin/bash -
+
+# https://github.com/fish-shell/fish-shell#help-it-didnt-build
+readonly -a DEPENDENCIES=(
+  'libpcre2-dev'
+)
+
+# https://stackoverflow.com/a/677212
+if ! command -v rustc >/dev/null; then
+  tee >&2 <<'EOF'
+missing dependency: rustc
+
+First install Rust via your omni update script.
+EOF
+  exit 1
+fi
+
+# Let's make sure that we compile from a `tar.xz`; not from a `tar.gz`.{{{
+#
+# With the latter, there is no guarantee that fish compiles correctly:
+#
+#    > Download links: To  download the  source code  for fish,  we suggest  the file
+#    > named "fish-3.6.1.tar.xz". The file downloaded from "Source code (tar.gz)" may
+#    > not build correctly.
+#
+# In particular, there is no `version` file in a `tar.gz`; as a result:
+#
+#     $ fish --version
+#     fish, version unknown
+#                   ^-----^
+#                      ✘
+#}}}
+rm --force --verbose ./fish-*.tar.gz
+
+bold="$(tput bold)"
+reset="$(tput sgr0)"
+source "${0%/*}/_lib"
+_Extract_Archive 'fish' "https://github.com/fish-shell/fish-shell/releases
+
+${bold}Choose a \"tar.xz\"; not \"tar.gz\"${reset}."
+
+_Install_Dependencies "${DEPENDENCIES[@]}"
+
+# dependency to build the documentation pages
+pipx install sphinx
+
+# We set `WITH_DOCS` to be sure the documentation is updated.{{{
+#
+# https://github.com/fish-shell/fish-shell?tab=readme-ov-file#cmake-build-options
+#}}}
+mkdir build \
+  && cd build \
+  && cmake -D CMAKE_INSTALL_PREFIX:PATH="$HOME/.local" \
+           -D CMAKE_BUILD_TYPE:STRING=Release          \
+           -D WITH_DOCS:BOOL=ON                        \
+           .. \
+  && make install \
+  && fish --command='fish_update_completions'

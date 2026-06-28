@@ -1,0 +1,74 @@
+vim9script
+
+export def GetCml(): list<string> #{{{1
+    # This function should return a list of 2 strings:
+    #
+    #    - the beginning of a comment string; e.g. for vim:    `" `
+    #    - the end of a comment string;       e.g. for html:   ` -->`
+
+    # Special Case: inside a mermaid fenced code block in a markdown file
+    if &filetype == 'markdown'
+            && searchpair('^```mermaid$', '', '```', 'bnW') > 0
+        return ['%% ', '']
+    endif
+
+    return &commentstring
+        # make sure there's a space between the comment leader and the comment:
+        #         #%s   →   # %s
+        # more readable
+        ->substitute('\S\zs\ze%s', ' ', '')
+        # make sure there's a space between the comment and the end-comment leader
+        #         <-- %s-->    →    <-- %s -->
+        ->substitute('%s\zs\ze\S', ' ', '')
+        # return the comment leader, and the possible end-comment leader,
+        # through a list of 2 items
+        ->split('%s', true)
+    #             ^--^
+    #             always return 2 items, even if there's nothing
+    #             after `%s` (in this case, the 2nd item will be '')
+enddef
+
+export def MaybeTrimCml( #{{{1
+        line: string,
+        l_: string,
+        r_: string
+        ): list<string>
+
+    var l: string = l_->trim(' ', 2)
+    var r: string = r_->trim(' ', 1)
+
+    # if the  line is commented with  the trimmed comment leaders,  but not with
+    # the space-padded ones, return the trimmed ones
+    if IsCommented(line, l, r) && !IsCommented(line, l_, r_)
+        return [l, r]
+    endif
+
+    # don't  break  `:help  line-continuation-comment` when  commenting  a  line
+    # starting with a  backslash (i.e. don't insert a space  between the comment
+    # leader and the backslash)
+    if &filetype == 'vim' && line =~ '^\s*\\ ' && l_ =~ '"'
+        return ['"', '']
+    endif
+
+    # by default, return the space-padded comment leaders
+    return [l_, r_]
+enddef
+
+export def IsCommented( #{{{1
+        arg_line: string,
+        l: string,
+        r: string
+        ): bool
+
+    #                                      trim beginning whitespace
+    #                                      v
+    var line: string = arg_line->matchstr('\S.*\s\@1<!')
+    #                                          ^-----^
+    #                                          trim ending whitespace
+
+    #      the line begins with the comment leader
+    #      v------------------v
+    return line->stridx(l) == 0 && line[strcharlen(line) - strcharlen(r) :] == r
+    #                              ^--------------------------------------^
+    #                              it also ends with the end-comment leader
+enddef

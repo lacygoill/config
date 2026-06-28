@@ -1,0 +1,41 @@
+% RedHat
+
+# show description of given package
+dnf info <package>
+
+# install given package
+dnf install <package>
+
+# remove given package
+dnf remove <package>
+
+# update packages
+dnf upgrade --refresh
+    # upgrade: updates each package to the latest version that is both available
+    # and resolvable
+    # --refresh: force synchronization of all enabled repositories by setting
+    # metadata as expired before running command
+
+# print package name providing given file
+dnf provides <path_to_file>
+
+# list files installed by a package
+dnf repoquery --list <package>
+
+# list packages containing given keyword in name
+dnf search <keyword>
+
+# list installed packages containing given keyword in name
+rpm --query --all '*<keyword>*'
+    # Alternative: `$ dnf list install '*❬keyword❭*'`
+    # but it might be much slower, because it reaches out to the network
+    # and refresh all repositories
+
+% RedHat, GRUB
+
+# disable splash screen during boot, and disable RedHat Graphical Boot
+sudo grubby --remove-args='rhgb quiet' --update-kernel=ALL
+    # useful to be able to read kernel messages
+
+# update GRUB's config file
+sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
