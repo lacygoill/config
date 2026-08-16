@@ -1,0 +1,212 @@
+#!/bin/bash -
+
+# Purpose: Print the meaning of some of the arguments in a simple command-line.{{{
+#
+# Example:
+#
+#     $ explain-shell ls -larth
+#     ls      List directory contents
+#
+#     SYNOPSIS
+#            ls [OPTION]... [FILE]...
+#
+#     ARGUMENTS
+#     -l      Long listing format
+#
+#     -a      Show hidden
+#
+#     -r      Reverse sort order
+#
+#     -t      Sort by modified time, most recent first
+#
+#     -h      Human readable sizes
+#}}}
+# The script fails to print the descriptions of some options!{{{
+#
+# The script relies on fish being able to complete the given command.
+# But maybe fish has no completion for your command.
+#
+# First, make sure a man page for the command is currently installed on your system.
+# If the devs do not provide one, they might at least have some documentation in
+# a markdown file.  If you can find one, you might use `pandoc(1)` to generate a
+# man page:
+#
+#     $ pandoc --standalone --from=markdown-smart --to=man /path/to/some_doc.md --output=/path/to/my-cmd.1
+#     $ cp /path/to/my-cmd.1 ~/.local/share/man/man1/
+#
+# *That's how `translate-shell(1)` generates its man page:*
+# https://github.com/soimort/translate-shell/blob/1e3f901c479fc4f838b290f11e1b547b86bdadd4/build.awk#L49
+#
+# Once you have a man page, ask fish to generate a completion out of it:
+#
+#     $ fish_update_completions
+#
+# The fish completion should be put in:
+#
+#     ~/.local/share/fish/generated_completions/
+#}}}
+
+readonly SCRIPT="${0##*/}"
+
+if ! command -v fish >/dev/null; then
+  printf '%s: missing dependency: fish\n' "$0" >&2
+  exit 1
+fi
+
+# Let's colorize the output, but only if we're connected to a terminal.
+if [[ -t 1 ]]; then
+  green="$(tput setaf 2)"
+  blue="$(tput setaf 4)"
+  bold="$(tput bold)"
+  reset="$(tput sgr0)"
+fi
+
+readonly CMD="$1"
+shift
+
+readonly TAB=$'\t'
+complete='complete --do-complete --no-files'
+# shellcheck disable=SC1087
+cmd_description="$(
+  fish --command="$(printf '%s "%s"' "$complete" "$CMD")" \
+    | grep "^$CMD[ $TAB]" \
+    | head --lines=1
+)"
+
+# bail out if fish doesn't have any description for the command
+if [[ -z "$cmd_description" ]]; then
+  printf -- "%s: %s%s%s is not a valid command\n" "$SCRIPT" "$green" "$CMD" "$reset" >&2
+  exit 1
+
+# Fall back on `--help` rather than `man(1)` if the description is a generic “command”.
+# Useful for example for the `cargo` and `vboxmanage` commands.
+elif [[ "$cmd_description" == "${CMD}${TAB}command" ]] \
+    || [[ "$cmd_description" == "${CMD}${TAB}command link" ]]; then
+  printf '%s%s%s %s\n' "$green" "$CMD" "$reset" "$($CMD --help | head --lines=1)"
+
+else
+  # shellcheck disable=SC2001
+  sed "s/\S\+/$green\0$reset/" <<< "$cmd_description"
+fi
+
+echo
+if man --where "$CMD" >/dev/null 2>&1; then
+  # Some man pages don't have a SYNOPSIS section.  They give errors.  Ignore them.{{{
+  #
+  #     $ man kitty | sed -n '/^\s*SYNOPSIS\s*$/,/^\s*$/p'
+  #     grotty:<standard input> (<standard input>):3141: character above first line discarded
+  #     ...
+  #}}}
+  man "$CMD" 2>/dev/null \
+    | sed -n "/^\s*SYNOPSIS\s*$/,/^\s*$/ { s//$bold\0$reset/; p }"
+else
+  # Useful for example for the `cargo` or `vboxmanage` commands.
+  # We use `awk(1)` instead of `sed(1)`,  because the structure of the text is
+  # not well-defined.  In  particular, there might be an empty  line after the
+  # “usage” header, or not.
+  $CMD --help \
+    | awk -v IGNORECASE=1 ' \
+        /^[[:blank:]]*usage[[:blank:]]*:?[[:blank:]]*$/ { print $0; found = 1; next }
+        /[^[:blank:]]/ && found == 1 { print $0; found = 2; next }
+        /^[[:blank:]]*$/ && found == 2 { print $0; exit }
+      ' \
+    | sed "s/^\s*[uU][sS][aA][gG][eE]\s*:\?\s*$/$bold\0$reset/"
+fi
+
+# print description for remaining options and subcommands
+printf '%s%s%s\n' "$bold" 'ARGUMENTS' "$reset"
+options="$(fish --command="$(printf '%s "%s -"' "$complete" "$CMD")")"
+# an option might also start with `+` (e.g. `$ dig +short ...`)
+options+="$(fish --command="$(printf '%s "%s +"' "$complete" "$CMD")")"
+subcommands="$(fish --command="$(printf '%s "%s "' "$complete" "$CMD")")"
+
+function Update_Options_And_Subcommands {
+# This is necessary after finding a subcommand.{{{
+#
+# Without, we would not get any description for `--jobs` and `--path` here:
+#
+#     $ explain-shell cargo install --jobs=1 --path .
+#
+# That's because `$options` and `$subcommands` are set with the completions for:
+#
+#     $ cargo
+#     $ cargo -
+#
+# But after `install` has been found they need to be reset with the completions for:
+#
+#     $ cargo install
+#     $ cargo install -
+#}}}
+  local cmd="$1"
+  local arg="$2"
+
+  local complete_this
+  printf -v complete_this '%s "%s %s -"' "$complete" "$cmd" "$arg"
+
+  options="$(fish --command="$complete_this")"
+
+  # Completing an `install` subcommand can take too much time.
+  # And it's useless anyway.
+  if [[ "$arg" != 'install' ]]; then
+    printf -v complete_this '%s "%s %s "' "$complete" "$cmd" "$arg"
+    subcommands="$(fish --command="$complete_this")"
+  fi
+}
+
+for arg in "$@"; do
+  # Sanitize argument.{{{
+  #
+  # An arbitrary argument can contain just about anything.
+  #
+  # For example, a single dot might represent the current working directory.
+  # But, there is nothing to document about it.
+  # Worse, `grep(1)` would interpret it as a metacharacter matching anything.
+  # As a result, it would print a lot of noise.
+  #}}}
+  if ! [[ "$arg" =~ [-[:alnum:]] ]]; then
+    continue
+  fi
+
+  # Trim possible assignment:{{{
+  #
+  #     --jobs=1
+  #           ^^
+  #}}}
+  arg="${arg%%=*}"
+
+  # subcommand (e.g. `install` in `$ apt install`)
+  # option (e.g. `if` in `$ dd if=/dev/null`)
+  if [[ "${arg:0:1}" != '-' ]] && [[ "${arg:0:1}" != '+' ]]; then
+
+    # shellcheck disable=SC1087
+    if grep "^$arg[ $TAB=]" <<<"$subcommands" \
+        | uniq \
+        | sed "s/^\S\+/$blue\0$reset/"; then
+
+      # We've found a subcommand.
+      # This means that the contents of `$options` and `$subcommands` is (probably?) stale.
+      # Update it.
+      Update_Options_And_Subcommands "$CMD" "$arg"
+    fi
+
+  # single short option (e.g. `-l` in `$ ls -l`)
+  # gnu-style long option (e.g. `--all` in `$ ls --all`)
+  # old-style long option (e.g. `-path` in `$ find -path`)
+  elif grep --quiet "^$arg\s" <<<"$options"; then
+    grep "^$arg\s" <<<"$options" \
+      | sed "s/^\S\+/$blue\0$reset/"
+
+  # multiple short options (e.g. `-larth` in `$ ls -larth`)
+  elif [[ "$arg" =~ ^-[^-] ]]; then
+    printf '%s' "${arg:1}" \
+      | while read -r -n1 flag; do
+        # If we find  an invalid flag, then the whole  token is probably
+        # not a collection of flags.  Bail out.
+        if ! grep "^-$flag\\s" <<<"$options" \
+            | sed "s/^\S\+/$blue\0$reset/"; then
+          break
+        fi
+        echo
+      done
+  fi
+done

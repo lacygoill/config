@@ -1,0 +1,39 @@
+#!/usr/bin/awk -f
+
+BEGIN {
+  cmd = "date +'%s'"
+  cmd | getline now
+  close(cmd)
+}
+
+type == $2 || type == "" {
+  frequency[$1] = $3
+  last_seen[$1] = $4
+  paths[$1] = 1
+}
+
+END {
+  for (path in paths)
+    printf "%-10s %s\n", frequency[path] * recency_factor(last_seen[path]), path
+}
+
+function recency_factor(past) {
+# Get factor for a given past date.
+# The more recent the date is, the bigger the factor should be.
+  elapsed = now - past
+
+  # more recent than 1 hour
+  if (elapsed < 3600)
+    return 6
+
+  # more recent than 1 day
+  if (elapsed < 86400)
+    return 4
+
+  # more recent than 1 week
+  if (elapsed < 604800)
+    return 2
+
+  # older than 1 week
+  return 1
+}

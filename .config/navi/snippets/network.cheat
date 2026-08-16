@@ -1,0 +1,723 @@
+% network
+
+$ ifname: nmcli --get-values=DEVICE device status
+$ nm_field: nmcli connection show "$(nmcli --get-values=NAME connection show | head --lines=1)" \
+  | awk -F':' '{ sub("\\[[0-9]*\\]", "", $1); print $1 }' \
+  | sort --unique
+$ profile: nmcli --get-values=NAME connection show | sed "s/.*/'\0'/"
+
+$ on_off: printf '%s\n' on off
+$ up_down: printf '%s\n' up down
+
+$ IPv46: printf '%s\n' 4 6
+; IPv4 vs IPv6
+
+$ TCP: printf '%s\n' 'TCP' 'UDP'
+
+# ping remote host
+ping -4 -c <count> <host>
+    #     $ ping -c3 192.168.1.254
+    #                                        vv vv
+    #     PING 192.168.1.254 (192.168.1.254) 56(84) bytes of data.
+    #     64 bytes from 192.168.1.254: icmp_seq=1 ttl=64 time=0.681 ms
+    #     ^^                           ^------^   ^^^    ^--^
+    #     64 bytes from 192.168.1.254: icmp_seq=2 ttl=64 time=0.439 ms
+    #     64 bytes from 192.168.1.254: icmp_seq=3 ttl=64 time=0.405 ms
+    #
+    #     --- 192.168.1.254 ping statistics ---
+    #     3 packets transmitted, 3 received, 0% packet loss, time 2038ms
+    #     rtt min/avg/max/mdev = 0.405/0.508/0.681/0.122 ms
+    #     ^^^
+    #
+    # `56`: Default amount of data sent (in bytes).
+    # `84`: 56 + 8 (ICMP header) + 20 (IP header)
+    # `64`: 56 +  8 (ICMP header).  By  the time `ping(8)` receives  the packet,
+    # the IP header has been removed.
+    #
+    # `icmp_seq`: Sequence number  of the  packet sent.  A  gap in  the sequence
+    # numbers  (e.g. `2`   then  `4`)  usually   means  there's  some   kind  of
+    # connectivity problem.
+    #
+    # `ttl`: The "Time  To Live" field  of the IP  packet received (!=  sent) by
+    # `ping(8)`.
+    #
+    # `time`: Time elapsed  between the request  packet leaves and  the response
+    # packet arrives.
+    #
+    # `rtt`: round-trip time
+    #
+    # ---
+    #
+    # By default, `ping(8)` only sends 1 packet per second.  If a response takes
+    # more than 1 second to arrive, the connection is extremely slow.
+    #
+    # ---
+    #
+    # If there's no  way to reach the  destination, the final router  to see the
+    # packet returns an ICMP “Destination Host Unreachable” packet.
+
+# list network server processes
+sudo lsof -i TCP -s TCP:LISTEN -nP
+    # For processes  which are *not*  listening (typically they're  connected to
+    # another process, and their lines end with "(ESTABLISHED)"):
+    #
+    #     $ sudo lsof -i TCP -s TCP:^LISTEN -nP
+    #                               ^
+    #
+    # `^` negates the following protocol name state.
+    #
+    # ---
+    #
+    # You probably don't  have many UDP servers on your  system, but the command
+    # won't  list  them,  because  UDP  servers  don't  listen  and  don't  have
+    # connections.
+    #
+    # To view running UDP servers *and* clients:
+    #
+    #     $ sudo lsof -i UDP -nP
+    #
+    # ---
+    #
+    # Alternative:
+    #
+    #     # sort(1) in increasing order of PIDs (to get output in same order as lsof(8))
+    #     $ sudo netstat --listening --tcp --numeric --program \
+    #         | sort --key=7bn,7 \
+    #         | tail --lines=+3
+    #
+    # This lists server programs with active network connection.
+
+# list connections used by given program
+sudo lsof -i -a -p $(pidof -d, <pgm>) -nP
+
+# list opened sockets (filtering by IP protocol, TCP vs UDP, host, port)
+sudo lsof -i <IPv46><TCP>@<host>:<port> -nP
+    # `❬host❭` and  `❬port❭` are  matched against  the host/port  on any
+    # side of the communication.
+    #
+    # ---
+    #
+    # Without `sudo(8)`, only your user's processes would be shown.
+    #
+    # ---
+    #
+    # All parameters are optional in the internet address specification:
+    #
+    #    - the IP version
+    #    - the transport protocol
+    #    - the `@host`
+    #    - the `:port`
+    #
+    # ---
+    #
+    # If `❬host❭` is an IPv6, surround it with brackets:
+    #
+    #     @[❬IPv6❭]
+    #      ^      ^
+    #
+    # ---
+    #
+    # The  port  can   be  a  number  *or*  a  service   name  as  specified  in
+    # `/etc/services`.
+    #
+    # ---
+    #
+    # `-n`: don't reverse-resolve every IP address into a host name.
+    # Can make the command faster.
+    #
+    # `-P`: same thing for ports.
+    # Rationale: Expressing *some* ports with numbers  and others with names can
+    # lead to confusion.   In practice, we'll mostly think in  terms of numbers,
+    # because they work no matter what (not all numeric ports have a name).
+
+# list running network interfaces
+ip -4 address show up
+    # To limit the output to IPv6 destinations, use `-6` instead of `-4`.
+    # To get the full output, no matter the type of addresses, remove `-4`.
+    # This applies to any of `ip(8)`'s subcommands: `address`, `route`, ...
+    #
+    # Note that both  `-4` and `-6` suppress the lines  containing MAC addresses
+    # such as:
+    #
+    #     link/ether 08:60:6e:6a:3c:56 brd ff:ff:ff:ff:ff:ff
+    #
+    # To display or change Ethernet device settings, prefer `ethtool(8)`.
+    #
+    # ---
+    #
+    # To  list  *all* network  interfaces,  including  the  ones which  are  not
+    # currently  running, remove  the  `up`  flag.  Or,  list  the filenames  in
+    # `/sys/class/net/`:
+    #
+    #     # bash
+    #     $ for interface in /sys/class/net/*; do echo "${interface#/sys/class/net/}"; done
+    #
+    #     # fish (adapted from the `__fish_print_interfaces` function)
+    #     $ string replace /sys/class/net/ '' /sys/class/net/*
+    #
+    # ---
+    #
+    # You might  find out that IPv4  addresses assigned to your  private network
+    # have the global scope:
+    #
+    #     $ ip -4 address show | grep 'scope global'
+    #     inet 192.168.1.86/24 brd 192.168.1.255 scope global dynamic noprefixroute enp3s0
+    #          ^------^                          ^----------^
+    #
+    # Which  is odd  because addresses  in the  `192.168.0.0/16` subnet  are not
+    # routable.   But hosts  on  your LAN  can still  send  and receive  packets
+    # to/from the Internet using those IPs.  So,  I guess it means that they can
+    # be made  *global*ly valid thanks to  your gateway which uses  NAT (Network
+    # Address Translation).
+    #
+    # There is no such issue with  IPv6 addresses, because they're not as scarce
+    # as IPv4  ones, and  thus don't  need NAT.   So, link-local  IPv6 addresses
+    # (`fe80::/10` prefix)  always have the  "link" scope, while  global unicast
+    # addresses (`2000::/3` prefix) always have the "global" scope:
+    #
+    #     $ ip -6 address show | grep scope
+    #         ...
+    #         inet6 fe80::4a90:dae3:da7a:3392/64 scope link noprefixroute
+    #               ^----^                       ^--------^
+    #                                                ✔
+
+# print name of network interface used to reach Internet
+ip -4 route show | awk '/default/ { print $5 }'
+
+# print local IP address
+ip -4 route get to 1.0.0.0 | sed -n 's/.*src \([0-9.]\+\).*/\1/p'
+    # For more info: `man ip-route /ip route get`
+
+# print port on which service implementing given protocol listens
+awk '/^<protocol>[[:blank:]]/ { print $2 }' /etc/services
+
+# print IP address of remote host name
+dig +short <host>
+    # Example: `$ dig +short info.cern.ch`
+    #
+    # Alternative:
+    #
+    #     $ host ❬host❭
+
+# print IPv6 address of remote host name
+dig AAAA +short <host>
+    # example:  `$ dig AAAA +short info.cern.ch`
+
+# print host name behind given IP address
+host <IP>
+    # This is  not always reliable.  A  single IP might be  associated with more
+    # than one  host name;  if so,  DNS doesn't  know which  one of  them should
+    # correspond to  an IP.  Besides, the  administrator for that host  needs to
+    # manually set up the reverse lookup, which they often don't do.
+
+# scan local network for hosts
+nmap -sn 192.168.1.0/24
+    # `-sn`: Ping Scan - disable port scan
+
+# test whether given TCP port is free
+nmap -p T:<port> localhost | awk '/^<port>\/tcp/ { print $2 }'
+    # If it is, the output should be "closed".
+    #
+    # ---
+    #
+    # Without `-p T:❬port❭`, `nmap(1)` scans what  seems to be a preset list
+    # of what it considers "interesting" ports:
+    #
+    #    > The output from Nmap is a list of scanned targets, with supplemental
+    #    > information on each depending on the options used. Key among that
+    #    > information is the “**interesting ports table**”.
+    #
+    # Since your `❬port❭` might not be included in that list, better specify
+    # it explicitly with `-p`.
+
+# let wireshark capture packets
+sudo addgroup wireshark \
+    && sudo adduser "$USER" wireshark \
+    && sudo chgrp wireshark /usr/bin/dumpcap \
+    && sudo chmod o-rx /usr/bin/dumpcap \
+    && sudo setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap
+    # Log out & log back in for the changes to take effect.
+    # See:
+    # https://wiki.wireshark.org/CaptureSetup/CapturePrivileges#limiting-capture-permission-to-only-one-group
+    # https://wiki.wireshark.org/CaptureSetup/CapturePrivileges#setting-network-privileges-for-dumpcap-if-your-kernel-and-file-system-support-file-capabilities
+
+# add given IP address and subnet for given network interface
+sudo ip address add <IP>/<subnet-mask> dev <ifname>
+    # Warning: Only run this for an experiment.   Let a network manager (such as
+    # `NetworkManager(8)`) do it automatically; it's more reliable.
+
+# enable or disable given network interface
+sudo ip link set dev <ifname> <up_down>
+    # Documented here: `man 8 ip-link /ip link set - change device attributes/;/up and down`
+
+% network, firewall
+@ network
+
+; `nftables(8)` is meant to replace `iptables(8)`.
+;
+;    > The iptables/xtables framework has been replaced by nftables. You should
+;    > consider migrating now.
+;
+; Source: `$ apt show iptables`
+;
+; However,  we still  keep snippets  for  `iptables(8)` here,  because there  is
+; probably more documentation for the latter.  For example, we might come across
+; a command using the `iptables(8)` syntax, which we want to translate using the
+; `nftables(8)` one.  We need a snippet for that.
+
+$ family: printf '%s\n' ip ip6 inet arp bridge netdev
+; `man 8 nft /^ADDRESS FAMILIES`
+
+; Actually, not all these hooks are available for a given address family.
+; Only a subset.
+$ hook: printf '%s\n' input output forward prerouting postrouting ingress egress
+
+$ policy: printf '%s\n' accept drop
+
+; `man 8 nft /^CHAINS/;/Table`
+$ type: printf '%s\n' filter nat route
+
+# save nftables ruleset into file
+sudo nft list ruleset >./ruleset.nft
+
+# save iptables ruleset into file
+sudo iptables-save >./ruleset.txt
+
+# restore nftables ruleset from file
+sudo nft -f ./ruleset.nft
+
+# restore iptables ruleset from file
+sudo iptables-restore ./ruleset.txt
+
+# print nftables config
+sudo nft list ruleset
+
+# print iptables config
+sudo iptables --list --numeric
+
+# add nftables rule
+sudo nft add rule <family> <table> <chain> <rule>
+    # Examples:
+    #
+    #                                                            rule
+    #                                           v------------------------------------v
+    #     $ sudo nft add rule inet filter input ip saddr 127.0.0.1 tcp dport 22 accept
+    #     $ sudo nft add rule inet filter input tcp dport 22 drop
+    #                                           ^---------------^
+    #
+    # The  second command  blocks  incoming  TCP packets  on  port 22  (i.e. SSH
+    # traffic).  The  first command makes  an exception for packets  coming from
+    # the localhost.
+    #
+    # Here, `filter` is the name of a table (created in `/etc/nftables.conf`).
+    # Don't conflate it with the `filter` chain type.
+    #
+    # Similarly, `input` is the name of a chain (again, added in `/etc/nftables.conf`).
+    # Don't conflate it with the `input` hook.
+
+# insert nftables rule
+sudo nft insert rule <table> <chain> handle <handle> <rule>
+    # `insert` is  similar to  `add`, but `❬rule❭`  is prepended  before the
+    # rule with the handle `❬handle❭`, instead of being appended at the end.
+    #
+    # For example, this inserts a rule before the rule with the handle 8:
+    #
+    #     $ sudo nft insert rule filter output handle 8 ip daddr 127.0.0.8 drop
+
+# delete nftables rule
+sudo nft delete rule <family> <table> <chain> handle <n>
+    # `❬n❭` is the handle  of the rule that you want to  delete, as given by
+    # `$ sudo nft --handle list ruleset`.  It's a simple number which does *not*
+    # change, even if you delete/add other rules.
+
+# delete iptables rule
+sudo iptables --delete=<chain> <n>
+    # Typically, `❬chain❭` will be `INPUT`, `OUTPUT` or `FORWARD`.
+    #
+    # ---
+    #
+    # `❬n❭` is  the index of the  rule you want  to delete, as it  is listed
+    # in  the output  of  `$ sudo iptables --list --numeric` (in  the block  for
+    # `❬chain❭`).  Note that this index can change.  For example, if a chain
+    # contains 3 rules  and you delete the  2nd one, then the index  of the last
+    # rule changes from `3` to `2`.
+
+# get handle of nftables objects (table, chain, rule, ...)
+sudo nft --handle list ruleset
+    # The handle of an object is printed in an inline comment:
+    #
+    #                                  v
+    #     table inet filter { # handle 1
+    #                                    v
+    #             chain input { # handle 1
+    #                     type filter hook input priority filter; policy accept;
+    #                                                                                                 v
+    #                     ip saddr 127.0.0.1 tcp dport 2222 counter packets 0 bytes 0 accept # handle 4
+    #             }
+    #             ...
+
+# translate iptables ruleset with nftables syntax
+sudo iptables-restore-translate -f ./ruleset.txt >./ruleset.nft
+    # Contrary   to   what   the   name    of   the   command   might   suggest,
+    # `iptables-restore-translate(8)` doesn't restore anything.  It just outputs
+    # a new ruleset using the `nftables(8)`  syntax.  That's why we redirect its
+    # output into a  file.  Read it to  check the config looks OK.   If it does,
+    # you can load it on a different machine which uses `nftables(8)` instead of
+    # `iptables(8)`:
+    #
+    #     $ sudo nft -f ./ruleset.nft
+
+# translate iptables given rule with nftables syntax
+iptables-translate <rule>
+    # You might still need to edit the generated command.
+    #
+    # For example:
+    #
+    #     $ iptables-translate --append=INPUT --protocol=tcp --destination-port=2222 --jump=DROP
+    #     nft add rule ip filter INPUT tcp dport 2222 counter drop
+    #
+    # The last command will not work on Debian 12:
+    #
+    #     $ sudo nft add rule ip filter INPUT tcp dport 2222 counter drop
+    #     Error: Could not process rule: No such file or directory
+    #     add rule ip filter INPUT tcp dport 2222 counter drop
+    #                 ^^^^^^
+    #
+    # I think that's because, by default, the firewall only has a `filter` table
+    # whose address  family is `inet` (IPv4  + IPv6); not `ip`  (IPv4 only).  So
+    # the parsing  breaks after `ip`, and  `filter` is wrongly parsed  as a file
+    # name.  You need to replace `ip` with `inet`:
+    #
+    #     $ sudo nft add rule inet filter INPUT tcp dport 2222 counter drop
+    #                         ^--^
+    #
+    # Also, you might still need to downcase  the name of the chain, to suppress
+    # yet another error:
+    #
+    #     Error: Could not process rule: No such file or directory
+    #     add rule inet filter INPUT tcp dport 2222 counter drop
+    #                          ^^^^^
+    #
+    # I think  that's because,  by default,  the `filter`  table has  an `input`
+    # chain; not an `INPUT` one:
+    #
+    #     $ cat /etc/nftables.conf
+    #     ...
+    #     table inet filter {
+    #             chain input {
+    #                   ^---^
+    #     ...
+    #
+    # Which gives this as the final correct command:
+    #
+    #     $ sudo nft add rule inet filter input tcp dport 2222 counter drop
+    #                         ^--^        ^---^
+    #
+    # BTW, I have no idea what `counter` means here.  It *might* be a statement:
+    #
+    #    > A counter statement sets the hit count of packets along with the number
+    #    > of bytes.
+    #    >
+    #    >     counter packets number bytes number
+    #    >     counter { packets number | bytes number }
+    #
+    # Source: `man 8 nft /STATEMENTS/;/COUNTER STATEMENT`
+    #
+    # But the previous command doesn't provide any number argument to `counter`.
+    # So, it must be something else.  I found this which *might* be relevant:
+    #
+    #    > Stateful objects are attached to tables and are identified by a unique
+    #    > name. They group stateful information from rules, to reference them in
+    #    > rules the keywords "type name" are used e.g. "**counter name**".
+    #
+    # Source: `man 8 nft /STATEFUL OBJECTS`
+    #
+    # In any  case, I  suggest you omit  such a `counter`  if the  command works
+    # without (the one we studied here does).
+
+# disable nftables temporarily
+sudo nft add table inet filter { flags dormant \; }
+    # Rules from the default `filter` table are not evaluated anymore.
+    # Note that you can disable a different table:
+    #
+    #     $ sudo nft add table inet ❬table❭ { flags dormant \; }
+    #                               ^-----^
+    #
+    # ---
+    #
+    # To re-enable `nftables(8)` (i.e. make the `filter` table active again):
+    #
+    #     $ sudo nft add table inet filter
+
+# create new table (nftables)
+sudo nft create table <family> <table>
+    # Example:
+    #
+    #     $ sudo nft create table inet filter
+    #     nft> create table inet filter
+    #          ^----^
+    #
+    # ---
+    #
+    # You can also use `add` instead  of `create`.  If the table already exists,
+    # `create` will give an error; not `add`.
+
+# add new chain to given table (nftables)
+sudo nft add chain <family> <table> <chain> { type <type> hook <hook> priority <priority> \; policy <policy> \; }
+    # Examples:
+    #
+    #     $ sudo nft add chain inet filter input { type filter hook input priority filter \; policy accept \; }
+    #     $ sudo nft add chain inet filter forward { type filter hook forward priority filter \; policy accept \; }
+    #     $ sudo nft add chain inet filter output { type filter hook output priority filter \; policy accept \; }
+    #
+    # ---
+    #
+    # Don't conflate the 3 occurrences of `filter` in the previous commands:
+    #
+    #    - the first one is the name of an existing table
+    #
+    #    - the second one is the type of a chain; it's described as a "Standard
+    #      chain type to use in doubt."
+    #
+    #    - the third one is the priority value 0
+    #
+    # ---
+    #
+    # Don't conflate the 2 occurrences  of `input`/`output`/`forward` in each of
+    # these commands either.  The  first one is the name of  a chain; the second
+    # one is the name of a hook.
+    #
+    # ---
+    #
+    # The `priority` parameter  accepts a signed integer value,  *or* a standard
+    # priority name.  It specifies the order  in which chains with the same hook
+    # value  are traversed.   The  ordering is  ascending;  i.e. lower  priority
+    # values have precedence over higher ones.
+    #
+    # Standard priority  values can  be replaced  with easily  memorizable names
+    # (e.g. `priority filter` is the same as `priority 0`).
+
+# reset nftables ruleset to default config
+sudo nft -f /etc/nftables.conf
+
+# clear nftables ruleset
+sudo nft flush ruleset
+    # This is *not* the same as resetting the ruleset to its default state.
+    # This removes *any* config, like `-u NONE` for Vim.
+
+# update nftables config interactively
+sudo nft --interactive
+    # Execute `quit` to quit; or press `CTRL-D`.
+
+# make nftables current config persistent
+sudo nft list ruleset >/etc/nftables.conf
+    # Otherwise, the config is reset after the system reboots.
+
+% network, nmcli
+@ network
+
+# print NetworkManager current status
+nmcli --get-values=RUNNING,STATE general status
+    # `RUNNING`: is NetworkManager running?
+    # `STATE`: are we connected?
+    #
+    # ---
+    #
+    # Whatever network configuration change you have in mind, it can be scripted
+    # with `nmcli(1)`.   To get  an idea of  this powerful  tool's capabilities,
+    # have a look at `man nmcli /^EXAMPLES` and `man 7 nmcli-examples`.
+    #
+    # Some examples are  hard to read because subcommands can  be shortened down
+    # to the smallest unambiguous prefix:
+    #
+    #                                 v v
+    #     $ nmcli -f name,autoconnect c s
+    #     ⇔
+    #     $ nmcli -f name,autoconnect connection show
+    #                                 ^--------^ ^--^
+    #
+    # ---
+    #
+    # The  output of  all  subcommands  can be  filtered  with `--fields`  which
+    # accepts a comma separated-list of field names.
+    #
+    # ---
+    #
+    # If you prefer a TUI tool, have a look at `nmtui(1)`.
+
+# show status for all network interfaces (connected, unmanaged, ...)
+nmcli device status
+
+# show details about given network interface
+nmcli --pretty device show <ifname>
+
+# show details about given connection profile
+nmcli --pretty connection show <profile>
+    # To also show password for WiFi connection, pass `--show-secrets` to `nmcli(1)`.
+
+# list available Wi-Fi access points
+nmcli device wifi list
+
+# get given field value of given connection profile
+nmcli --get-values=<nm_field> connection show <profile>
+    # `❬nm_field❭`   can  be   a  comma-separated   list  of   fields  (e.g.
+    # `ip4.address,ip4.dns`), or a section name:
+    #
+    #     802-3-ethernet
+    #     DHCP4
+    #     DHCP6
+    #     GENERAL
+    #     IP4
+    #     IP6
+    #     connection
+    #     ipv4
+    #     ipv6
+    #     proxy
+    #
+    # If it's  a section, all  the related field values  will be printed  on the
+    # same line, separated by bars.
+
+# enable or disable given connection profile
+nmcli connection <up_down> '<profile>'
+
+# enable or disable Wi-Fi
+nmcli radio wifi <on_off>
+
+# modify 'autoconnect' property in 'connection' setting of given connection profile
+nmcli connection modify <profile> connection.autoconnect no
+
+# append given DNS server to DNS servers in given connection profile
+nmcli connection modify <profile> +ipv4.dns <DNS_IP>
+    #                             ^
+    # `+`: append instead of overwrite
+
+# add ethernet connection profile with manual IP configuration
+nmcli connection add con-name <profile> \
+    ifname <interface> \
+    type ethernet \
+    ip4 <IP>/<subnet-mask> \
+    gw4 <IP-gateway> \
+    ipv4.dns '<IP-DNS>'
+    # `❬profile❭` is an arbitrary name that you must choose.
+    # `❬IP-DNS❭` can be a space-separated list of IPs.
+    #
+    # To review the profile's parameters:
+    #
+    #     $ nmcli --pretty connection show ❬profile❭
+
+# add ethernet connection profile in interactive editor
+nmcli connection edit type ethernet
+    # Here is an example of interactive session:
+    #
+    #     nmcli> print
+    #     nmcli> goto ethernet
+    #     nmcli> goto ipv4.addresses
+    #     nmcli> set ipv4.gateway 192.168.1.1
+    #     nmcli> print
+    #     nmcli> verify
+    #     nmcli> set ipv4.dns 8.8.8.8 8.8.4.4
+    #     nmcli> print
+    #     nmcli> verify
+    #     nmcli> save
+    #     nmcli> quit
+
+% network, route
+@ network
+
+# print routing table
+ip -4 route show
+    # each line is a route
+
+# add default route
+sudo ip route add default via <IP-gateway> dev <ifname>
+    # `❬gateway-IP❭`  must  be an  address  in  a locally  connected  subnet
+    # assigned to one of your network interfaces.
+    #
+    # ---
+    #
+    # Warning: Only run this for an experiment.   Let a network manager (such as
+    # `NetworkManager(8)`) do it automatically; it's more reliable.
+
+# remove default route
+sudo ip route del default
+
+# add given route
+sudo ip route add <subnet> via <IP-router>
+    # This is  not really meant to  be run on your  host.  For your route  to be
+    # useful, you would also need to  configure *each* host on `❬subnet❭` so
+    # that  their routing  table can  lead back  to your  subnet.  This  is more
+    # useful on your gateway router.
+
+# delete route to given subnet
+sudo ip route del <subnet>
+
+% network, TLS
+@ network
+
+$ cert: find . -maxdepth 1 -name '*.pem' -printf '%P\n' 2>/dev/null
+
+# examine TLS properties of remote server (to debug web server having a certificate issue)
+openssl s_client -connect=<domain>:<port>
+    # Among other  things, this lets you  check which version of  TLS the server
+    # supports.
+
+# download server certificate
+openssl s_client -connect=<domain>:<port> </dev/null 2>/dev/null \
+    | sed -n '/^-\+BEGIN CERTIFICATE-\+$/,/^-\+END CERTIFICATE-\+$/p' ><certificate>.pem
+    # The port is most probably 443 for an HTTP server, and 6697 for an IRC server.
+    # See: https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
+    #
+    # ---
+    #
+    # Alternative:
+    #
+    #     $ gnutls-cli --port=❬port❭ --save-cert=❬certificate❭.pem ❬domain❭
+
+# inspect server certificate
+openssl x509 -in=<cert> -noout -text
+    # Alternative:
+    #
+    #     $ certtool --certificate-info --infile=❬cert❭
+
+# print expiration date of certificate
+openssl x509 -in=<cert> -noout -enddate
+
+# print fingerprint of certificate
+openssl x509 -in=<cert> -noout -fingerprint -sha512 \
+    | sed 's/.*=\|://g'
+
+# prepare certificate for signing by a CA (to serve TLS for given domain)
+openssl genpkey -algorithm=rsa -pkeyopt=rsa_keygen_bits:2048 -out=<domain>.key \
+    && openssl req -key=<domain>.key -new -out=<domain>.csr -sha256 -subj='/CN=<domain>'
+    # Submit  the contents  of `❬domain❭.csr`  to the  CA.  The  latter will
+    # check you're indeed  associated with `❬domain❭`, usually  by sending a
+    # confirmation  email to  an  address  within that  domain.   Then, it  will
+    # send  you a  signed  certificate which  you  can use  in  your web  server
+    # configuration along with `❬domain❭.key`.
+    #
+    # BTW, `.csr` stands for "Certificate Signing Request".
+    #
+    # ---
+    #
+    # The `genpkey` subcommand generates a 2048-bit private key.
+    # The `req` one uses this key to create a certificate signing request.
+    #
+    # ---
+    #
+    # `-key ❬filename❭`: File to read the private key from.
+    #
+    # ---
+    #
+    # `-new`: Generate  a  new certificate  request;  prompt  the user  for  the
+    # relevant field  values, unless `-subj`  is specified.  The  most important
+    # field being the Common Name:
+    #
+    #    > Most of these fields are fairly arbitrary, but the Common Name is important. It must
+    #    > match the name of the subdomain you want to serve. If, for instance, you want to
+    #    > serve TLS for www.admin.com, make that your Common Name. You can request
+    #    > multiple names for a single certificate or a wild card that matches all the names in
+    #    > a subdomain; for example, *.admin.com.
+    #
+    # Source: Unix and Linux System Administration Handbook
+    #
+    # See also: `~/.config/weechat/certs/README.md` (look for `^#.*-subj`).

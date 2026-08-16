@@ -1,0 +1,15 @@
+[Unit]
+Description=Remind us to make a backup if we did not create/update one recently
+
+[Timer]
+# Once per day; once per week is not frequent enough.{{{
+#
+# Our `backup-reminder` script only sends a reminder if we haven't backed up our
+# files since more than a week.  So, if  you only run it once per week, there is
+# a chance the backup might be missing up to almost 2 weeks of important data.
+#}}}
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

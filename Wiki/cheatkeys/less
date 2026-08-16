@@ -1,0 +1,26 @@
+jump to next file                       a
+jump to previous file                   A
+# This is to  cycle over the list  of files specified on  the command-line (what
+# Vim would call the arglist).
+
+read file into $EDITOR                  e
+# Executes   `visual`   which   honors    `$LESSEDIT`,   whose   default   value
+# (`%E ?lm+%lm. %g`) passes  the current line  number to the  editor, preserving
+# your position.
+read STDIN into $EDITOR                 E
+# `visual` cannot  read STDIN.  `E`  is a workaround, which  unfortunately can't
+# preserve your position.
+
+display help screen                     H
+
+save input to file                      s ‹filename›
+# only works if the input is a pipe (not an ordinary file)
+
+# filtering
+only display lines matching pattern     & ‹pattern›
+only display lines not matching pattern &! ‹pattern›
+only display lines matching literal pat & «C-r» ‹pattern›
+# `C-r` suppresses the special meaning of metacharacters (like `*`).
+
+turn off filtering                      & «Enter»
+# i.e. use an empty pattern

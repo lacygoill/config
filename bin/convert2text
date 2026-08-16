@@ -1,0 +1,155 @@
+#!/bin/bash -
+
+readonly SCRIPT="${0##*/}"
+
+readonly CACHE_DIR="$HOME/.cache/$SCRIPT"
+[[ -d "$CACHE_DIR" ]] || mkdir -p "$CACHE_DIR"
+
+# Some other program might  want to know which kinds of  files can be converted.
+# Let's  cache the  info inside  a file  (for an  interactive application,  it's
+# faster to read a file, than to start an external shell to run a script).
+if [[ "$1" == '--cache-supported-extensions' ]]; then
+  echo 'doc docx epub odp odt pdf' >"$CACHE_DIR/supported-extensions"
+  exit
+fi
+
+if [[ "$1" == '--print-cached-filepath' ]]; then
+  print_cached_filepath='yes'
+  shift
+fi
+
+# `realpath`: we  need an absolute  path to avoid  a collision when  caching the
+# conversion (e.g. between `~/some.pdf` and `~/Ebooks/some.pdf`).
+filename="$(realpath -- "$1")"
+extension="${filename##*.}"
+
+#     /path/to/some.pdf
+#     →
+#     $CACHE_DIR/%path%to%some.pdf.txt
+#                ^-------^    ^--^
+# We  preserve  the full  path  as  well as  the  filename  extension to  handle
+# a  possible  conflict between  two  files  with  the  same name  in  different
+# directories, and/or with the same base name but with different extensions.
+printf -v cached_file '%s/%s.txt' "$CACHE_DIR" "${filename//\//%}"
+
+# Some other script might want to know where the cached file is.
+if [[ -n "$print_cached_filepath" ]]; then
+  echo "$cached_file"
+  exit
+fi
+
+if [[ -f "$cached_file" ]]; then
+  tee <"$cached_file"
+  exit
+fi
+
+# Write any weird  space sometimes found in  the conversion of a  file either in
+# `TO_REMOVE` or `TO_REPLACE`.   It might cause an unexpected error  to be given
+# when we  run some code.  You  can also include some  control characters, which
+# were probably meant to format the text; they create noise.
+#
+# We find those with:
+#
+#     :VimGrep /[^[:print:]\x09]/gj ~/.cache/convert2text/*.txt
+readonly -a TO_REMOVE=(
+  # bell
+  $'\x07'
+  # backspace
+  $'\x08'
+  # break permitted here
+  $'\u0082'
+  # four per em space
+  $'\u2005'
+  # zero width space
+  $'\u200b'
+  # zero width non joiner
+  $'\u200c'
+  # word joiner
+  $'\u2060'
+  # zero width no break space
+  $'\ufeff'
+)
+
+readonly -a TO_REPLACE=(
+  # no break space
+  # Warning: Do *not* replace `\u00a0` with `\xa0`.{{{
+  #
+  # `\xa0`  is  the  *byte*  `a0`.   But  we don't  want  to  remove  this  byte
+  # unconditionally;  it  can be  used  in  the  multibyte sequence  of  another
+  # character:
+  #
+  #     à: c3 a0
+  #     ^     ^^
+  #
+  #     ①: e2 91 a0
+  #     ^        ^^
+  #
+  # We want to remove the no-break  space *character*, which is probably encoded
+  # as the multibyte sequence `c2 a0`.
+  #}}}
+  $'\u00a0'
+  # en space
+  $'\u2002'
+  # em space
+  $'\u2003'
+  # figure space
+  $'\u2007'
+  # thin space
+  $'\u2009'
+  # hair space
+  $'\u200a'
+  # narrow no break space
+  $'\u202f'
+)
+
+function Clean_And_Write {
+  sed 's/['"$(printf '%s' "${TO_REPLACE[@]}")"']/ /g
+    s/['"$(printf '%s' "${TO_REMOVE[@]}")"']//g' \
+  | tee -- "$cached_file"
+  # Write both into `$cached_file` *and* on the script's STDOUT; another process
+  # might need to read the latter if the script is run in a pipeline.
+}
+
+case $extension in
+doc)
+  if ! command -v antiword >/dev/null; then
+    printf '%s: missing dependency: antiword\n' "$SCRIPT" >&2
+    exit 1
+  fi
+  antiword -- "$filename" \
+    | Clean_And_Write
+;;
+
+docx | epub)
+  if ! command -v pandoc >/dev/null; then
+    printf '%s: missing dependency: pandoc\n' "$SCRIPT" >&2
+    exit 1
+  fi
+  pandoc --from="$extension" --to=markdown -- "$filename" \
+    | Clean_And_Write
+;;
+
+od[pt])
+  if ! command -v odt2txt >/dev/null; then
+    printf '%s: missing dependency: odt2txt\n' "$SCRIPT" >&2
+    exit 1
+  fi
+  odt2txt -- "$filename" \
+    | Clean_And_Write
+;;
+
+pdf)
+  if ! command -v pdftotext >/dev/null; then
+    printf '%s: missing dependency: poppler-utils\n' "$SCRIPT" >&2
+    exit 1
+  fi
+  STDOUT='-'
+  pdftotext -nopgbrk -layout -q -eol unix -- "$filename" "$STDOUT" \
+    | Clean_And_Write
+;;
+
+*)
+  printf '%s: extension not supported: .%s\n' "$SCRIPT" "$extension" >&2
+  exit 1
+;;
+esac

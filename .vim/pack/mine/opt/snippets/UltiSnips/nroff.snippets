@@ -1,0 +1,90 @@
+global !p
+from snippetHelpers import *
+endglobal
+
+# Mnemonic: Reverse Slash
+snippet bs "literal backslash anywhere in a line" bm
+\(rs
+endsnippet
+
+# Here, we need the escape sequence `\&` representing a zero-width space.{{{
+#
+# That's to  get the period away  from the beginning  of the line (which  is the
+# only place where it is treated specially).
+#}}}
+snippet dot "literal dot at start of line" bm
+\&.
+endsnippet
+
+# the macro `\(em` is documented at `man 7 man-pages`
+# How is it rendered on an ASCII terminal?{{{
+#
+# As two hyphens.
+#}}}
+#   In other typographical contexts?{{{
+#
+# As a long dash.
+#}}}
+snippet em-dash "em-dash" bm
+\(em
+endsnippet
+
+# Why shouldn't I simply write `-`?{{{
+#
+# `\-` looks better typeset than the shorter ordinary hyphen does.
+# Especially when the code is converted into a pdf.
+#}}}
+snippet - "single hyphen" bm
+\-
+endsnippet
+
+# What's the thing in the middle?{{{
+#
+# An escape sequence standing for a 1/12th em space.
+# It's ignored for TTY output devices (rounded to zero).
+#}}}
+#   How is it useful?{{{
+#
+# It prevents the hyphens from running together in Troff output.
+# In Nroff output, the space will disappear.
+# When the groff  code is converted into  a pdf, you can see  that `\^` slightly
+# increases the gap between the previous and the next character.
+#}}}
+snippet -- "double hyphen" bm
+\-\^\-
+endsnippet
+
+# Why the `u` in front of `u'NAME...`?{{{
+#
+# To convert it as a unicode string.
+# Without, this error would be given when selecting the string by pressing `N`:
+#
+#     UnicodeDecodeError: 'ascii' codec can't decode byte 0xe2 in position 13: ordinal not in range(128)
+#
+# For more info, see: https://stackoverflow.com/a/35444608/9780968
+#}}}
+snippet sh "Section Header" bm
+.\" ========================================================
+.SH $1`!p snip.rv = complete(t[1],
+[
+	u'NAME command \(em description',
+	'SYNOPSIS',
+	'DESCRIPTION',
+	'EXAMPLES',
+	'OVERVIEW',
+	'OPTIONS',
+	'EXIT STATUS',
+	'ENVIRONMENT',
+	'FILES',
+	'SEE ALSO',
+	])`
+$0
+endsnippet
+
+# See `man man` for what section names are conventionally used in a man page.
+# We use double quotes to surround  the revision date and version number because
+# they could contain whitespace.
+snippet th "Text Header" bm
+.TH ${1:COMMAND NAME} ${2:manual section number} "${3:revision date}" "${4:version number}"
+$0
+endsnippet

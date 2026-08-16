@@ -1,0 +1,39 @@
+[Unit]
+Description=instant compilation and previewing of Markup files
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+
+# Minimal set of  variables (extracted from the environment of  a regular shell)
+# which seem necessary for `instant-markdown-d` to work as expected.
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus
+Environment=DISPLAY=:0.0
+Environment=PATH=%h/.local/bin:/usr/bin
+
+# The markdown preview server can be configured via several environment variables:{{{
+#
+#    ┌─────────────────────────────────────────┬─────────────────────────────────────────────────────────────┐
+#    │ INSTANT_MARKDOWN_OPEN_TO_THE_WORLD=1    │ By default, the server only listens on localhost.           │
+#    │                                         │ To make the server available to others in your network,     │
+#    │                                         │ set this environment variable to a non-empty value.         │
+#    │                                         │ Only use this setting on trusted networks!                  │
+#    ├─────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+#    │ INSTANT_MARKDOWN_ALLOW_UNSAFE_CONTENT=1 │ By default, scripts are blocked.                            │
+#    │                                         │ Use this preference to allow scripts.                       │
+#    ├─────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+#    │ INSTANT_MARKDOWN_BLOCK_EXTERNAL=1       │ By default, external resources such as images, stylesheets, │
+#    │                                         │ frames and plugins are allowed.                             │
+#    │                                         │ Use this setting to block such external content.            │
+#    └─────────────────────────────────────────┴─────────────────────────────────────────────────────────────┘
+# Source: https://github.com/suan/instant-markdown-d#environment-variables
+#}}}
+# necessary for Vimium to be allowed to work
+Environment=INSTANT_MARKDOWN_ALLOW_UNSAFE_CONTENT=1
+
+StandardOutput=null
+StandardError=null
+
+ExecStartPre=/usr/bin/sleep 5
+ExecStart=%h/.local/bin/instant-markdown-d --mermaid --mathjax
+ExecStop=/usr/bin/kill -STOP $MAINPID

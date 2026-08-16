@@ -1,0 +1,31 @@
+% navi
+
+# get the root directory where all `.cheat` files are stored
+navi info cheats-path
+
+# only look for `.cheat` files from given directories
+navi --path='/some/dir:/other/dir'
+
+# only show the tag and comment columns
+navi --fzf-overrides='--with-nth=1,2'
+
+# only match the query against the tag and comment columns
+navi --fzf-overrides='--nth=1,2'
+
+# automatically select the snippet that best matches the query
+navi --best-match --query=<query>
+
+# automatically select a snippet if there is only 1 match
+navi --fzf-overrides='--select-1'
+
+# automatically select an argument value if there is only 1 match
+navi --fzf-overrides-var='--select-1'
+
+# automatically set the `name` argument to `value` (no interactive prompt)
+name=value navi --query=<query> --best-match
+
+# automatically set the `name` argument to `value` (still interactive prompt to choose sth different)
+name__query=value navi --query=<query> --best-match
+
+# automatically set the `name` argument to the best value matching `value` (no interactive prompt)
+name__best=value navi --query=<query> --best-match

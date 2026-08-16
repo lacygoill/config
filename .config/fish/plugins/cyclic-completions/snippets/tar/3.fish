@@ -1,0 +1,1 @@
+--list --file=ARCHIVE.tar --verbose | less

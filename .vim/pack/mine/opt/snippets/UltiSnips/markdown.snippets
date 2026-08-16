@@ -1,0 +1,220 @@
+global !p
+from snippetHelpers import *
+endglobal
+
+# bug tracker {{{1
+
+snippet t01 "filing bug report for Vim" Am
+**Steps to reproduce**
+
+Run this shell command:
+
+	$ vim -Nu NONE -S <(tee <<'EOF'
+	EOF
+	)
+
+**Expected behavior**
+
+**Version of Vim**
+
+`!v g:my_ultisnips_info['vim --version']`
+
+**Environment**
+
+Operating system: `!v g:my_ultisnips_info['lsb_release -d']`
+Terminal: `!v g:my_ultisnips_info['xterm -v']`
+Value of $TERM: xterm-256color
+Shell: `!v g:my_ultisnips_info['shell_version']`
+
+**$1`!p snip.rv = complete(t[1], ['Additional context', 'Logs and stack traces'])`**
+
+$0
+endsnippet
+
+snippet t02 "For more questions, " Am
+For more questions, visit the [google mailing list](https://groups.google.com/g/vim_use), the [irc channel](https://www.vi-improved.org/), or [vi.stackexchange.com](https://vi.stackexchange.com/).
+endsnippet
+
+# Replace the `tmux-xxx-PID.log` lines with the links to the actual files.{{{
+#
+# To do so, open a GUI file manager, and drag-and-drop the file into the issue;
+#
+# GitHub will  automatically upload your file,  create a link, and  name it with
+# the original filename.
+#
+# Don't close the file manager until the link has been generated.
+#}}}
+snippet t03 "filing bug report for tmux" Am
+### Issue description
+
+To reproduce, run these shell commands:
+
+	$ tmux -Lx -f/dev/null
+
+### Required information
+
+ - \`$ tmux -V\`: `!v g:my_ultisnips_info['tmux -V']`, commit `git -C ~/VCS/tmux rev-parse HEAD`
+ - \`$ uname -sp\`: `uname -sp`
+ - terminal: xterm
+ - \`$TERM\` outside tmux: ${1:xterm-256color}
+ - \`$TERM\` inside tmux: ${2:screen}
+ - logs:${3:
+ - [backtrace]()}${4:
+ - regression introduced in:}${5:
+ - \`$ tmux info\`:}${6:
+ - \`$ ps -e -f\`:
+ - \`$ ~/bin/signals-disposition $(tmux display -p '#\{pid\}')\`:}
+$0
+endsnippet
+
+# Source:{{{
+#
+#    https://www.w3schools.com/tags/tag_details.asp
+#    https://stackoverflow.com/a/33033172/8243465
+#    https://github.com/dear-github/dear-github/issues/166#issuecomment-252282315
+#}}}
+# If you  want your  answer the hidden  text to contain  a codeblock,  insert an
+# empty line right below `<summary>`.
+snippet t04 "view or hide text on demand" Am
+<details><summary>
+${1:answer:}</summary>
+
+$0
+</details>
+endsnippet
+
+# math {{{1
+# For more commands:
+# https://math.meta.stackexchange.com/questions/5020/mathjax-basic-tutorial-and-quick-reference
+# embedding {{{2
+
+# https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/writing-mathematical-expressions#writing-inline-expressions
+snippet t05 "math: inline formula" Am
+$$0$
+endsnippet
+
+# https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/writing-mathematical-expressions#writing-expressions-as-blocks
+snippet t06 "math: block formula" Am
+$$$0$$
+endsnippet
+
+# set {{{2
+
+snippet t07 "math: (does not) belong to" Am
+\in
+\notin
+endsnippet
+
+snippet t08 "math: union/intersection/difference/symmetric difference of 2 sets" Am
+\cup
+\cap
+-
+\triangle
+endsnippet
+
+# parens {{{2
+
+snippet t09 "math: left and right parenthesis" Am
+\left( \right)
+endsnippet
+
+snippet t10 "math left and right curly braces" Am
+\\{ \\}
+endsnippet
+
+# logic {{{2
+
+snippet t11 "math: logical and / or" Am
+\and
+\or
+endsnippet
+
+# miscellaneous {{{2
+
+snippet t12 "math: lower or equal" Am
+\leq
+endsnippet
+
+snippet t13 "math: sigma (sum from k=1 to k=n)" Am
+\sum_{k=1}^n
+endsnippet
+
+snippet t14 "math: a index k" Am
+a_k
+endsnippet
+
+snippet t15 "math: square root of n" Am
+\sqrt{n}
+endsnippet
+
+snippet t16 "math: modulo operator" Am
+\mod ${1:modulus}
+endsnippet
+
+snippet t17 "math: congruence relationship" Am
+\equiv
+endsnippet
+# }}}1
+# mermaid {{{1
+
+snippet t18 "mermaid: class diagram" Am
+\`\`\`mermaid
+classDiagram
+$0
+\`\`\`
+endsnippet
+
+snippet t19 "mermaid: declare relationship" Am
+${1:class} ${2:relation} ${3:class}: ${4:label text}
+endsnippet
+
+snippet t20 "mermaid: declare class" Am
+class ${1:class} {
+	$0
+}
+endsnippet
+
+snippet t21 "mermaid: aggregation relation" Am
+--o
+endsnippet
+
+snippet t22 "mermaid: association relation" Am
+-->
+endsnippet
+
+snippet t23 "mermaid: composition relation" Am
+--*
+endsnippet
+
+snippet t24 "mermaid: inheritance relation" Am
+->
+endsnippet
+
+snippet t25 "mermaid: attribute" Am
+%% \`visibility\` can be:
+%%    - \`-\` for "private"
+%%    - \`+\` for "public"
+%%    - \`#\` for "protected"
+${1:visibility}${2:attribute}: ${3:type_hint}
+endsnippet
+
+# prose {{{1
+
+snippet t26 "prose: syntax written only to make code easier to understand" Am
+From \`man find\`:
+
+   > The expression on the right hand side of the \`-o\` **is in parentheses only**
+   > **for clarity.  It emphasises that** the \`-print0\` action takes place only
+   > for things that didn't have \`-prune\` applied to them.
+
+${1:thing} is ${2:qualified} only for clarity.  It emphasises that ${3:proposition}.
+$0
+endsnippet
+
+snippet t27 "prose: intent" Am
+to communicate/convey intent
+to clarify one's/code's intent
+to show/obscure programmer intent
+the intent (with something) is that/to ...
+$0
+endsnippet

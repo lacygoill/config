@@ -1,0 +1,2 @@
+# suppress the introductory and copyright messages
+set startup-quietly on

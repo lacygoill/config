@@ -1,0 +1,207 @@
+#!/bin/bash -
+
+# Purpose: Some programs generate files which can take a lot of space over time.
+# Remove as many of them as possible.
+
+# NOTE: Here, only clean *user* files.
+# For system files, use the `clean` function in `~/bin/update-system`.
+
+readonly SCRIPT="${0##*/}"
+
+# Util {{{1
+function Original_File_No_Longer_Exists { # {{{2
+  if [[ "$1" == --strip-suffix=* ]]; then
+    suffix="${1#--strip-suffix=}"
+  fi
+
+  # shellcheck disable=SC2016
+  #
+  # `sed(1)` is meant to turn `find(1)`'s output into a shell script which tests
+  # the existence of the original files; `sh(1)` then executes that script.  For
+  # example, if `find(1)` finds:
+  #
+  #     /home/user/.local/share/vim/undo/%home%user%path%to%file
+  #
+  # `sh(1)` makes sure that this file exists:
+  #
+  #     /home/user/path/to/file
+  sed '
+      # An embedded quote makes it difficult to quote a file name in a shell command.
+      # Assert that no file name contains a quote.
+      /"/d
+
+      h
+
+      #     $VIM/undo/%home%user%path%to%file
+      #     →
+      #     %home%user%path%to%file
+      s,.*/,,
+
+      #     %home%user%path%to%file
+      #     →
+      #     /home/user/path/to/file
+      s,%,/,g
+
+      # remove optional suffix
+      '"${suffix:+s/"$suffix"$//}"'
+
+      #     /home/user/path/to/file
+      #     →
+      #     /home/user/path/to/file
+      #     $VIM/undo/%home%user%path%to%file
+      G
+
+      #     /home/user/path/to/file
+      #     $VIM/undo/%home%user%path%to%file
+      #     →
+      #     test -e "/home/user/path/to/file" || echo "$VIM/undo/%home%user%path%to%file"
+      s/\(.*\)\n\(.*\)/test -e "\1" || echo "\2"/' \
+  | sh
+}
+# }}}1
+# `cargo` cache {{{1
+
+# We could run:
+#
+#     $ cargo cache --autoclean
+#
+# But we don't because it requires that we install `cargo-cache`:
+#
+#     $ cargo install cargo-cache
+#
+# And last time we did, it took almost 13 minutes...
+
+# `convert2text` cache {{{1
+
+readonly CONVERT2TEXT_CACHE_DIR="$HOME/.cache/convert2text"
+
+find "$CONVERT2TEXT_CACHE_DIR" -name '%*' -type f -print \
+  | Original_File_No_Longer_Exists --strip-suffix='.txt' \
+  | xargs --delimiter='\n' --no-run-if-empty rm --
+
+# We don't try to remove files which haven't been accessed for a long time.{{{
+#
+#     declare -i -r MAX_CONVERT2TEXT_AGE=30
+#     find "$CONVERT2TEXT_CACHE_DIR" -depth -atime +"$MAX_CONVERT2TEXT_AGE" -type f -delete
+#
+# It would be useless because we regularly run `grep(1)` on all the files:
+#
+#     $ grepc pattern ~/.cache/convert2text
+#
+# Which  updates  their access  time.   Note  that  the  latter is  not  updated
+# unconditionally, but  only if  it's more  than 1  day old  at the  time you're
+# accessing  the file;  that's  because  the file  system  is  mounted with  the
+# `relatime` option:
+#
+#    > Access time is only updated if the previous access time was earlier
+#    > than the current modify or change time.
+#    >
+#    > [...] the file's last access time is always updated if it is more than 1
+#    > day old.
+#
+# Source: `man 8 mount /FILESYSTEM-INDEPENDENT MOUNT OPTIONS/;/\<relatime$`
+#}}}
+# Instead, we give a warning if the size of the cache exceeds some limit.
+declare -i -r MAX_CONVERT2TEXT_SIZE=100
+declare -i convert2txt_size
+convert2txt_size="$(du --summarize --bytes "$CONVERT2TEXT_CACHE_DIR" | awk '{ print $1 }')"
+if (( convert2txt_size > MAX_CONVERT2TEXT_SIZE * 1024 * 1024 )); then
+  IFS= read -r -d '' msg <<EOS
+The size of the cache for your convert2text script exceeds: ${MAX_CONVERT2TEXT_SIZE}MiB
+
+You might  want to  clean it  by removing files  which you  haven't purposefully
+accessed for a long time.
+EOS
+  printf '%s' "$msg" | mail --subject='convert2text'\''s cache too big' "$USER@localhost"
+fi
+
+# fish history {{{1
+
+fish_clean_history="$HOME/bin/util/fish/clean-history"
+if [[ -x "$fish_clean_history" ]]; then
+  "$fish_clean_history"
+else
+  printf '%s: missing dependency: %s\n' "$SCRIPT" "$fish_clean_history" 2>&1
+fi
+
+# `frec` database {{{1
+
+if command -v frec >/dev/null; then
+  frec --clean
+fi
+
+# `npm(1)` cache {{{1
+
+# Warning: Do not try to clean it.{{{
+#
+# If you do, an error will be given:
+#
+#     npm ERR! As of npm@5, the npm cache self-heals from corruption issues
+#     npm ERR!   by treating integrity mismatches as cache misses.  As a result,
+#     npm ERR!   data extracted from the cache is guaranteed to be valid.  If you
+#     npm ERR!   want to make sure everything is consistent, use `npm cache verify`
+#     npm ERR!   instead.  Deleting the cache can only make npm go slower, and is
+#     npm ERR!   not likely to correct any problems you may be encountering!
+#     npm ERR!
+#     npm ERR!   On the other hand, if you're debugging an issue with the installer,
+#     npm ERR!   or race conditions that depend on the timing of writing to an empty
+#     npm ERR!   cache, you can use `npm install --cache /tmp/empty-cache` to use a
+#     npm ERR!   temporary cache instead of nuking the actual one.
+#     npm ERR!
+#     npm ERR!   If you're sure you want to delete the entire cache, rerun this command
+#     npm ERR!   with --force.
+#
+# `verify` verifies *and* compresses the cache:
+#
+#     $ npm cache verify
+#                    v------------v
+#     Cache verified and compressed (~/.npm/_cacache)
+#     Content verified: 1485 (104588823 bytes)
+#     Content garbage-collected: 428 (84390826 bytes)
+#     Index entries: 1485
+#     Finished in 4.866s
+#}}}
+npm cache verify
+
+# Vim undo/backup files {{{1
+
+# ATM, my biggest "valid" undo file takes 5 megs.
+# The ones above are not valid (PDFs, non-existing files, ...).
+readonly MAX_VIM_SIZE='10M'
+readonly VIM="$HOME/.local/share/vim"
+
+# PDFs
+find "$VIM/"{backup,undo} -depth -name '*.pdf' -delete
+
+# too big files
+find "$VIM/"{backup,undo} -depth -size +"$MAX_VIM_SIZE" -type f -delete
+
+# files under `/tmp/` or `/run/`
+find "$VIM/"{backup,undo} -depth \( -path '*/%run%*' -o -path '*/%tmp%*' \) -delete
+
+# files which don't exist anymore
+# We assume that no file name contains a newline.{{{
+#
+# To  support  an  embedded  newline,  we would  need  to  call  `find(1)`  with
+# `-print0`, `sed(1)` with `--null-data`, and to replace:
+#
+#     s/\(.*\)\n\(.*\)/test -e "\1" || echo "\2"/' \
+#             ^^
+#
+# with:
+#
+#     s/\(.*\)\o000\(.*\)/test -e "\1" || echo "\2"/' \
+#             ^---^
+#             \0 does not work here; \o000 is what sed(1) itself prints in --debug mode
+#
+# But we wouldn't be able to pipe that `sed(1)`'s output to `sh(1)`, because the
+# latter does not support any `--null`-like option.
+#}}}
+find "$VIM/undo" -type f -print \
+  | Original_File_No_Longer_Exists \
+  | xargs --delimiter='\n' --no-run-if-empty rm --
+
+# `--strip-suffix`: remove `&backupext`.
+find "$VIM/backup" -type f -print \
+  | Original_File_No_Longer_Exists --strip-suffix='~' \
+  | xargs --delimiter='\n' --no-run-if-empty rm --

@@ -1,0 +1,26 @@
+#!/bin/bash -
+
+cd "$HOME/Downloads/" || exit 1
+
+package=( ./gh_*_linux_amd64.deb )
+
+if ! [[ -f "${package[0]}" ]]; then
+  tee >&2 <<'EOF'
+missing package: gh
+
+Download it from: https://github.com/cli/cli/releases
+EOF
+  exit 1
+fi
+
+if ! sudo apt install ./"${package[0]}"; then
+  exit 1
+fi
+
+# authenticate `gh(1)` and `git(1)` with GitHub
+if ! gh auth login; then
+  exit 1
+fi
+
+# install `gh(1)`'s copilot extension
+gh extension install github/gh-copilot

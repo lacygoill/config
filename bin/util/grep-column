@@ -1,0 +1,69 @@
+#!/usr/bin/mawk -f
+# We want to be as fast as possible and `mawk(1)` is faster than `gawk(1)`.
+
+{
+  # Corner Case: File name ending with a colon.{{{
+  #
+  # In that case, we don't want to be stuck in an infinite loop:
+  #
+  #     $ echo x >file:
+  #     $ grepc x
+  #     file::1:1
+  #     file::1:1
+  #     ...
+  #     # infinitely
+  #
+  # The issue is that the colon forms an unexpected separator, which should have
+  # been ignored when `awk(1)` splitted the record:
+  #
+  #     ^[[35m^[[Kfile:^[[m^[[K^[[36m^[[K:^[[m^[[K^[[32m^[[K1^[[m^[[K^[[36m^[[K:^[[m^[[K^[[01;31m^[[Kx^[[m^[[K
+  #                   ^-------^          ^-------^                             ^-------^
+  #                       ✘                  ✔                                     ✔
+  #}}}
+  if ($2 ~ /^\x1b\[36m/) {
+    $2 = $2 $3
+    $3 = $4
+  }
+
+  # If we  don't output colors,  strip color  codes highlighting file  names and
+  # line numbers immediately; they're useless.
+  if (!output_colors) {
+    gsub(/\x1b\[[0-9]*m\x1b\[K/, "", $1)
+    gsub(/\x1b\[[0-9]*m\x1b\[K/, "", $2)
+  }
+
+  # There might be several matches on the same input line.  Iterate over them to
+  # output one dedicated message for each.
+  while (match($3, /\x1b\[/)) {
+    col = RSTART + RLENGTH - 2
+
+    # We make a copy of the text because – if there are several matches on the
+    # same  input  line  –  we  can't let  `gsub()`  remove  all  color  codes
+    # definitively.   We  need  to  preserve  the  ones  surrounding  subsequent
+    # matches, to compute their column numbers in future iterations.
+    text = $3
+    # If we output colors, we need to remove all color codes *except* around the
+    # current match; hence why we need more substitutions.
+    if (output_colors) {
+      sub(/\x1b\[01;31m\x1b\[K/, "\x01", text)
+      sub(/\x1b\[m\x1b\[K/, "\x01", text)
+      gsub(/\x1b\[01;31m\x1b\[K|\x1b\[m\x1b\[K/, "", text)
+      sub(/\x01/, "\x1b[01;31m\x1b[K", text)
+      sub(/\x01/, "\x1b[m\x1b[K", text)
+    } else
+      gsub(/\x1b\[01;31m\x1b\[K|\x1b\[m\x1b\[K/, "", text)
+
+    # `$1`: file name
+    # `$2`: line number
+    # `col`: column number
+    # `text`: text (possibly highlighting current match)
+    print $1, $2, col ":" text
+    #       ^   ^
+    #       for OFS to be printed
+
+    # The color codes around the current match are no longer useful.
+    # We can remove them definitively.
+    sub(/\x1b\[01;31m\x1b\[K/, "", $3)
+    sub(/\x1b\[m\x1b\[K/, "", $3)
+  }
+}

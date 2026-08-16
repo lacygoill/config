@@ -1,0 +1,7 @@
+#!/bin/bash -
+
+source "${0%/*}/_lib"
+_Extract_Archive 'keyd' 'https://github.com/rvaiya/keyd/releases'
+
+make && sudo make install
+sudo systemctl enable keyd && sudo systemctl start keyd

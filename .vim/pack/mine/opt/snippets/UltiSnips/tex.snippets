@@ -1,0 +1,26 @@
+global !p
+from snippetHelpers import *
+endglobal
+
+# bd {{{1
+
+pre_expand "capture_visual_content(snip)"
+post_expand "trim_ws(snip)"
+snippet bd "begin{} / end{}" bmA
+\begin{${1:document}}
+$0
+\end{$1}
+endsnippet
+
+# cc {{{1
+
+snippet cc "{}" A
+{$0}
+endsnippet
+
+# dc {{{1
+
+snippet dc "documentclass" bmA
+\documentclass{${1:article}}
+$0
+endsnippet

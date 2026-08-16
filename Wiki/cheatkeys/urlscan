@@ -1,0 +1,22 @@
+print help                              ?
+
+copy current URL to clipboard           y
+
+reverse order of displayed URLs         r
+# Alternative: start urlscan with `--reverse`
+
+toggle context                          c
+# Alternative: start urlscan with `--compact`
+
+toggle truncation of current URL        s
+toggle truncation of all URLs           S
+
+select different color scheme           p
+# bound to  the `palette` command,  which cycles  between all the  color schemes
+# defined in the config file
+
+cycle between link handlers             L
+# This  cycles  between a  Python  web-browser  module, `xdg-open(1)`  and  your
+# optional arbitrary  shell command.  In  the header  menu, you can  check which
+# program/command  is going  to be  run, provided  that it's  visible (i.e.  you
+# didn't start urlscan with `--nohelp`).

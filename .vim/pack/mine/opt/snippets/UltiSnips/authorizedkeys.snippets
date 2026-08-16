@@ -1,0 +1,146 @@
+# documentation {{{1
+
+snippet t01 "doc: purpose of options" Am
+# Options are meant to be written at the start of a line.
+#
+#     command="some command" ssh-rsa AAAAC3Nz... user@host
+#     ^--------------------^
+#
+# They allow you to specify restrictions on a per-user/host/key basis.  That is,
+# they restrict what a given user can do when they log in on a given host with a
+# given key.
+#
+# ---
+#
+# Options are  useful for keys which  are only meant to  run automated processes
+# (e.g. \`rsync(1)\`).
+#
+# Indeed, for those, you can't set a  passphrase, because there would be no easy
+# way to provide it when the automated process has to be run.  But a private key
+# which is  not protected  by a passphrase  should not have  access to  too many
+# resources; otherwise, if it's disclosed, it might be abused to inflict damage.
+# Options can restrict those resources to minimize potential damage.
+#
+# ---
+#
+# For more info and options: \`man 8 sshd /AUTHORIZED_KEYS FILE FORMAT\`.
+endsnippet
+
+snippet t02 "doc: how to specify multiple options" Am
+# Separate them with commas (without any space before/after the comma):
+#
+#     v-------------------------------v
+#     option1="value1",option2="value2" ssh-rsa AAAAC3Nz... user@host
+#                     ^
+endsnippet
+
+snippet t03 "doc: how conflicts are resolved with options from sshd_config" Am
+# If   an  option   from   \`authorized_keys\`  conflicts   with  another   from
+# \`sshd_config\`, the  latter always  wins.  Which  makes sense.   Otherwise, a
+# user could override a restriction imposed by the sysadmin.
+endsnippet
+
+# options {{{1
+
+snippet t04 "run command given here instead of the one given from CLI" Am
+# This will force \`ssh(1)\` to run \`$1\`, no matter what was written on the CLI:
+#
+#     $ ssh -i <identity_file> <user>@<host> 'CLI_command'
+#                                             ^---------^
+#                                               ignored
+#
+# In addition to restricting the key's rights, this is also useful to avoid code
+# duplication, because  now, whenever  you authenticate using  this key,  you no
+# longer need to write the command.
+#
+# ---
+#
+# \`~/.ssh/rc\` is also ignored on the remote.
+#
+# ---
+#
+# \`$1\`  can read  the original  shell command  from \`$SSH_ORIGINAL_COMMAND\`.
+# This way, it can still run what was asked on the CLI, possibly after some test
+# (e.g. check the command doesn't try to do something disallowed/unexpected).
+command="${1:command}"
+endsnippet
+
+snippet t05 "set environment variable" Am
+# This option can be used multiple times to set several environment variables:
+#
+#     environment="FOO=1",environment="BAR=2",...
+#
+# ---
+#
+# It doesn't work!
+#
+# Make sure \`PermitUserEnvironment\` is set to \`yes\` in \`sshd_config\`.
+environment="${1:NAME=value}"
+endsnippet
+
+snippet t06 "only allow the key to be used from given IP address or host name" Am
+# \`$1\` is  a pattern (or a  comma-separated list of patterns)  whose syntax is
+# documented at \`man 5 ssh_config /PATTERNS\`.
+#
+# ---
+#
+# In addition to IPs and host names, \`$1\` can include subnets in CIDR notation.
+from="${1:pattern-list}"
+endsnippet
+
+snippet t07 "disable agent forwarding" Am
+no-agent-forwarding
+endsnippet
+
+snippet t08 "disable port forwarding" Am
+no-port-forwarding
+endsnippet
+
+snippet t09 "disable X forwarding" Am
+no-X11-forwarding
+endsnippet
+
+snippet t10 "do not allocate pseudo-terminal" Am
+# Most often, an automated process does not need a terminal.
+no-pty
+endsnippet
+
+snippet t11 "do not execute user script at ~/.ssh/rc on remote" Am
+no-user-rc
+endsnippet
+
+snippet t12 "only allow local port forwarding to connect to given IP and port on remote" Am
+# You can specify multiple \`permitopen\` options separated with commas:
+#
+#     permitopen="host1:port1",permitopen="host2:port2"
+#
+# ---
+#
+# The processing of  the value is a bit complex;  see our \`sshdconfig\` snippet
+# for \`PermitOpen\`.
+permitopen="${1:host}:${2:port}"
+endsnippet
+
+snippet t13 "only allow remote port forwarding to listen on given IP and port on remote" Am
+# You can specify multiple \`permitlisten\` options separated with commas:
+#
+#     permitlisten="port1",permitlisten="host:port2"
+#
+# ---
+#
+# The processing of  the value is a bit complex;  see our \`sshdconfig\` snippet
+# for \`PermitListen\`.
+permitlisten="${1:port | host:port}"
+endsnippet
+
+snippet t14 "enable all restrictions" Am
+# This is equivalent to:
+#
+#     no-X11-forwarding,no-agent-forwarding,no-port-forwarding,no-pty,no-touch-required,no-user-rc
+#
+# To undo one  of these restrictions, write its option  name without the \`no-\`
+# prefix.  For example, to enable all restrictions except \`no-pty\`:
+#
+#     restrict,pty
+restrict
+endsnippet

@@ -1,0 +1,107 @@
+# What's the syntax to define a key binding?{{{
+#
+#     <action> <key>
+#
+# You can bind several keys to the same action via a single key binding:
+#
+#     <action> <key1> <key2> ...
+#}}}
+# Where do I find the name of a <key>?{{{
+#
+# Each key is an X11 keysym name as shown by `xev(1)`, like `Delete`.
+# See:
+#
+#     /usr/include/X11/keysymdef.h
+#
+# ---
+#
+# Note that the case matters.
+# For example, for the `+` key, you must write `plus` in lowercase:
+#
+#              ✘
+#              v
+#     <action> Plus
+#
+#     <action> plus
+#              ^
+#              ✔
+#}}}
+#   Which modifiers can I use?{{{
+#
+#    - C for Control
+#    - S for Shift
+#    - 1, 2, 3, 4 for Mod1, Mod2, Mod3 and Mod4
+#
+# Usage example:
+#
+#     C-Delete
+#     ^
+#     Control
+#
+# You can also specify several modifiers:
+#
+#     C-1-Delete
+#     │ │
+#     │ └ Alt
+#     └ Control
+#
+# ---
+#
+# If an alphabetical key is written in uppercase, it implies the shift modifier.
+#}}}
+
+# Where can I find an example of config file?{{{
+#
+#     /usr/share/doc/feh/examples/keys
+#
+# If you don't have the file:
+#
+#     $ apt download feh
+#     $ ar x *.deb data.tar.xz
+#     $ tar --extract --file=data.tar.xz --xz ./usr/share/doc/feh/examples/keys
+#     $ editor ./usr/share/doc/feh/examples/keys
+#}}}
+
+# custom key bindings {{{1
+
+zoom_fit equal
+zoom_in  plus
+zoom_out minus
+
+toggle_fullscreen f
+# toggle filename at the top-left of the image
+toggle_filenames F
+
+# NOTE: A contextual menu can be opened by pressing `m`.
+# select adjacent menu items:{{{
+#
+#    - parent
+#    - child
+#    - next
+#    - previous
+#}}}
+menu_parent h Left
+menu_down   j Down
+menu_up     k Up
+menu_child  l Right
+
+# select next/previous image
+next_img l Right
+prev_img h Left
+
+# scrolling motions
+scroll_left  H
+scroll_down  J
+scroll_up    K
+scroll_right L
+
+# disabled commands {{{1
+
+# We don't want to delete an image by accident.
+delete
+
+# By default, `L` is bound to `save_filelist`, and `s` to `save_image`.
+# We often hit  those keys accidentally, which causes feh  to create undesirable
+# files in the current working directory.  Let's disable them.
+save_filelist
+save_image

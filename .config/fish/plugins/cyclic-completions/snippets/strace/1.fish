@@ -1,0 +1,1 @@
+--output=$TMPDIR/trace.log -f

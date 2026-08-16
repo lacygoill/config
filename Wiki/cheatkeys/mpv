@@ -1,0 +1,16 @@
+toggle stay-on-top                      T
+
+increase brightness                     b
+decrease brightness                     B
+
+skip to previous chapter                H
+skip to next chapter                    L
+
+resync subtitles; next displayed now    «C-l»
+resync subtitles; prev displayed now    «C-h»
+
+go to next entry on playlist            «M-l»
+go to previous entry on playlist        «M-h»
+
+increase audio delay by 0.1 seconds     «C-+»
+decrease audio delay by 0.1 seconds     «C--»

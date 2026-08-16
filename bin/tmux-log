@@ -1,0 +1,38 @@
+#!/bin/sh
+
+if pidof -s strace >/dev/null; then
+  # `USR2`: toggle logging{{{
+  #
+  # `man tmux /-v`:
+  #
+  #    > The SIGUSR2 signal may be sent to the tmux server process
+  #    > to toggle logging between on (as if -v was given) and off.
+  #}}}
+  # Why do you pass `-b` to `run-shell`?  We already use it in our tmux key binding.{{{
+  #
+  # In case we  forget the tmux key  binding, and invoke the  script manually on
+  # the shell's command-line.
+  #}}}
+  tmux display-message 'Stopped tmux server logging' \
+    \; run-shell -b 'kill -USR2 #{pid} ; killall strace'
+else
+  # Where is the logfile written?{{{
+  #
+  # In the CWD of the shell from which you started tmux.  It is *not* written in
+  # the CWD  of the shell in  which you press  the key binding.  IOW,  it's most
+  # probably written in your $HOME.
+  #}}}
+  tmux display-message 'Started tmux server logging' \
+    \; run-shell -b 'kill -USR2 #{pid} ; strace -ttt --output=trace.log --attach=#{pid}'
+fi
+# TODO: What if we have a running `strace(1)` process when we use the function for the first time?{{{
+#
+# It will wrongly think tmux is being logged, and:
+#
+#    - tell us that the logging is being stopped (wrong but not harmful)
+#    - start the logging (✘ contradicts what has been displayed)
+#    - kill all `strace(1)` processes
+#
+# We would need a  format variable which tells us whether  tmux is being logged:
+# `#{logging}`.
+#}}}

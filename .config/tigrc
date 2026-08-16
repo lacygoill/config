@@ -1,0 +1,30 @@
+# Options {{{1
+
+# Shorten the date of commits to reduce visual clutter.
+# You can cycle through all possible values of this option by pressing `D`.
+set main-view-date-display = relative-compact
+
+# Don't display the author of a commit to reduce visual clutter.
+# You can cycle through all possible values of this option by pressing `A`.
+set main-view-author-display = no
+
+# Key bindings {{{1
+
+# add a branch
+bind main Ba ?git branch %(prompt)
+# delete a branch
+bind main Bd ?git branch -D %(prompt)
+
+# push a commit
+# https://github.com/jonas/tig/issues/199#issuecomment-36841759
+bind status P !git push origin
+
+# TODO: These shadow default key bindings:{{{
+#
+#     g view-grep Show grep view
+#     G :toggle commit-title-graph
+#
+# Find replacements.
+#}}}
+bind generic g move-first-line
+bind generic G move-last-line

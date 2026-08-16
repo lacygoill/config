@@ -1,0 +1,32 @@
+#!/bin/bash -
+
+# `$1`: query string.
+# `$2`: "save" or "restore".
+if (( $# != 2 )); then
+  exit 1
+fi
+
+if [[ -z "$FZF_UNDOFILE" ]]; then
+  exit
+fi
+
+readonly DIR="${0%/*}"
+source "$DIR/lib"
+
+delim=$'\x01'
+if [[ "$2" == 'save' ]]; then
+  printf '%d%s%s\n' "$curpos" "$delim" "$query" >>"$FZF_UNDOFILE"
+  exit
+fi
+
+if [[ "$2" != 'restore' ]]; then
+  exit 1
+fi
+
+shopt -s lastpipe
+tail --lines=1 "$FZF_UNDOFILE" \
+  | IFS="$delim" read -r curpos query
+shopt -u lastpipe
+echo "$query"
+_Set_Cursor_Position "$curpos"
+sed -i '$d' "$FZF_UNDOFILE"

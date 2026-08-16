@@ -1,0 +1,37 @@
+#!/bin/bash -
+
+declare -i i
+printf 'ANSI colors:\n'
+for i in {0..15}; do
+  printf '\e[48;5;%dm%3d\e[0m' "$i" "$i"
+  if (( i == 7 )); then
+    printf '\n'
+  fi
+done
+
+declare -i j
+printf '\n\nColor cube:\n'
+# The cube is split into 6 slices.  We print them on 2 rows.
+# Iterate over the rows.
+for i in 0 1; do
+  for (( j = 108 * i + 16; j <= 108 * i + 123; j++ )); do
+    # to seperate 2 consecutive slices
+    separation=''
+    if (( (j - 15) % 6 == 0 )); then
+      separation=' '
+    fi
+    printf '\e[48;5;%dm%4d\e[0m%s' "$j" "$j" "$separation"
+    if (( (j - 15) % 6 == 0 )); then
+      printf '\n'
+    fi
+  done | split --lines=6 --additional-suffix=.tmp.split - _
+  paste --delimiters=' ' _*.tmp.split
+  rm _*.tmp.split
+  printf '\n'
+done
+
+printf 'Grayscale ramp:\n'
+for i in {232..255}; do
+  printf '\e[48;5;%dm%4d\e[0m' "$i" "$i"
+done
+printf '\n'

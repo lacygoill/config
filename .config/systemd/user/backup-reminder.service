@@ -1,0 +1,6 @@
+[Unit]
+Description=Remind us to make a backup if we did not create/update one recently
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/backup --reminder

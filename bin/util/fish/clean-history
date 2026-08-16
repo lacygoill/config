@@ -1,0 +1,274 @@
+#!/bin/bash -
+
+# Remove commented and invalid commands from the shell history.
+# Also, remove some arbitrary commands in which we're not interested.
+
+# Config {{{1
+
+# Here, put your most frequent commands which accept subcommands.
+readonly -a SPECIAL_CMDS=(
+  'apt'
+  'apt-cache'
+  'apt-get'
+  'aptitude'
+  'git'
+  'coredumpctl'
+  'journalctl'
+  'systemctl'
+  'vboxmanage'
+)
+
+# We don't want to keep most commands from the `coreutils` package inside our shell history.{{{
+#
+# If you want to delete *all* commands provided by the coreutils packages:
+#
+#     readonly -a COREUTILS="$(dpkg-query --listfiles coreutils \
+#       | awk -F'/' '/\/bin\/[^[:blank:]]*$/ { sub(/\..*/, "", $NF); print $NF }' \
+#       )"
+#     # sub() for `md5sum.textutils` -> `md5sum`
+#
+# You might also want to consider the `moreutils` package.
+#}}}
+readonly -a COREUTILS=(
+  'cat'
+  'cp'
+  'du'
+  'echo'
+  'ls'
+  'mkdir'
+  'mv'
+  'printf'
+  'rm'
+  'rmdir'
+  'sleep'
+  'test'
+  'touch'
+)
+
+# Same thing with various other commands.
+readonly -a NOT_INTERESTING=(
+  'apt show'
+  'awk'
+  'bash'
+  'git clone'
+  'git commit'
+  'imv'
+  'kill'
+  'less'
+  'locate'
+  'man'
+  'mpv'
+  'sudo apt'
+  'sudoedit'
+  'tldr'
+  'vimdiff'
+)
+
+declare -i -r MAX_CMD_NAME_LENGTH_IN_REPORT=75
+
+declare -i -r MAX_CMDLINE_LENGTH=500
+
+# Init {{{1
+
+readonly HISTORY_FILE="$HOME/.local/share/fish/fish_history"
+
+readonly PARSE_HISTORY_SCRIPT="$HOME/bin/util/fish/parse-history"
+if ! [[ -f "$PARSE_HISTORY_SCRIPT" ]]; then
+  printf 'missing dependency: %s\n' "$PARSE_HISTORY_SCRIPT" >&2
+  exit 1
+fi
+
+if ! command -v sponge >/dev/null; then
+  echo 'missing dependency: sponge; install moreutils package' >&2
+  exit 127
+fi
+
+# Util {{{1
+function Is_Invalid_Cmd { #{{{2
+# We consider a command to be valid if, and only if, it's the name of an external utility.{{{
+#
+# This means that we reject shell  builtins, functions, and any command starting
+# with an environment variable (e.g. `VIMRUNTIME=...`, `SYSTEMD_PAGER=...`).
+#
+# If you want to keep shell builtins and functions:
+#
+#     ! type -P -- "$cmd" >/dev/null
+#
+#     →
+#
+#     ! type -P -- "..." >/dev/null \
+#     && ! fish --command="builtin --query -- '...'" \
+#     && ! fish --command="functions --query -- '...'"
+#}}}
+  local cmd="$1"
+
+  if [[ "$cmd" =~ ' ' ]]; then
+    # Handle 2 cases:
+    #
+    #     $ <command> <subcommand>
+    #     $ sudo <command>
+
+    local first_word
+    first_word="$(awk '{ print $1 }' <<<"$cmd")"
+
+    if [[ "$first_word" == 'sudo' ]]; then
+      local second_word
+      second_word="$(awk '{ print $2 }' <<<"$cmd")"
+      ! type -P -- "$second_word" >/dev/null
+    else
+      ! type -P -- "$first_word" >/dev/null
+    fi
+
+  else
+    ! type -P -- "$cmd" >/dev/null
+  fi
+}
+
+function History_Delete { #{{{2
+  local cmd="$1"
+
+  echo 'all' | fish --command="history delete --prefix --case-sensitive -- '$cmd '" >/dev/null
+
+  # Our  awk script  ignores  the  `sudo` command  itself  when  it reports  the
+  # commands and their frequencies.  As a  result, when it reports a command, we
+  # don't know  whether it  was prefixed with  `sudo`.  Let's  delete `sudo cmd`
+  # just in case.
+  echo 'all' | fish --command="history delete --prefix --case-sensitive -- 'sudo $cmd '" >/dev/null
+
+  echo 'all' | fish --command="history delete --exact --case-sensitive -- '$cmd'" >/dev/null
+}
+# }}}1
+
+# Delete some commands in which we're not interested. {{{1
+
+# Commented out because we want to keep `config` commands in our history.
+#     for script in "$HOME/bin/"*; do
+#       History_Delete "${script##*/}"
+#     done
+
+for cmd in "${COREUTILS[@]}" "${NOT_INTERESTING[@]}"; do
+  History_Delete "$cmd"
+done
+
+# Delete too long commands. {{{1
+
+# Commands followed by (sometimes *very* long) multiline comment (e.g. navi snippet).
+echo 'all' | fish --command='history delete --contains \n"    # "' >/dev/null
+
+# Arbitrary long commands.
+declare -a indexes_to_delete=()
+declare -i i=1
+# `$ history delete` requires a search string:
+#
+#     $ echo '' | history delete
+#     Searching for the empty string isn't allowed⏎
+#
+# And the most generic search string that I can think of is a single space.
+search_string=' '
+
+shopt -s lastpipe
+fish --command="history search --null '$search_string'" \
+  | while IFS= read -r -d '' cmd; do
+      if (( ${#cmd} > MAX_CMDLINE_LENGTH )); then
+        indexes_to_delete+=("$i")
+      fi
+      (( i++ ))
+    done
+shopt -u lastpipe
+
+if [[ -n "${indexes_to_delete[0]}" ]]; then
+  echo "${indexes_to_delete[@]}" \
+    | fish --command="history delete '$search_string' >/dev/null"
+fi
+
+# Delete all commands whose first character is not a "word character". {{{1
+
+IFS= read -r -d '' find_non_words <<'AWK'
+  /^- cmd: [^_[:alnum:]]/ { non_words[substr($3, 1, 1)] = 1 }
+  END {
+    for (non_word in non_words)
+      if (non_word == "\\")
+        print "\\\\"
+      else
+        print non_word
+  }
+AWK
+
+awk "$find_non_words" "$HISTORY_FILE" \
+  | while IFS= read -r non_word; do
+      History_Delete "$non_word"
+    done
+
+# The first word in a command might unexpectedly contain a literal newline character. {{{
+#
+# A newline is written as a backslash-escaped sequence `\n`.
+# But we can't pass that to `history(1)`; it doesn't understand such sequences.
+# And we  can't pass  a literal  newline either (`$'\n'`),  it wouldn't  work as
+# expected.
+#}}}
+awk '
+  /^- cmd: [^[:blank:]]*\\n/ { found = 1 }
+  /^- cmd: [^\\]*([[:blank:]]|$)/ { found = 0 }
+  !found { print $0 }
+' "$HISTORY_FILE" | sponge "$HISTORY_FILE"
+# Alternative:
+#
+#     sed -i '/^- cmd: \\/,/^- cmd: / { /^- cmd: [^\\]/!d }' "$HISTORY_FILE"
+
+# Print report with remaining commands sorted by frequency. {{{1
+
+# Theoretically, if `cmd == "sudo"`, we should not reset it to `$4` immediately.{{{
+#
+# There could be options passed to `sudo(8)`, and those should be ignored.
+# However, in practice, it might tricky to find the real command:
+#
+#     sudo --preserve-env env "PATH=$PATH" my_script
+#                                          ^-------^
+#
+# Besides, we rarely pass options to `sudo(8)`.
+# It's not worth the trouble.
+#}}}
+
+report="$(mktemp)"
+"$PARSE_HISTORY_SCRIPT" -v SPECIAL_CMDS="${SPECIAL_CMDS[*]}" "$HISTORY_FILE" \
+  | sort --key=2bnr,2 --field-separator=$'\t' \
+  | while IFS=$'\t' read -r cmd freq; do
+
+      if Is_Invalid_Cmd "$cmd"; then
+        if [[ "$cmd" =~ \' ]]; then
+          # A command name containing a single quote is problematic.{{{
+          #
+          # Its value will break the `history delete ...` command:
+          #
+          #     fish: Unexpected end of string, quotes are not balanced
+          #     history delete --prefix 'MANPAGER='vim'
+          #                                           ^
+          #     ...
+          #
+          # Let's ignore that quote and anything which comes afterward.
+          #}}}
+          cmd="${cmd%%\'*}"
+        fi
+        History_Delete "$cmd"
+        continue
+      fi
+
+      # Don't echo a command whose name is too long; it makes the report hard to read.
+      if (( ${#cmd} < MAX_CMD_NAME_LENGTH_IN_REPORT )); then
+        echo "$cmd" $'\t' "$freq"
+      fi
+    done | column -t -s $'\t' >"$report"
+
+# TODO: Commented  because I  never  read that  mail; it  creates  noise in  the
+# mailbox.  Should  we simplify this  script and no longer  compute frequencies?
+# Should we compute and report something else?
+#
+#     readonly SCRIPT="${0##*/}"
+#
+#     message='Please find attached a report of your most used fish commands'
+#     ruler="$(printf '%*s' "${#message}" ' ' | tr ' ' '=')"
+#
+#     printf "%s\n%s\n%s" "$ruler" "$message" "$ruler" \
+#       | mail --subject="$SCRIPT" --attach="$report" "$USER@localhost"
+
+rm -- "$report"

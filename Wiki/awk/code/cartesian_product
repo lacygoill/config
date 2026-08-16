@@ -1,0 +1,101 @@
+#!/usr/bin/gawk -f
+# We must use `gawk(1)`, and not `mawk(1)`, to get the guarantee that arrays are traversed in the desired order.{{{
+#
+#    > The order that var transverses the indices of array is not defined.
+#
+# Source: `man mawk /THE AWK LANGUAGE/;/6. Arrays/;/order`
+#}}}
+
+# Input:{{{
+#
+#     a
+#     b c
+#     d e f
+#}}}
+# Output:{{{
+#
+#     a b d
+#     a b e
+#     a b f
+#     a c d
+#     a c e
+#     a c f
+#}}}
+
+{ sets[NR] = $0 }
+
+END {
+  # To get the *guarantee* that arrays are traversed in the desired order.{{{
+  #
+  # This matters in `for` loops:
+  #
+  #     for (i in sets) {
+  #     ...
+  #     for (j in splitted) {
+  #
+  # For more info: `info gawk /8.1.6 Using Predefined Array Scanning Orders with 'gawk'`.
+  #}}}
+  # In  practice, the  code seems  to  work even  without that,  but that's  not
+  # guaranteed by the documentation.  We want the guarantee.
+  PROCINFO["sorted_in"] = "@ind_num_asc"
+  #                             ^^^
+  # `num` is correct here (not `str`), because in our program, the indices are always numbers.{{{
+  #
+  # Here:
+  #
+  #     for (i in sets) {
+  #
+  # Members of `sets` are assigned like so:
+  #
+  #     { sets[NR] = $0 }
+  #            ^^
+  #
+  # And `NR` is always a number.
+  #
+  # ---
+  #
+  # Here:
+  #
+  #     for (j in splitted) {
+  #
+  # Members of `splitted` are assigned like so:
+  #
+  #     split(sets[i], splitted, " ")
+  #
+  # And `split()` uses numbers to index members.
+  #}}}
+
+  combine(sets)
+}
+
+function combine(sets,    combination, i, splitted, first_set) {
+#                         ^---------------------------------^
+# Those variables must be local to the function, and not global.{{{
+#
+# Otherwise, when `combine()`  re-calls itself, it would change  their values in
+# the parent's context, which would break the code's logic.
+#}}}
+  if (length(sets) == 0) {
+    print combination
+    return
+  }
+
+  # Set `i` to index  of first set.  It's `1` in the  first call to `combine()`,
+  # but when the latter re-calls itself, it becomes `2`, `3`...
+  for (i in sets) {
+    break
+  }
+
+  split(sets[i], splitted, " ")
+  for (j in splitted) {
+    if (combination == "")
+      combination = splitted[j]
+    else
+      combination = combination " " splitted[j]
+    first_set = sets[i]
+    delete sets[i]
+    combine(sets, combination)
+    sets[i] = first_set
+    sub(/ [^ ]*$/, "", combination)
+  }
+}

@@ -1,0 +1,14 @@
+# The default provider is `presearch`.  I prefer `google`.
+provider: google
+
+customProviders [
+  {
+    name: thepiratebay
+    url: "https://thepiratebay.org/search.php?q=%s"
+    tags: [p2p, torrents]
+  },
+  {
+    name: urbandictionary
+    url: "https://www.urbandictionary.com/define.php?term=%s"
+  }
+]

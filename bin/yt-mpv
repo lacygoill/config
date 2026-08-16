@@ -1,0 +1,44 @@
+#!/bin/bash -
+
+# TODO: Require the `lz4json` package.
+# Install it here?  Or from `~/bin/linux-installation-checklist`?
+
+# Most of the code comes from: https://askubuntu.com/a/1405940
+# Except the end of the `jq(1)` filter which we came up with thanks to a bot.
+filter='.windows[0].tabs | sort_by(.lastAccessed) | .[].entries[].url | select(test("youtube.com/watch\\?v="))'
+firefox_url="$(
+  lz4jsoncat "$HOME/.mozilla/firefox/"*.default-release/sessionstore-backups/recovery.jsonlz4 \
+    | jq --raw-output "$filter" \
+    | tail --lines=1 \
+)"
+
+if [[ -z "$firefox_url" ]]; then
+  exit 1
+fi
+
+# If the URL in Firefox is already being read by `mpv(1)`, there is nothing to do.
+# Problem: Can't exit from a command run in a pipeline.{{{
+#
+# Because it's run in a subshell.
+#}}}
+# Solution: Set a trap to exit on an error with the (ad-hoc) status code 77.{{{
+#
+# `set -E` makes sure that our trap is inherited in subshells.
+# https://unix.stackexchange.com/a/48550
+#}}}
+set -E
+trap '(( $? == 77 )) && exit 77' ERR
+
+pgrep --full --list-full '^mpv .*youtube' \
+  | awk '{ print $1 " " $NF }' \
+  | while read -r pid mpv_url; do
+      if [[ "$mpv_url" == "$firefox_url" ]]; then
+        exit 77
+      fi
+      kill "$pid"
+    done
+
+mpv \
+  --force-window=immediate \
+  --geometry=1320x750+300+150 \
+  "$firefox_url" >/tmp/.yt-mpv 2>&1

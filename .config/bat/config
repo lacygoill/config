@@ -1,0 +1,86 @@
+# Run `$ bat --help` to get a list of all possible configuration options.
+
+# Ignore `.bak` extension.
+# For    example,    `/path/to/file.py.bak`    will    be    highlighted    like
+# `/path/to/file.py` (i.e. with the Python syntax).
+--ignored-suffix='.bak'
+
+# use italic text on the terminal
+--italic-text=always
+
+# Highlight `.gitignore` files with Git Ignore syntax.
+# The `*` glob lets us support `~/.cvsignore`.
+# To get the list of supported languages (and their filename glob patterns):{{{
+#
+#     $ bat --list-languages
+#}}}
+# In addition to `*`, you can use `**` to match nested directories:{{{
+#
+# Example:
+#
+#     --map-syntax='/etc/apache2/**/*.conf:Apache Conf'
+#                                ^^
+#
+# For more examples:
+#
+#     $ bat --list-languages | grep '\*\*'
+#}}}
+--map-syntax='\.*ignore:Git Ignore'
+
+# Use caret notation for non-printable characters.
+# The default is `unicode`, which is less readable:{{{
+#
+#                                                                             v---v
+#     $ printf 'a\bc' | BAT_CONFIG_PATH=/dev/null bat --nonprintable-notation=caret --show-all --color=never --style=plain
+#     a^Hc
+#      ^^
+#
+#                                                                             v-----v
+#     $ printf 'a\bc' | BAT_CONFIG_PATH=/dev/null bat --nonprintable-notation=unicode --show-all --color=never --style=plain
+#     a␈c
+#      ^
+#}}}
+--nonprintable-notation=caret
+
+# The  value is  a comma-separated  list  of components,  which determines  what
+# metadata will be printed in addition to the contents of the file.
+# What components can I include in it?{{{
+#
+#    - default: enables recommended style components (default)
+#    - full: enables all available components
+#    - auto: same as 'default', unless the output is piped
+#    - plain: disables all available components
+#    - changes: show Git modification markers
+#    - header: alias for 'header-filename'
+#    - header-filename: show filenames before the content
+#    - header-filesize: show file sizes before the content
+#
+#    - grid: vertical/horizontal lines to separate side bar
+#            and the header from the content
+#
+#    - rule: horizontal lines to delimit files
+#    - numbers: show line numbers in the side bar
+#
+#    - snip: Draw separation lines between distinct line ranges.
+#      For example, 2 consecutive changes in a diff.
+#      The `8<` characters are meant to represent a pair of scissors.
+#}}}
+--style='plain'
+
+# Let tab characters be consumed by the pager.
+# Otherwise, they're expanded to 4 spaces.
+--tabs=0
+
+# What are the other possible themes, and how to (pre)view them?{{{
+#
+# This command will print a default sample file for each theme:
+#
+#     $ bat --list-themes
+#
+# This command will print a preview of `/path/to/file` for each theme:
+#
+#     $ bat --list-themes | fzf --preview="bat --theme={} --color=always --style=plain /path/to/file"
+#}}}
+--theme='Coldark-Cold'
+# Our current theme seems to look good even in the console.
+# But if there is any issue, try `ansi` (3-bit colors) or `base16` (4-bit colors).

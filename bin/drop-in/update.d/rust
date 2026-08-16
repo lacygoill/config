@@ -1,0 +1,18 @@
+#!/bin/bash -
+
+# https://www.rust-lang.org/tools/install
+
+curl --proto '=https' --tlsv1.2 --fail --show-error --silent https://sh.rustup.rs \
+  | sh -s -- -y
+  #    ^------^
+  # Necessary to install Rust unattended/non-interactively:
+  # https://stackoverflow.com/a/57251636
+
+# The  previous  command   appends  an  undesirable  line  in   our  bashrc  and
+# our  profile.   Let's  remove  it.   Don't  worry,  we've  added  it  back  in
+# `~/.profile_local`.
+sed -i '\%/[.]cargo/env%d' "$HOME/.bashrc" "$HOME/.profile"
+
+# It also adds useless files.
+# Let's remove them
+rm "$HOME/.cargo/env.fish" "$HOME/.config/fish/conf.d/rustup.fish"

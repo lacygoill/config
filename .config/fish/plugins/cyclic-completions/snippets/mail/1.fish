@@ -1,0 +1,1 @@
+; mail --file=$HOME/mbox

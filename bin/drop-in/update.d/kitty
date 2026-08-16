@@ -1,0 +1,55 @@
+#!/bin/bash -
+
+# This script installs the latest stable release: https://sw.kovidgoyal.net/kitty/binary/
+# To compile from source, see: https://sw.kovidgoyal.net/kitty/build/
+
+# The `man(1)` command fails to open the man pages `kitty(1)` and `kitty.conf(5)`!{{{
+#
+# Make sure `~/.local/kitty.app/share/man/` is in `MANPATH`.
+#}}}
+
+# Install the `kitty` binary and its runtime files in `~/.local/kitty.app`: {{{1
+
+curl --fail --location --show-error --silent \
+  'https://sw.kovidgoyal.net/kitty/installer.sh' \
+  | sh /dev/stdin launch=n
+  #               ^------^
+  #               don't start kitty after the installation
+
+# Integrate the app into the desktop environment: {{{1
+# https://sw.kovidgoyal.net/kitty/binary/#desktop-integration-on-linux
+
+# Let the OS find the `kitty` and `kitten` binaries via your PATH: {{{2
+
+ln --symbolic --force "$HOME/.local/kitty.app/bin/kitty" \
+  "$HOME/.local/kitty.app/bin/kitten" \
+  "$HOME/.local/bin/"
+
+# Let the OS find the `kitty.desktop` file(s): {{{2
+
+ln --symbolic --force "$HOME/.local/kitty.app/share/applications/kitty.desktop" \
+  "$HOME/.local/share/applications/"
+
+# If you want to open text files and  images in kitty via your file manager also
+# symlink the `kitty-open.desktop` file:
+#
+#     ln --symbolic --force "$HOME/.local/kitty.app/share/applications/kitty-open.desktop" \
+#       "$HOME/.local/share/applications/"
+
+# Set the paths to the `kitty` binary and its icon in the `kitty.desktop` file(s): {{{2
+
+sed -i --follow-symlinks \
+  "s|Icon=kitty|Icon=$HOME/.local/kitty.app/share/icons/hicolor/256x256/apps/kitty.png|g" \
+  "$HOME/.local/share/applications/"kitty*.desktop
+  #                                      ^
+  #      to match "kitty" and "kitty-open"
+
+sed -i --follow-symlinks \
+  "s|Exec=kitty|Exec=$HOME/.local/kitty.app/bin/kitty|g" \
+  "$HOME/.local/share/applications/"kitty*.desktop
+
+# Install the `xterm-kitty` terminal description: {{{2
+
+terminfo_dir="$HOME/.terminfo/x"
+mkdir -p "$terminfo_dir"
+ln --symbolic --force "$HOME/.local/kitty.app/share/terminfo/x/xterm-kitty" "$terminfo_dir"

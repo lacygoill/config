@@ -1,0 +1,21 @@
+% tmux
+
+# compile tmux (useful when git-bisecting)
+cd "$(git rev-parse --show-toplevel)" \
+    && begin \
+        ; git reset --hard $(git rev-parse HEAD) \
+        ; make clean \
+        ; make distclean \
+        ; sed -i '/AM_CFLAGS/s/-O2/-O0/' Makefile.am \
+        ; sh autogen.sh \
+            && ./configure \
+            && make \
+        ; tput bel \
+        ; notify-send 'compilation finished' \
+    ; end
+
+# start tmux with no config
+tmux -Lx -f /dev/null
+
+# start tmux with MRE config
+tmux -Lx -f ~/.config/tmux/MRE
