@@ -1,0 +1,98 @@
+start in rescue mode                    «Esc»
+                                        boot: rescue
+# This assumes that you start from a netinst CD or live install image. {{{
+#
+# It doesn't  work at  your usual  GRUB menu  (the one  installed on  your SSD).
+# Also, Escape needs to  be pressed at the *main* installer  menu (in a submenu,
+# Escape is equivalent to selecting "back").
+#
+# ---
+#
+# Once you're  in rescue  mode, answer  the questions to  set up  your language,
+# country, locale,  keyboard layout,  and network.  At  the "Enter  rescue mode"
+# step, select  the device to  use as root  filesystem (typically that  would be
+# `/dev/sda1`).  Then, choose "Execute a  shell in /dev/...".  Once you've fixed
+# your system, press `CTRL-D`, and select "Reboot the system".
+#
+# ---
+#
+# You could also  start in rescue mode  from the menu, but  the entry's location
+# depends on the type of image you're  booting from.  From the menu of a netinst
+# CD image:
+#
+#     Advanced options
+#     > Rescue mode
+#
+# From the menu of a live install image:
+#
+#     Advanced install options
+#     > Text installer
+#     > Rescue mode
+#
+# Or, you  can select an  entry which installs the  system (any such  entry will
+# do),  and press  Tab.  Then,  before `---`,  insert `rescue/enable=true`,  and
+# press Enter.
+#
+# ----
+#
+# From the `boot:` prompt, I can't get back to the menu!
+#
+# There's no direct way to get back  to the installer menu (executing the `menu`
+# command *might* work in some cases, e.g. if you've booted from a Grml ISO).
+#
+# In addition to `rescue`, other commands might be available:
+#
+#    - `install` (select "Abort installation" to reboot the machine)
+#    - `expert` (expert install)
+#    - `hdt` (aka Hardware Detection Tool); from there, you can reboot by
+#      pressing `r` for "Reboot", then Enter
+#
+# Note that  `hdt` is not  available in the  netinst CD image  (it is in  a live
+# install image).
+#}}}
+# You can also start in recovery/rescue mode from your usual GRUB menu.{{{
+#
+# Select "Advanced options  for Debian GNU/Linux", then a  kernel version ending
+# with "(recovery mode)".
+#
+# But this assumes that  GRUB itself is not broken, and there  is still at least
+# one kernel to boot from.  If that's not  the case, start in rescue mode from a
+# Debian installer.
+#
+# ---
+#
+# Don't be confused by the terminology.  At the GRUB menu, it's called "recovery
+# mode".  But later, when the system starts, the messages call it "rescue mode".
+# These terms refer to the same thing.
+#}}}
+# I get an error!  "Cannot open access to console, the root account is locked."{{{
+#
+# This means  that you didn't  provide a password  for root when  installing the
+# system.
+#
+# Boot  from  a  netinst CD  or  live  install  image  (they don't  require  any
+# password).  If you don't  have a USB drive with one of  these images, try this
+# workaround:
+#
+#    - at the GRUB menu, press `e` to access its config
+#    - find the line starting with `linux /boot/vmlinuz-...`
+#    - append `rw init=/bin/bash` on that line (*)
+#    - press `CTRL-X`
+#    - execute `$ passwd root` to give a password to the root account
+#    - reboot with `$ reboot --force`
+#
+# Once you no longer need the root account, you can re-lock it:
+#
+#     $ sudo passwd --lock root
+#
+# (*) Alternatively, append `systemd.debug-shell=1`.
+# This will give you a root shell accessible by pressing `CTRL-ALT-F9`.
+#
+# ---
+#
+# Beware: That  workaround  does   not  start  in  rescue   mode.   Neither  the
+# keyboard  layout (QWERTY  by default),  nor the  network are  configured.  You
+# might  manually  configure  the  keyboard   layout  to  AZERTY,  by  executing
+# `$ loadkeys fr`.
+#}}}
+# For more info: https://www.debian.org/releases/stable/amd64/ch08s06.en.html

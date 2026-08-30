@@ -1,0 +1,200 @@
+% process
+
+$ PID: ps -e --format=pid=,comm= \
+    --- --map "awk '{ print $1 }'"
+
+$ user: getent passwd | awk -F':' '{ print $1 }' | sort
+
+# get PID of newest/oldest process with given name
+pgrep --oldest --exact <name>
+    # For the newest, replace `--oldest` with `--newest`.
+    # Alternatively, use `pidof(8)`:  `$ pidof -s ❬name❭`
+
+# monitor given process over time
+htop -p <pid>
+    # You can  monitor several  processes with a  comma-separated list  of PIDs.
+    # This can be  handy if you want  to monitor a program  which starts several
+    # processes:
+    #
+    #     $ htop -p $(pidof -d, ❬pgm❭)
+
+# list names of supplementary groups of given process
+ps -e --format=pid,supgrp | grep '^\s*<PID>\s'
+    # Alternative:
+    #
+    #     $ grep ^Groups: /proc/❬PID❭/status
+    #
+    # This lists the IDs of the groups; not their names.
+
+# list limits imposed on resources available to current shell and its children
+ulimit --all
+
+# list open file descriptors of current shell
+ls -l /proc/$fish_pid/fd
+
+# list zombie processes
+ps -e --format=pid=,stat=,cmd= | awk '$2 ~ /Z/'
+    #    - `R`: running or runnable
+    #    - `S`: interruptible sleep (waiting for an event to complete)
+    #    - `T`: stopped by job control signal
+    #    - `Z`: defunct ("zombie") process, terminated but not reaped by its parent
+    #    - `s`: is a session leader
+    #    - `+`: is in the foreground process group
+
+# print environment of given process
+cat /proc/<PID>/environ | tr '\0' '\n'
+    # You might get rid of `cat(1)` with a simple `<` redirection:
+    #
+    #     $ tr '\0' '\n' < /proc/❬PID❭/environ
+    #
+    # But that won't work if the process is owned by the root user:
+    #
+    #     $ tr '\0' '\n' < /proc/1/environ
+    #     warning: An error occurred while redirecting file '/proc/1/environ'
+    #     open: Permission denied
+    #
+    # In contrast, with `cat(1)`, you just need to prepend `sudo(8)`.
+
+# print UIDs of of given process
+ps -e --format=pid,comm,ruid,euid,suid | grep '^\s*<PID>\s'
+    # Alternative:
+    #
+    #     $ ps -e --format=pid,comm,ruser,euser,suser | grep '^\s*❬PID❭\s'
+    #                               ^---------------^
+
+# kill frozen GUI application without knowing its name nor PID
+xkill
+    # Hover your cursor on the window, then left-click on it.
+    # The only thing that xkill(1) does, is to close the connection to the X server.
+    # There's no guarantee that the application will abort nicely, or even abort
+    # at all.
+    # Many existing applications do indeed abort  when their connection to the X
+    # server is closed, but some can choose to continue.
+
+% process, capabilities
+@ process
+
+$ capability: awk '/^#define CAP[_[:upper:]]*[ \t]*[0-9]*$/ { print $2 }' /usr/include/linux/capability.h | sort
+
+; `man 7 capabilities /Thread capability sets`
+$ CapSet: printf '%s\n' 'which capability set?' Inherited Permitted Effective Bounding Ambient \
+    --- --header-lines 1 \
+        --map "\
+            case $(cat) in \
+                Permitted) printf 'CapPrm' ;; \
+                Inheritable) printf 'CapInh' ;; \
+                Effective) printf 'CapEff' ;; \
+                Bounding) printf 'CapBnd' ;; \
+                Ambient) printf 'CapAmb' ;; \
+            esac \
+        "
+
+# list binaries with capabilities
+getcap -r / 2>/dev/null
+
+# print capabilities of given binary
+getcap $(type --path <binary>)
+
+# print capabilities of normal user process
+capsh --print
+
+# print capabilities of given process
+grep ^Cap /proc/<PID>/status
+    # The hex digits represent the capabilities in the set.
+    # They can be decoded with `capsh(1)`.
+
+# print capabilities in given set of given process
+capsh --decode=$(awk '/^<CapSet>/ { print $2 }' /proc/<PID>/status)
+
+# add given capability to permitted set of given binary and set its effective flag
+sudo setcap <capability>+ep $(type --path <binary>)
+    # Useful for a binary which is not “capability aware”.
+    #
+    # That is, a binary which – when `execve(2)`'d – creates a process which
+    # does not call  `capset(2)` to copy a needed capability  from its permitted
+    # set to its effective set.
+    #
+    # A file has no effective set; it has an effective flag.  When the effective
+    # flag is  set, `execve(2)` automatically  copies all the  capabilities from
+    # the permitted set to the effective set.
+    #
+    # This  is slightly  less  secure  than if  the  binary called  `capset(2)`,
+    # because the process will keep the  capabilities for its whole life.  If it
+    # was  programmed to  call `capset(2)`,  it could  add a  capability to  its
+    # effective set dynamically, and drop it as soon as it's no longer needed.
+
+% process, lsof
+@ process
+
+; You  can run  `lsof(8)` as  root or  as a  regular user,  but you'll  get more
+; information as root; hence why we always use `sudo(8)` here.
+;
+; TODO: But as root, we get this error:
+;
+;     lsof: WARNING: can't stat() fuse.gvfsd-fuse file system /run/user/1000/gvfs
+;           Output information may be incomplete.
+;
+; It just adds noise.  How to suppress it?  Without having to type `2>/dev/null`
+; every single time we execute `lsof(8)`...
+;
+; Edit: We could use the `-w` flag.
+;
+; ---
+;
+; We don't have this issue in Debian 12 in a VM.  Why?
+; Did we misconfigure something in Ubuntu?
+
+# list processes opening given file
+sudo lsof <file>
+    # To just get their PIDs, use `-t` (for *t*erse):
+    #
+    #     $ sudo lsof -t ❬file❭
+    #                 ^^
+    #
+    # Useful when  you need to unmount  a partition, but you  can't because some
+    # process is still accessing a file in it.
+
+# list files opened by given process
+sudo lsof -p <PID>
+    # If you prefer to give the name of a program, rather than a PID:
+    #
+    #                            vv
+    #     $ sudo lsof -p $(pidof -s ❬pgm❭)
+    #     $ sudo lsof -p $(pidof -d, ❬pgm❭)
+    #                            ^^^
+    #
+    # The `-d,` syntax lets you monitor all the processes started by the program
+    # (e.g. Firefox  starts  several).   OTOH,  `-s` only  monitors  the  latest
+    # process started by the program.
+
+# list files opened under given directory
+sudo lsof +D <dir>
+    # Avoid using this command  if `❬dir❭` is large; it can  be too slow and
+    # consume too much CPU.
+
+# list files opened for given user
+sudo lsof -u <user> -nP
+
+# list opened Unix domain sockets
+sudo lsof -U
+    # I think  `type=STREAM` means  that the  socket expects  to receive  a byte
+    # stream, which it  converts into TCP packets.  And  `type=DGRAM` means that
+    # the  socket expects  to  receive  datagrams, which  it  converts into  UDP
+    # packets.  See: `man 2 socket /SOCK_STREAM`.
+
+# list opened files satisfying 2 conditions
+sudo lsof <cond1> -a <cond2>
+    # The  man  page   uses  the  term  "list  selection   options"  instead  of
+    # "conditions".
+    #
+    # ---
+    #
+    # For example, to list IPv4 sockets opened by the process whose PID is `1234`:
+    #
+    #                 v--v    v-----v
+    #     $ sudo lsof -i 4 -a -p 1234
+    #                      ^^
+
+# get path to binary from which given process was started
+sudo lsof -p <PID> | awk '/ txt / { print $NF }'
+    # `txt`: program text (code and data)

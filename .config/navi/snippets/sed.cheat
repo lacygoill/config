@@ -1,0 +1,409 @@
+% sed
+
+# run sed command
+sed <options> <script> <input>
+    # `❬script❭` can be:
+    #
+    #    - a quoted string (*)
+    #    - multiple quoted strings (*), each preceded by `-e`
+    #    - one or several files, each preceded by `-f`
+    #    - a mix of `-e` strings and `-f` files
+    #
+    # (*) Technically,  quotes are  only necessary  to protect  possible special
+    # characters from the shell (e.g.  space, `*`, `$`, ...). What distinguishes
+    # `❬script❭` from `❬input❭` is its position:  if no `-e` is used, it
+    # must be  the first positional argument,  otherwise it must follow  an `-e`
+    # option.
+    #
+    # ---
+    #
+    # If  `❬script❭`  contains multiple  statements,  and  two of  them  are
+    # written consecutively in the same string/file, they must be separated by a
+    # semicolon or a newline.
+    #
+    # ---
+    #
+    # If  a  sequence  of  `-e`  string(s) and/or  `-f`  file(s)  is  specified,
+    # `❬script❭` results from their concatenation.
+    #
+    # ---
+    #
+    # `❬input❭` can be  one or several file(s).  If  omitted, `sed(1)` reads
+    # its  STDIN which  by default  is  connected to  the terminal  (but can  be
+    # re-connected to a pipe via `|` or a file via `<`).
+
+# suppress auto-printing of pattern space
+sed -n ...
+    # Without `-n`, the auto-print of the pattern space occurs:
+    #
+    #    - at the end of a cycle
+    #    - right before the `n` command replaces the pattern space with the
+    #      next input line (but not before `N` appends the next input line)
+    #
+    # ---
+    #
+    # `-n` can't suppress commands whose goal is to explicitly print something:
+    #
+    #    - `p`, `P`, `l`
+    #    - `=`, `F`
+    #
+    # And it can't suppress the printing of the text added by:
+    #
+    #    - `a`, `i`, `c`
+    #    - `r`, `R`
+    #
+    # ---
+    #
+    # A special case of auto-printing occurs  when making `sed(1)` quit with `q`
+    # (because  that  causes the  current  cycle  to  terminate).  This  can  be
+    # suppressed by executing `Q` instead.
+    #
+    # ---
+    #
+    # Corner case: without GNU extensions (`--posix`), if `N` is executed on the
+    # last line, the pattern space is not auto-printed.
+
+# print first and last line of each input file
+sed -n -s '1p; $p' <input>
+    # Without `-s`  (aka `--separate`), `sed(1)` would  process `❬input❭` as
+    # if  a  single  file  had  been given,  whose  contents  results  from  the
+    # concatenation of  all input files.  As  a result, it would  only print the
+    # first line of the first file, and the last line of the last one.
+    #
+    # With `-s`, line addresses are relative to the start of each input file.
+    #
+    # With `-s`, range  addresses such as `/abc/,/def/` are not  allowed to span
+    # several files.   Also, `R file` rewinds  its reading of `file`  after each
+    # input file has been processed.
+
+# create backup of given file before editing it in-place
+sed -i'.bak' [--follow-symlinks] ...
+    # If the input is a file  named `foo`, `-i'.bak'` will create `foo.bak` with
+    # the original contents.
+    #
+    # ---
+    #
+    # Since `-i`  accepts an optional value,  it can't be combined  with another
+    # option immediately  afterward.  For  example, you  can't combine  `-i` and
+    # `-e` like this: `-ie`. `e` would be interpreted as a backup extension.
+    #
+    # ---
+    #
+    # `-i`  implies `-s`;  i.e. if  you  specify multiple  input files,  they're
+    # processed separately.
+    #
+    # ---
+    #
+    # If your  input file is a  symlink, use `--follow-symlinks` in  addition to
+    # `-i`.  Without,  `sed(1)` would  replace the symlink  with a  regular file
+    # containing the modified contents of the link destination.
+    #
+    # ---
+    #
+    # Since `$ sed -i` actually operates on a  temporary file (which it moves to
+    # replace the original file once finished), you need write permission to the
+    # parent directory.  Without, `sed(1)` can't modify the directory listing to
+    # create its temporary copy of the file.
+    #
+    # ---
+    #
+    # `-i` causes the output to be redirected to a file.  If you also want it to
+    # be printed in the terminal,  execute `w /dev/stdout` or `w /dev/stderr` in
+    # your script.
+    #
+    # ---
+    #
+    # To use a naming scheme where the  original file name is not written at the
+    # start, use the special placeholder `*`:
+    #
+    #     $ cd /tmp
+    #     $ mkdir dir
+    #     $ echo 'hello' >file
+    #
+    #     $ sed -i'bak_*' 's/hello/world/' file
+    #                  ^
+    #
+    #     $ cat file
+    #     world
+    #     $ cat bak_file
+    #     hello
+    #
+    # ---
+    #
+    # `*` can be used to create a backup in a different directory:
+    #
+    #     $ sed -i'❬dir❭/*.bak' ...
+    #
+    # But it's replaced with the input file  name *exactly* as it was written on
+    # the CLI.  So, do *not* specify the  absolute path to your input file; only
+    # a relative one:
+    #
+    #                                            ✘
+    #                                          v---v
+    #     $ sed -i'dir/*.bak' 's/hello/world/' /tmp/file
+    #     sed: cannot rename /tmp/file: No such file or directory
+    #
+    # Here, `*` is  replaced with `/tmp/file` (because that's  how you specified
+    # your input), so  `sed(1)` tries to create a  backup in `dir/tmp/file.bak`,
+    # but `dir/tmp/` doesn't exist, hence the error.
+    #
+    # ---
+    #
+    # From `greybot` on the IRC channel `#bash` on Libera (`/msg greybot sed-i`):
+    #
+    #    > Some sed(1)s have -i which claims to "modify" files.
+    #    > It does not: sed is not a FILE editor.
+    #    > The -i flag re-writes the entire file and replaces the original with the new.
+    #    > This breaks open handles and hard-link sets, and fails to follow symlinks.
+    #    > -i is also unportable: valid sed on one system will write broken files on another.
+    #    > Use ed(1) or ex(1) instead: eg.
+    #    > ex -sc '%s/a/b/|wq' file
+    #
+    # Besides, `$ sed -i`  makes you lose  Vim's undo tree (which  `ex(1)` might
+    # otherwise  preserve provided  that  you set  `'undofile'` and  `'undodir'`
+    # appropriately).
+    #
+    # But `ex(1)` is tricky to use:
+    #
+    #     $ ex -Nu NONE -U NONE -i NONE -es -c '%s/pat/rep/e | wq!' file
+    #
+    # If  `ex(1)` calls  Vim, you  have to  prevent the  sourcing of  all config
+    # files, and the writing of the viminfo file.  Also, if an error occurs, Vim
+    # hangs (that's why we used the `e` flag of `:s`).  There are no such issues
+    # with Nvim, but you don't know in  advance which binary `ex(1)` is going to
+    # call; and Nvim is not as ubiquitous as `ex(1)`.
+
+# use NUL character instead of newline to separate lines when reading input
+sed -z ...
+
+# find invalid multibyte characters in given file
+sed -n 's/.//g; =; l' <file> | paste - - | awk '$2 != "$"'
+    # On each  line, the  second field prints  all invalid  multibyte characters
+    # (represented using  octal escape  sequences) contained  on the  line whose
+    # address is printed in the first field.
+    #
+    # ---
+    #
+    # Unfortunately,  you can't  use the  output to  reliably fix  the file.   A
+    # single line in the file might contain several invalid multibyte characters
+    # with various byte sizes.  And an  incomplete byte sequence might have been
+    # used to encode a valid character *before* on the same line:
+    #
+    #        valid encoding of Σ    invalid
+    #                   v------v    v--v
+    #     $ printf '____\xCE\xA3____\xCE____\n' | sed -n 's/.//g; =; l' | paste - - | awk '$2 != "$"'
+    #     1       \316$
+    #             ^--^
+    #             There are two \316 bytes on the line.
+    #             We don't have enough info to know which one we should remove.
+    #
+    # ---
+    #
+    # Not all sequences of bytes are valid in UTF-8.
+    # For example, `0xCE` does not encode a valid character:
+    #
+    #     $ printf 'a\xCEb\n'
+    #     a�b
+    #      ^
+    #
+    # An invalid multibyte character might be  represented with the glyph of the
+    # "replacement character", or  not at all.  It depends on  the terminal.  It
+    # is  displayed in  xterm, xfce4-terminal  and gnome-terminal  outside tmux.
+    # It's  not  in our  current  Kitty,  even  outside  tmux.  Also,  for  some
+    # reason, xterm  only displays 1  glyph for 2 consecutive  invalid multibyte
+    # characters.
+    #
+    # ---
+    #
+    # Don't conflate the  bytes encoding a character (which you  can read in Vim
+    # by pressing `g8`;  e.g. `\xCE\xA3` for `Σ`), with its  unicode code point
+    # (which you can  read by pressing `ga` – actually  `-a` in our customized
+    # Vim; e.g. `U+03A3` again  for `Σ`). They might look  similar, but they're
+    # still different:
+    #
+    #     CEA3
+    #     03A3
+    #
+    # ---
+    #
+    # GNU `sed(1)`  can produce and  match a  character with its  byte sequence,
+    # because it processes escape sequences *before* executing the code.  But it
+    # can't do anything with a unicode code point (it doesn't support any syntax
+    # for the latter).
+    #
+    # Vim can  *produce* a character both  with its unicode code  point, and its
+    # byte sequence:
+    #
+    #     :echo "\u03A3"
+    #     Σ
+    #
+    #     :echo "\xCE\xA3"
+    #     Σ
+    #
+    # But it can only *match* a character with its unicode code point:
+    #
+    #     /\%u03A3
+    #
+    # ---
+    #
+    # If  Vim  reads  an  incomplete  byte sequence,  it  pads  its  hexadecimal
+    # representation with `0`s on the left to produce a unicode code point which
+    # is then used to determine the glyph to print:
+    #
+    #               v--v
+    #     $ printf '\xCE' | vim - -es +'%p|qa!' -Nu NONE --not-a-term
+    #     Î
+    #
+    #                        v----v
+    #     $ vim -es +'put =\"\u00CE\"|%p|qa!' -Nu NONE
+    #     Î
+    #
+    # The transformation is only applied to  the buffer; not to the file.  Also,
+    # Vim might  infer a different character  encoding for a file  containing an
+    # invalid multibyte character (e.g. latin 1):
+    #
+    #     $ printf '\xCE' \
+    #       | vim - -es +'set verbose=1 | echo [&l:fileencoding, &encoding] | qa!' \
+    #       -Nu NONE -i NONE --not-a-term
+    #
+    #     ['latin1', 'utf-8']
+    #
+    # If that happens, and you write the buffer, `[converted]` is printed in the
+    # status line:
+    #
+    #     "invalid.txt" [converted] 1L, 5B
+    #                   ^---------^
+
+# test sed supports GNU extensions
+    #     $ test echo | sed 'v' 2>/dev/null \
+    #         && echo 'sed supports GNU extensions' \
+    #         || echo 'sed does NOT support GNU extensions'
+    #
+    # `v` will fail if GNU extensions are not supported.
+    #
+    # ---
+    #
+    # To  test for  a specific  version (e.g. `1.2.3`),  pass the  latter as  an
+    # argument to `v`:
+    #
+    #     $ test echo | sed 'v 1.2.3' 2>/dev/null \
+    #         && echo 'sed is more recent than 1.2.3' \
+    #         || echo 'sed is older than 1.2.3'
+
+# disable most GNU extensions
+sed --posix ...
+    # Useful to test the portability of your script.
+    #
+    # ---
+    #
+    # Most GNU  extensions merely add new  syntaxes to POSIX.  But  some of them
+    # actually violate POSIX (e.g. `N` command on  last line).  If you only want
+    # to disable those,  instead of using `--posix`, set  `POSIXLY_CORRECT` to a
+    # non-empty value.
+    #
+    # ---
+    #
+    # `--posix` does not disable:
+    #
+    #    - GNU shell options (the only POSIX shell options are `-e`, `-E`, `-f` and `-n`)
+    #    - `/dev/std*` files given as argument to the `r` or `w` command
+    #    - the ability to separate grouping, labeling and branching commands
+    #      with semicolons
+    #    - `\{,m\}` in a regex (even though it's a GNU extension)
+    #
+    # And some  disabled syntaxes do  not give any  error; they only  change the
+    # semantics of the code:
+    #
+    #    - in a bracket expression in a regex, `\n` and `\t` lose their special
+    #      meaning
+    #
+    #    - in the replacement field of a substitution command, `\l`, `\L`,
+    #      `\u`, `\U`, `\E` stand for `l`, `L`, `u`, `U`, `E`
+    #
+    #    - in a regex, `\?`, `\+`, `\|`, `\<`, `\>`, `\b`, `\B`, `\s`, `\S`,
+    #      `\w`, `\W` match the character after the backslash (you can still
+    #      use the meta-characters `?`, `+`, `|` with `--posix`, but only in
+    #      combination with `-E`)
+    #
+    # ---
+    #
+    # Support  for  `\(regex\)*`   is  required  by  POSIX,   but  many  non-GNU
+    # implementations do not support it.
+    #
+    # ---
+    #
+    # The only  C-like backslash sequences  that you  can portably assume  to be
+    # interpreted are  `\n` and `\\`;  in particular  `\t` is not  portable, and
+    # matches a `t` under most implementations, rather than a tab character.
+    #
+    # ---
+    #
+    # `^`  matches the  start  of the  pattern  space  even at  the  start of  a
+    # subexpression or  alternation (i.e.  after `\(`/`\|`),  like in  Vim.  But
+    # POSIX allow  implementations that  treat `^` as  an ordinary  character in
+    # that position.  Same thing for `$`.
+    #
+    # ---
+    #
+    # Some implementations have a limit of 199 commands per script.
+    #
+    # ---
+    #
+    # For portability, keep `N` between 0 and 255 (inclusive), for `\{N\}` in a regex.
+    #
+    # ---
+    #
+    # POSIX specifies  that implementations  should support  at least  8192 byte
+    # line  lengths (for  the pattern  and hold  spaces).  GNU  `sed(1)` has  no
+    # built-in limit  on line length.   Some implementations have been  known to
+    # limit line lengths to 4000 bytes.
+
+# debug script
+sed --debug ...
+    # This  will print  the  script in  canonical form,  and  annotate the  code
+    # execution.  Auto-printed lines (at the end  of a cycle, or right after `n`
+    # command) are displayed in the middle of the annotations.
+    #
+    # ---
+    #
+    # TODO: Executing `b` inside a  group unexpectedly increases the indentation
+    # of commands in the annotations, making it harder to follow the code:
+    #
+    #           vv
+    #     $ seq 10 | sed -n --debug '{ b }'
+    #     ...
+    #     PATTERN: 10
+    #     COMMAND:                   {
+    #     COMMAND:                     b
+    #             ^-------------------^
+    #     END-OF-CYCLE:
+    #
+    #           vv
+    #     $ seq 20 | sed -n --debug '{ b }'
+    #     ...
+    #     PATTERN: 20
+    #     COMMAND:                                       {
+    #     COMMAND:                                         b
+    #             ^---------------------------------------^
+    #     END-OF-CYCLE:
+    #
+    # Is that a bug that we should report?
+    #
+    # For the  moment, if  you capture the  output in Vim,  wrap your  lines, or
+    # remove the indentation:
+    #
+    #     :%s/^COMMAND:\zs\s\+/ /
+    #
+    # ---
+    #
+    # TODO: `:label` is replaced by `(null)`  when the script is executed from a
+    # file:
+    #
+    #     $ printf '%s\n' '#!/usr/bin/sed -f' ':label' >/tmp/sed.sed
+    #     $ chmod u+x /tmp/sed.sed
+    #     $ /tmp/sed.sed --debug /dev/null
+    #     SED PROGRAM:
+    #       :(null)
+    #        ^----^
+    #
+    # Is that a bug?

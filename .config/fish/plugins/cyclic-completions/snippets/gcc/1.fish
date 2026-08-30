@@ -1,0 +1,1 @@
+-Wno-WARNING  # suppress GCC warning

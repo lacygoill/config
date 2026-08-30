@@ -1,0 +1,77 @@
+[alias]
+    ; How do git aliases work?{{{
+    ;
+    ; https://git-scm.com/book/en/v2/Git-Basics-Git-Aliases
+    ;}}}
+    ; Why are they better than shell aliases?{{{
+    ;
+    ; Shell aliases are bad in general.
+    ; Besides, git aliases are separate from shell aliases; no risk of conflict.
+    ; Finally, the shell completion is better after a git alias.
+    ;}}}
+    ; Can you give some examples?{{{
+    ;
+    ;     ch = checkout
+    ;     chm = checkout master
+    ;}}}
+    ; How to make a git alias run shell code?{{{
+    ;
+    ; https://github.com/alfunx/.dotfiles/blob/c55e6ee07132f367847fb544fd8e9b01aa03d34c/.gitconfig#L230-L444
+    ;
+    ; Example:
+    ;
+    ;     dr = "!f() { git diff -c ${1:-HEAD}~..${1:-HEAD}; }; f"
+    ;}}}
+    ; Why don't you use any alias?{{{
+    ;
+    ; It obfuscates the code being run.
+    ; I prefer a shell abbreviation which is automatically expanded.
+    ;}}}
+[color]
+        diff = auto
+        status = auto
+        branch = auto
+[commit]
+        template = ~/.config/git/message.txt
+        ; When I'm writing a commit message, show me unified diff between the HEAD commit and what would be committed.{{{
+        ;
+        ; Useful to  get reminded of what  changes the commit includes,  and use
+        ; that info to write a better commit title.
+        ;
+        ; See the commit.verbose configuration variable in `man git-config(1)`.
+        ;}}}
+        verbose = true
+[core]
+        editor = vim
+        excludesfile = ~/.cvsignore
+        pager = LESS=i~MRS less
+[credential]
+        helper = cache --timeout=14400
+[help]
+        autocorrect = 10
+[merge]
+        tool = vimdiff
+[push]
+        ; Get rid of annoying message when we push a branch without providing any name.
+        ; https://stackoverflow.com/a/13148313/9690698
+        default = simple
+[user]
+	name = lacygoill
+        email = lacygoill@lacygoill.me
+[diff]
+        ; use "patience diff" algorithm when generating patches
+        ; `man git-config /diff\.algorithm`
+        algorithm = patience
+        ; enable experimental heuristics that shift diff hunk boundaries to make patches easier to read
+        ; `man git-config /diff\.indentHeuristic`
+        indentHeuristic = true
+[advice]
+        ; Do *not* show  directions on how to proceed from  the current state in
+        ; the output  of git-status(1), as  well as  in the template  shown when
+        ; writing  commit messages  in git-commit(1),  and in  the help  message
+        ; shown by gitcheckout(1) when switching branch.
+        statusHints = false
+[init]
+        ; Set the name of the default branch created by `$ git init`.
+        ; It's "master" by default.  Require Git version 2.28.0.
+	defaultBranch = main

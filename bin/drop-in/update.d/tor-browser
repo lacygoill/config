@@ -1,0 +1,15 @@
+#!/bin/bash -
+
+# For help: https://tb-manual.torproject.org/installation/
+
+readonly INSTALL_DIR="$HOME/.local/bin/tor-browser_en-US"
+if [[ -d "$INSTALL_DIR" ]]; then
+  printf 'Found existing installation at %s.  Bailing out.\n' "$INSTALL_DIR" >&2
+  exit 1
+fi
+
+source "${0%/*}/_lib"
+_Extract_Archive 'tor-browser' 'https://www.torproject.org/download/'
+
+mkdir -p "$INSTALL_DIR"
+cp -R ./* "$INSTALL_DIR"

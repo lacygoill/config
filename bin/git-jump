@@ -1,0 +1,112 @@
+#!/bin/bash -
+
+# TODO: Finish assimilating this script.
+#
+# Also, it's quite old.  Check out if it was updated in the last years:
+# https://github.com/git/git/tree/master/contrib/git-jump
+# If it was, merge any interesting patch.
+
+# Functions {{{1
+function Usage { # {{{2
+  tee <<'EOF'
+usage: git jump <mode> [<args>]
+
+Jump to interesting elements in an editor.
+The <mode> parameter is one of:
+
+diff: elements are diff hunks.  Arguments are given to `diff(1)`.
+
+merge: elements are merge conflicts.  Arguments are ignored.
+
+grep: elements are grep hits.  Arguments are given to `git-grep(1)` or, if
+      configured, to the command in `jump.grepCmd`.
+
+ws: elements are whitespace errors.  Arguments are given to `$ diff --check`.
+EOF
+}
+
+function Open_Editor { # {{{2
+  local editor
+  editor="$(git var GIT_EDITOR)"
+  $editor -q "$1"
+}
+
+function Mode_diff { # {{{2
+  IFS= read -r -d '' extract_quickfix_entries <<'AWK'
+  /^\+\+\+ .*/ {
+    sub(/^\+\+\+ /, "")
+    file = $0
+    next
+  }
+  file == "" { next }
+  /^@@ .*\+[[:digit:]]/ {
+    sub(/^@@ [^+]*\+/, "")
+    sub(/[^[:digit:]].*/, "")
+    line = $0
+    next
+  }
+  line == "" { next }
+  /^ / {
+    line++
+    next
+  }
+  /^[-+]/ {
+    sub(/^[-+][[:blank:]]*/, "")
+    # to get a valid entry in Vim quickfix list
+    if ($0 == "")
+      $0 = " "
+    printf("%s:%d:%s\n", file, line, $0)
+    line = ""
+  }
+AWK
+
+  git diff --no-prefix --relative "$@" \
+    | awk "$extract_quickfix_entries"
+}
+
+function Mode_merge { # {{{2
+  local fname
+  git ls-files --unmerged \
+    | sed 's/[^\t]*\t//' \
+    | LC_ALL=C sort --unique \
+    | while IFS= read -r fname; do
+        grep --with-filename --line-number '^<<<<<<<' "$fname"
+      done
+}
+
+function Mode_grep { # {{{2
+  local cmd
+  cmd="$(git config jump.grepCmd)"
+  [[ -n "$cmd" ]] \
+    || cmd='git grep --line-number --column'
+  # Grep `-n` generates  nice quickfix-looking lines by itself,  but let's clean
+  # up extra whitespace, so  they look better if the editor shows  them to us in
+  # the status bar.
+  $cmd "$@" \
+    | sed '
+        s/[[:blank:]]\+/ /g
+        s/^ *//
+        '
+}
+
+function Mode_ws { # {{{2
+  git diff --check "$@"
+}
+# }}}1
+# Execution {{{1
+
+if (( $# == 0 )); then
+  Usage >&2
+  exit 1
+fi
+
+mode="$1"
+shift
+
+tmp="$(mktemp -t git-jump.XXXXXX)" || exit 1
+trap 'rm -f "$tmp"' ABRT EXIT HUP INT QUIT TERM
+
+type "Mode_$mode" >/dev/null 2>&1 || { Usage >&2; exit 1; }
+"Mode_$mode" "$@" >"$tmp"
+[[ -s "$tmp" ]] || exit 0
+Open_Editor "$tmp"

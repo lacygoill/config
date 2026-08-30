@@ -1,0 +1,21 @@
+login name                              anonymous
+password                                user@example.com
+
+list supported commands                 help
+print help about given command          help ‹cmd›
+
+print CWD on remote machine             pwd
+print CWD on local machine              lpwd
+
+change CWD on remote machine            cd ‹dir›
+# on most  anonymous FTP  servers, the  files for  public downloading  are found
+# somewhere under the `pub/` directory
+
+change CWD on local machine             lcd ‹dir›
+
+list directory on remote machine        ls
+
+download file from remote               get ‹file›
+# on the local machine, the file will be downloaded into `lpwd`
+
+log off the remote                      bye

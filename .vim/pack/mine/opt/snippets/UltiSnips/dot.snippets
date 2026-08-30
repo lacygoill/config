@@ -1,0 +1,17 @@
+snippet t01 "Undirected graph" Am
+graph ${1:G} {
+	${2:a -- b;}
+}
+endsnippet
+
+snippet t02 "Directed graph" Am
+digraph ${1:D} {
+	${2:a -> b;}
+}
+endsnippet
+
+snippet t03 "subgraph" Am
+subgraph cluster_${1:name} {
+	$0
+}
+endsnippet

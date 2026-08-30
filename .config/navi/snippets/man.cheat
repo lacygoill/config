@@ -1,0 +1,80 @@
+% man, manpage
+
+$ cmd: compgen -A command
+
+$ man_page: find . -maxdepth 1 -regex '.*\.[1-9]$' -printf '%P\n' 2>/dev/null
+
+; Make sure hyphens are properly escaped.
+;
+; `man` greps the source code of the man pages, not their rendered version.  And
+; in the source code, a hyphen must be escaped to be rendered literally.
+;
+;                                    to prevent the shell from removing the backslashes
+;                                    v                   v
+;     $ man --global-apropos --where 'word\-with\-hyphens'
+;                                         ^     ^
+;                                         properly escaped hyphens
+$ regex: --- --map 'sed "s/-/\\\-/g"'
+
+# print short help for the man(1) command
+man --help
+
+# print where to find man page(s) for given command
+man --where --all <cmd>
+
+# print short description of given command (NAME section)
+man --whatis <cmd>
+
+# list man pages related to given topic
+man --apropos '<topic>'
+
+# grep man pages with given keyword
+man --global-apropos --sections=<n> --where <keyword>
+
+# grep man pages with given regex
+man --global-apropos --sections=<n> --where --regex '<regex>'
+
+# check formatting of given man page in terminal
+groff -m man -T ascii <man_page>
+    # If `❬man_page❭` is available as an uncompressed file:
+    #
+    #     $ groff -m man -T ascii $(man --where ❬cmd❭)
+    #
+    # If it's only available as a compressed file:
+    #
+    #     $ zcat $(man --where ❬cmd❭) | groff -m man -T ascii
+
+# check formatting of given man page in pdf
+groff -m man -T pdf <man_page> | zathura -
+
+# fix unexpected behavior from Vim when used as a man pager
+sudo aa-disable /etc/apparmor.d/usr.bin.man
+    # This disables the AppArmor profile of the man command.
+    # To re-set it to enforce mode, run:
+    #
+    #     $ sudo aa-enforce /etc/apparmor.d/usr.bin.man
+    #
+    # ---
+    #
+    # Do *not* set it to complain mode.
+    # To understand why, look for `aa-complain` in `admin.cheat`.
+    #
+    # ---
+    #
+    # The unexpected behavior  might be the inability to open  a link with `gx`,
+    # or to expand a wildcard (while 'wildignorecase' is set).
+    #
+    # See: https://github.com/vim/vim/issues/8991#issuecomment-983037604
+
+# fix :Man cmd: man.vim: No manual entry for cmd
+for cat_file in $(locate --regex '/man/cat1/[^/]*\.1\.gz'); trash put $cat_file; end
+    # A stale  cat file might  prevent `$ man --where` from printing  any output
+    # (without giving any error, nor returning with a non-zero status).
+    # In turn, this can break `:Man`.
+    #
+    # The previous command should fix this by removing those files.
+    # It's harmless, because `man(1)` can re-generate them at runtime.
+    # A cat  file is simply  a pre-processed version of  a manual page  which is
+    # cached, and used to improve the performance.
+    # The actual  man page is in  `/man/man1/`, and is formatted  in groff/troff
+    # which requires some processing.

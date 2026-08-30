@@ -1,0 +1,105 @@
+#!/bin/bash -
+
+# We mostly deal with custom *user* units; not with *system* units.{{{
+#
+# Those require  root privileges which  our user systemd instance  doesn't have.
+# That should not  be an issue though.   Indeed, we don't create  our own system
+# units; we  merely configure existing ones  by dropping `.conf` files  in `.d/`
+# directories.  And those don't require much maintenance (although, we can still
+# lint them).
+#}}}
+
+readonly ANSI_ESCAPE_CODES='\x1b\[[;[:digit:]]*m'
+
+readonly SCRIPT="${0##*/}"
+
+# delete broken symlinks {{{1
+
+find "$HOME/.config/systemd/user" -depth -type l \! -execdir /usr/bin/test -e '{}' \; -delete
+
+# A directory might  contain only broken symlinks.  After  the previous command,
+# such a directory is empty and no longer needed.  Remove it too.
+find "$HOME/.config/systemd/user" -depth -type d -empty -delete
+
+# re-enable our units {{{1
+
+# Rationale: Since `reenable` is  a combination of `disable`  and `enable`, it's
+# useful to  reset the  symlinks a  unit file  is enabled  with to  the defaults
+# configured in its  `[Install]` section (or to remove stale  symlinks if a unit
+# file no longer contains any `[Install]` section).
+
+grep --null --files-with-matches '^\[Install\]$' "$HOME/.config/systemd/user/"* 2>/dev/null \
+  | xargs --null --no-run-if-empty systemctl --user reenable --
+
+# lint our unit files {{{1
+
+# It's useful for example  to get a warning when we make a  mistake in a path in
+# an `ExecStart` directive.
+
+{
+  # user units
+  find "$HOME/.config/systemd/user/" \! -name '*.conf' -type f \
+    -exec systemd-analyze --user verify '{}' \+
+  # system units
+  find "$HOME/.config/etc/systemd/system/" \! -name '*.conf' -type f -print0 \
+    | while IFS= read -r -d '' file; do
+        etc_counterpart="${file#"$HOME/.config"}"
+        if [[ -f "$etc_counterpart" ]]; then
+          systemd-analyze --user verify "$etc_counterpart"
+        fi
+      done
+} 2>&1 \
+  | sed "s/$ANSI_ESCAPE_CODES//g" \
+  | ifne mail --subject="$SCRIPT" "$USER@localhost"
+
+# check that we never use `PassEnvironment=` {{{1
+
+# `PassEnvironment=`  is only  relevant  for the  *system*  service manager,  as
+# system  services  by default  do  not  automatically inherit  any  environment
+# variables set for the service manager itself.
+#
+# In the  case of the  `--user` service  manager, all environment  variables are
+# automatically passed to the executed processes; no need of this option then.
+#
+# For more info: `man 5 systemd.exec /^ENVIRONMENT/;/PassEnvironment=$`.
+
+# shellcheck disable=SC1003
+grep --files-with-matches --recursive '^PassEnvironment=' "$HOME/.config/systemd/user" \
+  | ifne sed -e '1i PassEnvironment is useless for the --user service manager:\' -e '' \
+  | ifne mail --subject="$SCRIPT" "$USER@localhost"
+  # Do *not* drop the second `ifne(1)`; you really need it for both `sed(1)` and
+  # `mail(1)`.  Otherwise, if `grep(1)` finds  nothing, `mail(1)` would send you
+  # a useless mail with an empty body.
+
+# check that no `Wants=` directive refers to a non-existing unit {{{1
+
+# It seems  that `$ systemd-analyze --user verify` doesn't give  any warning for
+# that kind of mistakes.
+
+# Don't use `list-units`.   For some reason, it might miss  some of our services
+# (even with `--all`).
+#                                                           v-------------v
+readarray -t all_our_units < <(systemctl --user --no-legend list-unit-files | awk '{ print $1 }')
+
+shopt -s lastpipe
+grep --only-matching --perl-regexp --recursive '^Wants=\K.*' "$HOME/.config/systemd/user/" \
+  | while IFS= read -r line; do
+      IFS=':' read -r filename wanted_unit <<<"$line"
+      if ! [[ " ${all_our_units[*]} " == *" $wanted_unit "* ]]; then
+        printf 'file "%s" wants "%s" but the latter does not exist\n' "$filename" "$wanted_unit"
+      fi
+    done \
+  | ifne mail --subject="$SCRIPT" "$USER@localhost"
+shopt -u lastpipe
+
+# check that all scripts under `~/bin/timers/` are used in timers {{{1
+
+readarray -t all_our_timers < <(systemctl --user --no-legend list-timers --all \
+  | awk '{ printf("%s/.config/systemd/user/%s\n", ENVIRON["HOME"], $NF) }')
+
+find "$HOME/bin/timers/" -type f -printf '%P\n' \
+  | while IFS= read -r timer_script; do
+      grep --quiet "$timer_script" "${all_our_timers[@]}" \
+        || printf 'script "%s/bin/timers/%s" is not referenced in any timer unit file\n' "$HOME" "$timer_script"
+    done \
+  | ifne mail --subject="$SCRIPT" "$USER@localhost"

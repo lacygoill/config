@@ -1,0 +1,53 @@
+# conditional argument {{{1
+
+snippet t01 "conditional argument" Am
+$ ${1:argument}: printf '%s\n' 'Do you want to ${2:do something}?' yes no \
+	--- --header-lines 1 \
+		--map "\
+			case $(cat) in \
+				yes) printf -- '${3:some token}' ;; \
+				no) ;; \
+			esac \
+		"
+$0
+endsnippet
+
+# dependent argument {{{1
+
+snippet t02 "argument whose value depends on values of other arguments" Am
+; The default value of \`dependent_argument\` depends on whatever you chose for \`arg1\` and \`arg2\`:{{{
+;
+;    - \`menu\` if you chose \`food\` and \`drink\` for \`arg1\` and \`arg2\`
+;    - \`something else\` otherwise
+;
+; BTW, notice how \`$arg1\` and \`$arg2\` can refer to the other arguments.
+; And notice  how we join  them with  a colon in  the \`case\` block,  because the
+; latter  only expects  1  argument; this  probably only  works  as expected  if
+; neither the value of \`arg1\` nor \`arg2\` can include a colon.
+;}}}
+
+# ${1: command description}
+${2:command} <${3:arg1}> <${4:arg2}> <${5:dependent_argument}>
+$ $5: case $$3:$$4 in \
+		food:drink) printf 'menu' ;; \
+		*) printf 'something else' ;; \
+	esac
+endsnippet
+
+# transformed argument {{{1
+
+snippet t03 "apply arbitrary transformation to selected value of argument" Am
+; This lets  you choose between  3 *displayed* values (\`val1\`,  \`val2\`, \`val3\`),
+; but it will be transformed into  a different *inserted* value after you choose
+; one.  BTW, notice how \`case\` can refer to the chosen value via \`$(cat)\`.
+
+# ${1: command description}
+${2:command} <${3:arg}>
+$ $3: printf '%s\n' ${4:val1} ${5:val2} ${6:val3} --- --map " \
+	case $(cat) in \
+		$4) printf '${7:transformed val1}' ;; \
+		$5) printf '${8:transformed val2}' ;; \
+		$6) printf '${9:transformed val3}' ;; \
+	esac \
+"
+endsnippet

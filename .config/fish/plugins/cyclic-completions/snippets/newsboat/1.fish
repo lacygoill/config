@@ -1,0 +1,1 @@
+--url-file=$HOME/.config/newsboat/book_podcast --cache-file=$HOME/.local/share/newsboat/cache-boook-podcast.db  # for podcasts about books

@@ -1,0 +1,61 @@
+#!/bin/bash -
+
+# TODO: Do we still need this script?
+#
+# Have a look at "How to reset the color scheme?" here:
+#
+#     ~/.config/etc/systemd/system/getty@.service.d/README.md
+
+#    > The colors  in the  Linux virtual  console running on  the framebuffer  can be
+#    > changed.  This is done by writing the escape code \\e]PXRRGGBB, where X is the
+#    > hexadecimal  index  of  the  color  from 0-F,  and  RRGGBB  is  a  traditional
+#    > hexadecimal RGB code.
+#
+# Source: https://wiki.archlinux.org/title/Color_output_in_console#Virtual_console
+
+# NOTE: Each program you use  can have its own color scheme.   You might need to
+# also tweak them so that the text they print is readable.
+
+# TODO: The colors might be reset to their original values (e.g. after `reset(1)`).
+# How to make our changes persistent?
+
+if ! [[ "$TERM" =~ ^linux ]]; then
+  echo 'only works in a virtual console' >&2
+  exit
+fi
+
+readonly Xresources="$HOME/.Xresources"
+if ! [[ -f "$Xresources" ]]; then
+  printf '%s does not exist\n' "$Xresources" >&2
+  exit
+fi
+
+extract_colors='s/^\*\.color\([[:digit:]]\{1,2\}\):\s\+#\([[:xdigit:]]\{6\}\)\s*$/\1 \2/p'
+IFS= read -r -d '' build_sequence <<'AWK'
+  $1 >= 16 {
+    next
+  }
+
+  # replace color0 with foreground (otherwise the result is too bright)
+  $1 == 0 {
+    $2 = foreground
+  }
+
+  # replace color7 with background (to be consistent)
+  $1 == 7 {
+    $2 = background
+  }
+
+  {
+    printf "\\e]P%X%s", $1, $2
+  }
+AWK
+
+foreground="$(sed -n 's/^\*\.foreground:\s\+#\([[:xdigit:]]\+\)/\1/p' "$Xresources")"
+background="$(sed -n 's/^\*\.background:\s\+#\([[:xdigit:]]\+\)/\1/p' "$Xresources")"
+
+seq="$(sed -n "$extract_colors" "$Xresources" \
+  | awk -v foreground="$foreground" -v background="$background" "$build_sequence")"
+
+printf '%b' "$seq"
+clear

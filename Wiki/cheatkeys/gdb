@@ -1,0 +1,101 @@
+Configuration {{{1
+
+log output in given file                set logging on
+disable built-in pager                  set pagination off
+# useful to avoid hit-enter prompt
+
+Stepping through {{{1
+
+set breakpoint on given function         b[reak] *‹function›
+
+set breakpoint on given address         b[reak] *0x‹address›
+# only works as expected if executed after run (not before)
+# Alternative:{{{
+#
+#     break *main+123
+#                ^--^
+# byte offset  from start  of main  function, which  you can  find in  output of
+# `(gdb) disassemble main`
+#}}}
+
+set breakpoint at function or line      b[reak] [file:][function|line]
+delete all breakpoints                  d[elete] br[eakpoints]
+
+set watchpoint on given variable        wa[tchpoints] ‹var›
+list watchpoints                        i[nfo] wa[tchpoints]
+delete given watchpoint(s)              d[elete] ‹watchpoint_number(s)›
+delete all breakpoints and watchpoints  d[elete]
+
+run program                             r[un]
+run program with argument               r[un] ‹arg›
+
+step over next source line              n[ext]
+step into next source line              s[tep]
+# What's the difference with `ni` and `si`?{{{
+#
+# Different granularity.
+# A single  source line can  contain multiple  instructions (in C,  separated by
+# semicolons).
+#}}}
+
+step over next instruction              ni
+step into next instruction              si
+# `ni` and `si` are shorthands for `nexti` and `stepi`
+
+skip code until next breakpoint         c[ontinue]
+
+Instrospection {{{1
+
+attach to running process               at[tach] ‹PID›
+detach from attached process            det[ach]
+
+print status of breakpoints             i[nfo] b[reakpoints]
+print status of watchpoints             i[nfo] wat[chpoints]
+
+list next ten lines of source code      l[ist]
+list previous ten lines of source code  l[ist] -
+list lines at current location          l[ist] .
+
+print help about given command          h[elp] ‹cmd›
+inspect values held by registers        i[nfo] r[egisters]
+
+inspect value of given register         x/s $‹register›
+# `/s` is a format which prints the value as a string
+
+print disassembly of main function      disassemble main
+
+print value of expression               print ‹expr›
+
+apply given command to all threads      thread apply all ‹cmd›
+print full backtrace                    bt full
+# can be prefixed with `thread apply all`
+
+Termdebug {{{1
+
+debug program                           :Termdebug ‹pgm›
+debug command with arguments            :TermdebugCommand ‹cmd›
+attach gdb to running Vim               :Termdebug vim ‹PID›
+use core file                           :Termdebug vim ‹core_file›
+
+Misc {{{1
+
+change working directory                cd ‹dir›
+print working directory                 pwd
+
+empty given register                    set $‹register› = 0
+
+start a shell                           shell
+
+enable tui                              tui enable
+# useful to follow relevant C source code during debugging session
+# Requirement: {{{
+# The binary must have been compiled with debugging information:
+#
+#     $ gcc -g ...
+#           ^^
+#}}}
+# Alternative: {{{
+#
+#     $ gdb -tui ...
+#           ^--^
+#}}}

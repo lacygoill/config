@@ -1,0 +1,84 @@
+# git ls-files --others --exclude-from=.git/info/exclude
+# Lines that start with '#' are comments.
+# For a project mostly in C, the following would be a good set of
+# exclude patterns (uncomment them if you want to use them):
+# *.[oa]
+# *~
+
+# ignore directory  where we  clone our  config, so that  we don't  create weird
+# recursion problems
+.cfg/
+
+# Ignore any  path which doesn't  start with  a dot; like  `Desktop/`, `Music/`,
+# `Pictures/`, ...
+/[^.W]*
+#   ^
+#   we have to accept `W` for our `Wiki/`
+
+# undo the `bin/` rule from `~/.cvsignore`
+!bin/
+
+.local/bin/
+
+# Ignore everything in `.config/cmus/`.
+.config/cmus/**
+# Except `.config/cmus/rc`.
+!.config/cmus/rc
+
+# Ignore symlinks created  by `systemctl(1)` when we enable  some `--user` units
+# (e.g. under `~/.config/systemd/user/timers.target.wants/`).
+.config/systemd/user/*.wants/
+
+# Ignore everything in `.config/weechat/`.
+.config/weechat/**
+# Except `.config/weechat/{config,MRE,README.md,Todo.md}`.
+!.config/weechat/config
+!.config/weechat/MRE
+!.config/weechat/*.md
+# And `.config/weechat/certs/{README,Todo}.md`.
+!.config/weechat/certs/
+!.config/weechat/certs/*.md
+# And `.config/weechat/python/*.py`.
+!.config/weechat/python/
+!.config/weechat/python/*.py
+
+# Ignore everything in `.config/xfce4/`.
+.config/xfce4/**
+
+# Ignore everything in `.local/`.
+.local/**
+# Except `.local/share/applications/README.md`.
+!.local/share/
+!.local/share/applications/
+!.local/share/applications/*.md
+
+# aptitude(8)
+.aptitude/
+
+# bash
+.bashrc
+.bash_logout
+.bash_history
+
+# Calibre
+.config/calibre/
+
+# Firefox
+.mozilla/
+
+# mpv
+.config/mpv/watch_later/
+
+# Ignore everything in `.ssh/`.
+.ssh/**
+# Except `config`, `rc`, and markdown files.
+!.ssh/config
+!.ssh/rc
+!.ssh/*.md
+
+# transmission
+.config/transmission-daemon/
+
+# Python virtual environments
+venv/
+.venv/

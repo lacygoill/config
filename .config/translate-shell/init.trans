@@ -1,0 +1,10 @@
+# https://github.com/soimort/translate-shell/wiki/Configuration
+
+{
+ # **t**arget **l**anguage
+ :tl "en"
+ :indent 4
+ :join-sentence true
+ :show-original false
+ :verbose true
+}

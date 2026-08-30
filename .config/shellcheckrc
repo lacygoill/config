@@ -1,0 +1,88 @@
+# directives {{{1
+
+# disable some error codes
+#     disable=SC1234,SC4567,SC5000-SC6000
+
+# Allow opening any `source`d file, even if not specified as input.{{{
+#
+# By default, shellcheck only follows files specified on the command-line:
+#
+#     $ shellcheck /path/to/script
+#                  ^-------------^
+#                  input file
+#                  (shellcheck scans it)
+#
+#     $ cat /path/to/script
+#     #!/bin/bash -
+#     source /path/to/other/script
+#            ^-------------------^
+#            NOT an input file
+#            (shellcheck does NOT scan it, unless external-sources is true)
+#}}}
+external-sources=true
+
+# look for `source`d files relative to the checked script
+source-path=SCRIPTDIR
+
+# optional checks {{{1
+# Run `$ shellcheck --list-optional` to get a list of them.
+
+# Suggest explicitly using -n in `[ $var ]`.{{{
+#
+# Bad:
+#
+#     [ "$var" ]
+#
+# Good:
+#
+#     [ -n "$var" ]
+#}}}
+enable=avoid-nullary-conditions
+
+# Notify when `set -e` is suppressed during function invocation.{{{
+#
+# Bad:
+#
+#     set -e; func() { cp ./*.txt ~/backup; rm ./*.txt; }; func && echo ok
+#
+# Good:
+#
+#     set -e; func() { cp ./*.txt ~/backup; rm ./*.txt; }; func; echo ok
+#}}}
+enable=check-set-e-suppressed
+
+# Warn when uppercase variables are unassigned.{{{
+#
+# Bad:
+#
+#     echo $VAR
+#
+# Good:
+#
+#     VAR=hello; echo $VAR
+#}}}
+enable=check-unassigned-uppercase
+
+# Suggest `command -v` instead of `which`.{{{
+#
+# Bad:
+#
+#     which javac
+#
+# Good:
+#
+#     command -v javac
+#}}}
+enable=deprecate-which
+
+# Suggest quoting variables without metacharacters.{{{
+#
+# Bad:
+#
+#     var=hello; echo $var
+#
+# Good:
+#
+#     var=hello; echo "$var"
+#}}}
+enable=quote-safe-variables

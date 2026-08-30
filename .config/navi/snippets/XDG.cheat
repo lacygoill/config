@@ -1,0 +1,35 @@
+% XDG
+
+$ desktop_file: locate --null '*.desktop' | xargs --max-args=1 --null basename --
+
+$ file: find . -maxdepth 1 -type f -printf '%P\n' 2>/dev/null
+
+$ MIME_type: grep --recursive MimeType $(locate '*.desktop') \
+    | sed 's/.*:MimeType=\(.*\)/\1/ ; s/;/\n/g' \
+    | sed '/^$/d' \
+    | sort --unique
+
+# get MIME encoding type of given file
+file --mime --no-pad <file>
+    #       ^------^
+    #       only useful if you specify several file paths
+    #
+    #     $ touch /tmp/foo{,bar}
+    #     $ file --mime /tmp/foo{,bar}
+    #
+    #              padding
+    #              vvv
+    #     /tmp/foo:    inode/x-empty; charset=binary
+    #     /tmp/foobar: inode/x-empty; charset=binary
+
+# get MIME type of given file
+xdg-mime query filetype <file>
+
+# get default application which handles given type of data
+xdg-mime query default <MIME_type>
+
+# set default application to handle given type of data
+xdg-mime default <desktop_file> <MIME_type>
+    # You can set the application to handle several types of data:
+    #
+    #     $ xdg-mime default ❬desktop_file❭ ❬MIME_type❭ ...

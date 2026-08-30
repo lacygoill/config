@@ -1,0 +1,43 @@
+[Unit]
+Description=Remove useless files frequently created by some programs
+# NOTE: Use this unit, and its associated `.service`, to delete more files if necessary.{{{
+#
+# To test the unit:
+#
+#     $ journalctl --user --boot=-0 --no-hostname --pager-end -nall --unit=remove-junk-files.service --follow
+#
+#     # open another terminal
+#     $ vim -Nu NONE
+#     # search some pattern, then quit
+#     # these lines should get appended in the journal:
+#     [...] systemd[...]: Started Remove useless files frequently created by some programs.
+#     [...] systemd[...]: remove-junk-files.service: Succeeded.
+#}}}
+
+[Path]
+
+# Even though we reset `viminfofile`  to `~/.local/share/vim/info` in our vimrc,
+# Vim might still create `~/.viminfo` when we debug an issue (e.g. `-Nu NONE`).
+PathExists=%h/.viminfo
+# FIXME: Often, the file is not deleted, because the service is not triggered.{{{
+#
+# Using `PathModified` instead of `PathChanged` does not help.
+#
+# I can reproduce  without triggering the service too quickly;  that is, without
+# exceeding the limits imposed by `StartLimitIntervalSec` and `StartLimitBurst`:
+#
+#     $ journalctl --user --boot=-0 --no-hostname --pager-end -nall --unit=remove-junk-files.service --follow
+#     # these messages are *not* printed
+#     [...]: Start request repeated too quickly.
+#     [...]: Failed with result 'start-limit-hit'.
+#     [...]: Failed to start ...
+#}}}
+PathModified=%h/.viminfo
+
+# Each  time we  log in,  one more  empty `config-err-*`  file is  created under
+# `/tmp`.  Not sure what  its purpose is, but it's distracting  in the output of
+# `ls(1)`.
+PathExistsGlob=/tmp/config-err-*
+
+[Install]
+WantedBy=paths.target

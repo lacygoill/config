@@ -1,0 +1,30 @@
+#!/bin/bash -
+
+# Rebuild a project  if any file in  the current directory is  added, removed or
+# modified.
+
+# Adapted from: http://eradman.com/entrproject/scripts/
+#
+# TODO: The  script must  have changed  quite a  lot compared  to the  original.
+# Check  out the  differences.   Did  we break  something?   Does our  `find(1)`
+# command find the same nodes?
+
+# TODO: Are there other interesting scripts at:
+# http://eradman.com/entrproject/scripts/
+# ?
+
+# Warning: Do *not* rename this script `watch`.
+# It would conflict with the `/usr/bin/watch` utility.
+
+if (( $# == 0 )); then
+  readonly COMMAND='make'
+else
+  readonly COMMAND="$*"
+fi
+
+# Sleep to allow Ctrl-C to operate
+while sleep .5; do
+  echo "Watching $PWD"
+  find . -mindepth 1 -name '.*' -prune -o -type d -print 2>/dev/null \
+    | entr -d "$COMMAND"
+done

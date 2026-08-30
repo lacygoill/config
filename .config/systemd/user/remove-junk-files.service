@@ -1,0 +1,11 @@
+[Unit]
+Description=Remove useless files frequently created by some programs
+
+[Service]
+Type=simple
+
+# `/usr/bin/sh`: to expand `*`.
+ExecStart=/usr/bin/sh -c '/usr/bin/rm --force %h/.viminfo /tmp/config-err-*'
+# If  you want  to know  which files  are removed  exactly, pass  `--verbose` to
+# `rm(1)`, and set `StandardOutput` (e.g. to the `journal`; but not permanently,
+# to avoid flooding it).

@@ -1,0 +1,114 @@
+#!/bin/bash -
+
+# Purpose: Save the permissions of our config files in a database file.
+# We'll use it in `~/bin/linux-installation-checklist`.
+#
+# For something more advanced, have a look at
+# `/usr/share/git-core/contrib/hooks/setgitperms.perl`.
+
+# Warning: Do not turn that script into a pre-push commit.
+# It would be too late to make the commit include the updated `DATABASE_FILE`.
+
+# Warning: Do not use absolute file paths.
+# It would make the  restoration less reliable if we work  on a different system
+# where we log in as a different user.
+
+
+# Warning: Any   change  of   the  delimiter   here  should   be  reflected   in
+# `~/bin/config-restore`.
+readonly DELIMITER=$'\t'
+readonly DATABASE_FILE="$HOME/.cfg-fileperms"
+
+readonly -a GIT_OPTIONS=( --git-dir="$HOME/.cfg" --work-tree="$HOME" )
+
+if ! command -v sponge >/dev/null; then
+  echo 'missing dependency: sponge' >&2
+  exit 1
+fi
+
+cd || exit 1
+
+# back up the database temporarily
+if [[ -f "$DATABASE_FILE" ]]; then
+  mv "$DATABASE_FILE"{,.bak}
+fi
+
+# iterate over the config files to save non-default permissions
+while IFS= read -r -d '' file; do
+  # Save permissions of a file if it makes sense.{{{
+  #
+  # That is:
+  #
+  #    - it exists
+  #    - it is not executable (Git already saves the executable bit)
+  #    - it is not a symlink (by definition, a symlink's permissions are set to `777`)
+  #    - it has non-default permissions (by definition, default permissions
+  #      can be set by the system)
+  #}}}
+  # Technically, `! [[ -x "$file" ]]` is wrong.{{{
+  #
+  # A file  might be  executable *and* have  non-default permissions.   But it's
+  # unlikely.  In  practice, non-default permissions  are intended to  limit the
+  # access of a non-executable file (e.g. `~/.netrc`).
+  #}}}
+  if [[ -f "$file" ]] && ! [[ -x "$file" ]] && ! [[ -L "$file" ]]; then
+    # get the config file's permissions
+    declare -i perms
+    perms="$(stat --format='%a' "$file")"
+    # Save them if they're non-default.{{{
+    #
+    # `644` and `664` are the default  permissions when the umask is resp. `022`
+    # and `002` (which are the most commonly used values).
+    #
+    # Saving default  permissions is not only  useless, it also makes  no sense,
+    # because restoring them on a different system might be wrong.
+    #
+    # Indeed, they're derived  from the umask whose value depends  on the system
+    # and the user:
+    #
+    #    - in Ubuntu, it's `002` (for a non-privileged user, but `022` for root)
+    #    - in Debian, it's `022`
+    #
+    # Also, from the arch wiki:
+    #
+    #    > **Most** Linux distributions, including Arch, set a umask default value of 022.
+    #
+    # "Most" != "All".
+    #
+    # It might even depend on whether you're using a login shell:
+    # https://discussion.fedoraproject.org/t/default-umask-value/71309
+    #}}}
+    if (( perms != 644 )) && (( perms != 664 )); then
+      printf '%s%s%s\n' "$file" "$DELIMITER" "$perms" >> "$DATABASE_FILE"
+    fi
+  fi
+done < <(git "${GIT_OPTIONS[@]}" ls-files -z)
+
+# There might be 2 lines for the same file, but with different permissions.
+# Only the last one should be kept (because it's the most recent).
+tac "$DATABASE_FILE" \
+  | LC_ALL=C sort --key=1b,1 --field-separator="$DELIMITER" --stable --unique \
+  | tac \
+  | sponge "$DATABASE_FILE"
+# Not sure  why, but `LC_ALL=C` gives  a nicer sorting with  regard to filenames
+# starting with a dot.
+#
+# ---
+#
+# Alternative to `sort(1)`:
+#
+#     | awk '!seen_lines[$0] { print $0; seen_lines[$0] = 1 }' \
+#
+# This should work too, but obviously the database would no longer be sorted.
+
+git "${GIT_OPTIONS[@]}" add "$DATABASE_FILE"
+
+# remove  the temporary  backup if  we created  one, and  were able  to build  a
+# non-empty database
+if [[ -f "$DATABASE_FILE".bak ]] \
+    && [[ -s "$DATABASE_FILE" ]]; then
+  rm -- "$DATABASE_FILE".bak
+fi
+
+# Exit with success status
+exit 0

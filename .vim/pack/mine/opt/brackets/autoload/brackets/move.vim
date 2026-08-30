@@ -1,0 +1,210 @@
+vim9script
+
+# Init {{{1
+
+import 'lg.vim'
+import autoload 'brackets/util.vim'
+
+const LHS2CMD: dict<list<string>> = {
+    ']q': ['cnext',     'cfirst'],
+    '[q': ['cprevious', 'clast'],
+    ']l': ['lnext',     'lfirst'],
+    '[l': ['lprevious', 'llast'],
+    '] C-q': ['cnfile', 'cfirst'],
+    '[ C-q': ['cpfile', 'clast'],
+    '] C-l': ['lnfile', 'lfirst'],
+    '[ C-l': ['lpfile', 'llast'],
+}
+
+const PATTERNS: dict<string> = {
+    def:              '^\C\s*\%(fu\%[nction]\|\%(export\s*\)\=def\)!\=\s\+',
+    enddef:           '^\C\s*\%(endf\%[unction]\|enddef\)\%(\s\|"\|$\)',
+    bash-func-start:  '^\s*\%(function\s\+\)\=\S\+\s*'
+        # a function name can be followed by `()`
+        .. '\%(()\s*\)\='
+        .. '{\%(\s*#\s*{{'
+        .. '{\d*\s*\)\=$',
+    bash-func-end:    '^}$',
+    fish-func-start:  '^function\s\+',
+    fish-func-end:    '^end$',
+    ref:              '\[.\{-1,}\](\zs.\{-1,})',
+    path:             '\f*/\&\%(\%(^\|\s\|`\)\)\@1<=[./~$]\f\+',
+    url:              '\C\%(https\=\|ftps\=\|www\)://\|!\=\[.\{-}\]\%((.\{-})\|\[.\{-}\]\)',
+    concealed-url:    '\[.\{-}\zs\](.\{-})',
+    codespan:         '`.\{-1,}`',
+    shell-prompt:     '^٪',
+}
+
+# Interface {{{1
+export def Next(lhs: string) #{{{2
+    var cnt: number = v:count1
+    # Do *not* use a `:try` conditional inside this function.{{{
+    #
+    # Inside a try conditional,  `:next`/`:previous` fail when the next/previous
+    # argument is not readable.
+    #
+    # https://github.com/vim/vim/issues/5451
+    #}}}
+    var argc: number = argc()
+    if argc < 2
+        echohl ErrorMsg
+        echo 'E163: There is only one file to edit'
+        echohl NONE
+        return
+    endif
+    for _ in range(cnt)
+        var argidx: number = argidx()
+        if lhs == ']a' && argidx == argc - 1
+            first
+        elseif lhs == '[a' && argidx == 0
+            last
+        elseif lhs == ']a'
+            next
+        elseif lhs =~ '[a'
+            previous
+        endif
+    endfor
+enddef
+
+export def Tnext(lhs: string) #{{{2
+    var cnt: string = v:count != 0 ? v:count->string() : ''
+
+    var cmd1: string
+    var cmd2: string
+    [cmd1, cmd2] = {
+        ']t': ['tnext', 'tfirst'],
+        '[t': ['tprevious', 'tlast'],
+        }[lhs]
+
+    try
+        execute cnt .. cmd1
+    # E73: tag stack empty
+    catch /^Vim\%((\a\+)\)\=:E73:/
+        lg.Catch()
+        return
+    # E425: Cannot go before first matching tag
+    # E428: Cannot go beyond last matching tag
+    catch /^Vim\%((\a\+)\)\=:\%(E425\|E428\):/
+        execute cmd2
+    endtry
+enddef
+
+export def Cnext(lhs: string) #{{{2
+    # Do *not* try to use `:cafter` & friends.{{{
+    #
+    # It  may seem  useful to  make our  custom commands  take into  account the
+    # current cursor position.  However:
+    #
+    #    - it needs a lot of code to get it right (see commit ef1ea5b89864969e0725b64b5a1159396344ce81)
+    #
+    #    - it only works under the assumption that your qf entries are sorted by their buffer,
+    #      line and column number; this is not always the case (e.g. `:WTF`)
+    #}}}
+    var cnt: number = v:count1
+    var cmd1: string
+    var cmd2: string
+    [cmd1, cmd2] = LHS2CMD[lhs]
+
+    for _ in range(cnt)
+        try
+            execute cmd1
+        # no entry in the qfl
+        catch /^Vim\%((\a\+)\)\=:E\%(42\|776\):/
+            lg.Catch()
+            return
+        # no more entry in the qfl; wrap around the edge
+        catch /^Vim\%((\a\+)\)\=:E553:/
+            execute cmd2
+        # E92: Buffer 123 not found
+        # can happen if the buffer has been wiped out since the last time you visited it
+        catch /^Vim\%((\a\+)\)\=:E92:/
+            lg.Catch()
+            return
+        endtry
+    endfor
+
+    util.OpenFold(lhs)
+enddef
+
+export def Cnewer(lhs: string) #{{{2
+    var cnt: number = v:count1
+    try
+        for i: number in range(1, cnt)
+            var cmd: string = {
+                '<q': 'colder',
+                '>q': 'cnewer',
+                '<l': 'lolder',
+                '>l': 'lnewer',
+                }[lhs]
+            if i < cnt
+                execute 'silent ' .. cmd
+            else
+                execute cmd
+            endif
+        endfor
+    # we've reached the end of the qf stack (or it's empty)
+    # E380: At bottom of quickfix stack
+    # E381: At top of quickfix stack
+    # E776: No location list
+    catch /^Vim\%((\a\+)\)\=:\%(E380\|E381\|E776\):/
+        # message from last list + message from first list = hit-enter prompt
+        redraw
+        try
+            var cmd: string = {
+                '<q': ':' .. getqflist({nr: '$'}).nr .. 'chistory',
+                '>q': ':1 chistory',
+                '<l': ':' .. getloclist(0, {nr: '$'}).nr .. 'lhistory',
+                '>l': ':1 lhistory',
+            }[lhs]
+            execute cmd
+        # the qf stack is empty
+        # E16: Invalid range
+        catch /^Vim\%((\a\+)\)\=:\%(E16\|E776\):/
+            lg.Catch()
+            return
+        endtry
+    endtry
+enddef
+
+export def Regex(kwd: string, is_fwd = true): string #{{{2
+    #                       necessary to get the full  name of the mode, otherwise in
+    #                       operator-pending mode, we would get 'n' instead of 'no'
+    #                       v--v
+    var mode: string = mode(true)
+    return printf("\<ScriptCmd>%s(%s, %d, %s)\<CR>",
+        Jump, string(kwd), is_fwd ? 1 : 0, string(mode))
+enddef
+#}}}1
+# Core {{{1
+def Jump( #{{{2
+    kwd: string,
+    is_fwd: bool,
+    mode: string
+)
+    var cnt: number = v:count1
+    var pat: string = get(PATTERNS, kwd, '')
+
+    if empty(pat)
+        return
+    endif
+
+    if mode == 'n'
+        normal! m'
+    endif
+
+    while cnt > 0
+        # Don't remove `W`; I like it.{{{
+        #
+        # For  example,  when I'm  cycling  through  urls  in a  markdown  files
+        # searching for some link, I like knowing that I've visited them all.
+        # If you remove `W`, we keep cycling as long as we press the mapping.
+        #}}}
+        search(pat, (is_fwd ? '' : 'b') .. 'W')
+        --cnt
+    endwhile
+
+    # the function shouldn't do anything in operator-pending mode
+    if mode =~ "[nvV\<C-V>]"
+        normal! zv
+    endif
+enddef

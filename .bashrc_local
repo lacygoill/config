@@ -1,0 +1,66 @@
+# shellcheck shell=bash
+
+# Save history  in `~/.local/share/` (to  avoid polluting our home  directory at
+# `~/.bash_history`).
+readonly HISTFILE="$HOME/.local/share/bash/history"
+
+# If the last command gave an error, print its exit status.
+# shellcheck disable=SC2154
+#
+#    > \[     begin a sequence of non-printing characters, which  could
+#    >        be  used  to  embed  a terminal control sequence into the
+#    >        prompt
+#    > \]     end a sequence of non-printing characters
+#
+#                                          vv                      vv    vv        vv
+PS1+='$(status=$?; (( status )) && printf "\[\033[30;41m\033[01;37m\][%d]\[\033[00m\] " "$status")'
+#                                            ^---------^^---------^        ^------^
+#                                        red background  white foreground  reset color
+
+# Disable XON/XOFF flow control.{{{
+#
+# By default, `C-s` and `C-q`  are interpreted by the terminal driver as
+# “stop sending data“, “continue sending“.
+#
+# Explanations:
+# http://unix.stackexchange.com/a/12108/125618
+# http://unix.stackexchange.com/a/12146/125618
+# http://unix.stackexchange.com/a/72092/125618
+# https://en.wikipedia.org/wiki/Software_flow_control
+#
+# Alternative: `$ stty -ixon`
+#}}}
+stty stop undef
+stty start undef
+# If you want to bind `C-\` in some shell program, you'll need to disable the `SIGQUIT` signal.{{{
+#
+#     stty quit undef
+#
+# For  the moment,  I prefer  to  keep the  default  behavior which  is for  the
+# terminal driver to send the `SIGQUIT` signal to the foreground process.
+# The latter can react to this signal however it wants, but usually it quits:
+#
+#     $ sleep 100
+#     press: C-\
+#     ^\[1]    28832 quit (core dumped)  sleep 100
+#}}}
+
+# History expansion makes the result of an executed command too unpredictable.{{{
+#
+#     $ set -H
+#     $ vim -Nu NONE -S <(tee <<'EOF'
+#         if !&emoji
+#         endif
+#     EOF
+#     )
+#     E580: :endif without :if: endif
+#
+# ---
+#
+#    > The  shell  supports a history expansion feature that is similar to the
+#    > history expansion in csh.  [...] This  feature  [...] can be **disabled**
+#    > using the **+H** option to the **set** builtin command [...]
+#
+# Source: `man bash /HISTORY EXPANSION`
+#}}}
+set +H

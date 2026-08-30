@@ -1,0 +1,103 @@
+#!/bin/bash -
+
+readonly CACHE_DIR="$HOME/.cache/applauncher"
+readonly CACHED_APPS="$CACHE_DIR/apps"
+readonly CACHED_TIMESTAMPS="$CACHE_DIR/timestamps"
+
+readonly -a DESKTOP_DIRS=(
+  '/usr/share/applications'
+  '/usr/local/share/applications'
+  "$HOME/.local/share/applications"
+  "$HOME/.local/share/flatpak/app/"
+)
+
+if ! [[ -d "$CACHE_DIR" ]]; then
+  mkdir -p "$CACHE_DIR"
+fi
+
+function Dir_In_DESKTOP_DIRS_Changed {
+# Should succeed if,  and only if, one of the  directories containing `.desktop`
+# files has changed since the last time this script was executed.
+
+  # Don't empty `IFS`; `read`  needs to split the lines on  spaces to assign the
+  # correct values to `dir` and `cached_timestamp`.
+  local dir cached_timestamp
+  while read -r dir cached_timestamp; do
+    local current_timestamp
+    current_timestamp="$(date --reference="$dir" +'%s')"
+    if ! [[ "$current_timestamp" == "$cached_timestamp" ]]; then
+      # yes, one of them changed
+      return 0
+    fi
+  done <"$CACHED_TIMESTAMPS"
+  # no, none of them changed
+  return 1
+}
+
+# Update the cache whenever one of the relevant directories has changed.
+if ! [[ -f "$CACHED_TIMESTAMPS" ]] \
+    || Dir_In_DESKTOP_DIRS_Changed; then
+  rm --force "$CACHE_DIR/"*
+  for dir in "${DESKTOP_DIRS[@]}"; do
+    printf '%s %d\n' "$dir" "$(date --reference="$dir" +'%s')" >>"$CACHED_TIMESTAMPS"
+  done
+fi
+
+# Create the cache if it doesn't exist.
+if ! [[ -s "$CACHED_APPS" ]]; then
+  # `-maxdepth 1` to ignore `/usr/share/applications/screensavers/`.
+  # Do *not* move it after `-name`:{{{
+  #
+  # It would give a noisy warning:
+  #
+  #     find: warning: you have specified the global option -maxdepth after the argument -name,
+  #     but global options are not positional,
+  #     i.e., -maxdepth affects tests specified before it as well as those specified after it.
+  #     Please specify global options before other arguments.
+  #}}}
+  { find '/usr/share/applications' \
+    '/usr/local/share/applications' \
+    "$HOME/.local/share/applications" \
+    -maxdepth 1 \
+    -name '*.desktop' \
+    -print0 \
+  ; find "$HOME/.local/share/flatpak/app/" -path '*/export/*.desktop' -print0 ;} \
+  | while IFS= read -r -d '' desktop_file; do
+      if ! grep --quiet 'NoDisplay=true' "$desktop_file"; then
+        echo "${desktop_file%.desktop}"
+      fi
+    done \
+  | awk -F'/' '!seen_app[$NF] { printf("%s%s\n", $NF, $0); seen_app[$NF] = 1 }' \
+  | sort --field-separator='/' --key=1b,1 >"$CACHED_APPS"
+  # We make `awk(1)` prepend the name of the program:{{{
+  #
+  #     ... { printf("%s%s\n", $NF, $0) ...
+  #                            ^^^
+  #
+  # So that `sort(1)` can sort the lines according to the program names.
+  #}}}
+fi
+
+chosen="$(fzf --delimiter=/ --with-nth=-1 <"$CACHED_APPS")"
+
+# Remove the name  of the program which  `awk(1)` has prepended in  front of the
+# desktop file path.
+chosen="/${chosen#*/}"
+
+desktop_file="$chosen.desktop"
+
+if ! [[ -f "$desktop_file" ]]; then
+  exit 1
+fi
+cd || return
+
+# `exec` to avoid `SHLVL` from being incremented if we open a terminal running fish
+# Without `setsid(1)`, the chosen program would terminate immediately.{{{
+#
+# That happens because the script is started like this:
+#
+#     $ xterm -e /path/to/this/script
+#
+# Presumably it receives `SIGHUP` when XTerm exits.
+#}}}
+exec setsid xdg-open "$desktop_file" >/dev/null 2>&1

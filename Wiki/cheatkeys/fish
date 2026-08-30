@@ -1,0 +1,9 @@
+toggle comment leader                   «M-#»
+# If the  command-line is  not commented,  `#` is prefixed,  and the  command is
+# executed to be logged in the history.
+#
+# If the  command-line *is* commented,  `#` is removed,  but the command  is not
+# executed, so that you can edit it further.
+#
+# If the  command-line is  empty, it's set  with the most  recent one  which was
+# commented out in the history; but this time, it's uncommented.

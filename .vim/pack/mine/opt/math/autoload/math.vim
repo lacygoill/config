@@ -1,0 +1,213 @@
+vim9script
+
+# Init {{{1
+
+import 'lg.vim'
+import 'lg/math.vim'
+
+def GetNumPat(): string
+    var sign: string = '[+-]\='
+    var decimal: string = '\d\+\.\=\d*'
+    var fraction: string = '\.\d\+'
+    var exponent: string = '[eE]' .. sign .. '\d\+'
+    return printf('^%s\%%(%s\|%s\)\%%(%s\)\=$', sign, decimal, fraction, exponent)
+enddef
+
+const NUM_PAT: string = GetNumPat()
+
+# Interface {{{1
+export def Op(type = ''): string #{{{2
+    if type == ''
+        &operatorfunc = function(lg.Opfunc, [{funcname: Op}])
+        return 'g@'
+    endif
+
+    var raw_numbers: list<any>
+    var numbers: list<any>
+    [raw_numbers, numbers] = ExtractData()
+    CalculateMetrics(raw_numbers, numbers)
+    # The cursor may  be moved to another  line when we use  the operator.  When
+    # that  happens, it  may  cause  a redraw,  especially  when  we repeat  the
+    # operator with the dot command.
+    #
+    # A redraw will erase the message, so we delay the report to be sure it will
+    # always be visible.
+    timer_start(0, (_) => {
+        var msg: string
+        for a_metrics: string in ['sum', 'avg', 'prod', 'min', 'max', 'count']
+            msg ..= printf('%s: %s   ', a_metrics, metrics[a_metrics])
+        endfor
+        # Don't try to use `echon` inside the loop:{{{
+        #
+        #     msg ..= printf('%s: %s   ', a_metrics, metrics[a_metrics])
+        #     →
+        #     echon printf('%s: %s   ', a_metrics, metrics[a_metrics])
+        #     ✘
+        #
+        # For some reason, the message would  not be visible if the Vim terminal
+        # window is  too narrow (atm, the  limit is 92 columns,  but it probably
+        # depends on the font size...).
+        #}}}
+        echomsg msg
+    })
+
+    return ''
+enddef
+
+#}}}1
+# Core {{{1
+def CalculateMetrics(raw_numbers: list<string>, numbers: list<float>) #{{{2
+    var cnt: number = len(numbers)
+
+    metrics = {
+          sum: SumOrAvg(cnt, raw_numbers, 0)->str2float(),
+          avg: SumOrAvg(cnt, raw_numbers, 1)->str2float(),
+          prod: Product(cnt, raw_numbers)->str2float(),
+          min: math.Min(numbers),
+          max: math.Max(numbers),
+          count: cnt,
+        }->map((_, v: any): string => Prettify(v))
+        #                             ^
+        #                             * scientific notation for big/small numbers
+        #                             * remove possible ending `.0`
+enddef
+
+var metrics: dict<any>
+
+def ExtractData(): list<list<any>> #{{{2
+    var selection: string = getreg('"')
+    #                                              default 2nd argument = \_s\+
+    #                                              v
+    var raw_numbers: list<string> = split(selection)
+        ->filter((_, v: string): bool => v =~ NUM_PAT)
+    # Vim's default coercion is good enough for integers but not for floats:{{{
+    #
+    #       echo '12' + 3
+    #       15    ✔˜
+    #
+    #       echo '1.2' + 3
+    #       4     ✘˜
+    #
+    # ... so we need to call `str2float()` to perform the right conversion, from
+    # a string to the float it contains.
+    #}}}
+    var numbers: list<float> = raw_numbers
+        ->copy()
+        ->map((_, v: string): float => str2float(v))
+    return [raw_numbers, numbers]
+enddef
+
+def Prettify(number: any): string #{{{2
+    #              use scientific notation if the number is too big/small
+    #              vv
+    return printf('%g', number)->substitute('\.0\+$', '', '')
+    #                                        ^----^
+    #                                        remove possible ending `.0`
+    #
+    #                                        `%g` does NOT remove it:
+    #
+    #                                                123.0
+    #
+    #                                        ... because it characterizes a float.
+enddef
+
+def Product(cnt: number, raw_numbers: list<string>): string #{{{2
+    var floats: list<string> = copy(raw_numbers)
+        ->filter((_, v: string): bool => v =~ '[.]')
+    var integers: list<string> = copy(raw_numbers)
+        ->filter((_, v: string): bool => v !~ '[.]')
+
+    # If there  are only integers, no  need to process the  product; compute and
+    # return immediately.
+    if empty(floats)
+        return cnt != 0
+            ?     raw_numbers
+                    ->reduce((a: number, v: string): number => a * v->str2nr(), 1)
+                    ->string()
+            :     '0'
+    endif
+
+    var integers_product: number = integers
+        ->reduce((a: number, v: string): number => a * v->str2nr(), 1)
+    var floats_product: float = floats
+        ->reduce((a: float, v: string): float => a * v->str2float(), 1.0)
+
+    var significant_digits: number = (
+        floats
+            ->mapnew((_, v: string): number =>
+                v->substitute('^0\+\|[.+-]', '', 'g')->strlen())
+        # never go above 10 significant digits
+        + [10]
+    )->min()
+
+    var string_float_product: string = significant_digits > 0
+        ?        printf('%.*f', significant_digits, floats_product)
+        :        string(floats_product)
+
+    if string_float_product == 'inf'
+        return string_float_product
+    endif
+
+    var split: list<string> = split(string_float_product, '\zs')
+    for [i: number, char: string] in split->items()
+        if char != '-' && char != '.'
+            if significant_digits <= 0
+                split[i] = '0'
+            elseif significant_digits == 1
+                # If the next digit after  the last significant digit is greater
+                # than 4, round it up.  As an example, suppose we have a product
+                # with 3 significant digits:
+                #
+                #           smaller than 4
+                #           v
+                #       1.232    →    1.23
+                #       1.238    →    1.24
+                #           ^
+                #           greater than 4
+                split[i] = (eval(split[i])
+                    + (get(split, i + 1, '')->str2nr() <= 4 ? 0 : 1))
+                    ->string()
+            endif
+            --significant_digits
+        endif
+    endfor
+    return (split->join('')->str2float() * integers_product)->string()
+enddef
+
+def SumOrAvg( #{{{2
+        cnt: number,
+        raw_numbers: list<string>,
+        avg: number
+        ): string
+
+    var sum: float = raw_numbers
+        ->reduce((a: float, v: string): float => a + v->str2float(), 0.0)
+    if avg != 0
+        sum = (cnt != 0 ? 1.0 * sum / cnt : 0.0)
+    endif
+
+    # RULE: The result of a sum should be as accurate as the least accurate number.{{{
+    #
+    # When you add  2 numbers in math, A  and B, A being accurate  to P1 decimal
+    # places,  and B  to  P2 decimal  places,  the result  must  be accurate  to
+    # min(P1,P2) decimal places.
+    #
+    # http://mathforum.org/library/drmath/view/58335.html
+    #
+    # So, if we sum several numbers with different precisions, the result should
+    # be as accurate as the least accurate number:
+    #
+    #     avg(1.2, 3.45) = 2.325    ✘
+    #     avg(1.2, 3.45) = 2.3      ✔
+    #}}}
+    var decimal_places: number = min(
+        raw_numbers->mapnew(
+            (_, v: string): number => v->matchstr('\.\zs\d\+$')->strlen())
+        # never go above 10 digits after the decimal point
+        + [10]
+    )
+
+    return decimal_places > 0
+        ?     printf('%.*f', decimal_places, sum)
+        :     round(sum)->float2nr()->printf('%d')
+enddef

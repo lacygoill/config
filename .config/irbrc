@@ -1,0 +1,7 @@
+# Don't save history (which otherwise pollutes our home directory at `~/.irb_history`).
+# Source: https://docs.ruby-lang.org/en/3.1/IRB.html#module-IRB-label-History
+IRB.conf[:SAVE_HISTORY] = nil
+# Alternative:
+#
+#     # require the creation of ~/.local/share/irb/
+#     IRB.conf[:HISTORY_FILE] = "#{ENV['HOME']}/.local/share/irb/irb_history"

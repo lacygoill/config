@@ -1,0 +1,40 @@
+[Unit]
+Description=???
+
+[Timer]
+OnCalendar=???
+
+# Catch up on missed runs of the service when the machine was powered down.{{{
+#
+# If `true`, when  the timer is activated (typically on  boot), the service unit
+# is triggered immediately if it would  have been triggered at least once during
+# the time when the timer was inactive (i.e. when the machine was powered down).
+#
+# Only has an effect on timers configured with `OnCalendar`.
+#
+# Defaults to `false`.
+#}}}
+Persistent=true
+
+# `RandomizedDelaySec` vs `AccuracySec` {{{
+#
+# Increase `RandomizedDelaySec`  to evenly distribute the  workload, and prevent
+# workload spikes that could cause performance issues or system crashes.
+# Increase `AccuracySec` to lower power consumption.
+#
+# Both directives have opposite effects.
+# `RandomizedDelaySec`  stretches timer  events over  a time  range, to  make it
+# unlikely that they fire simultaneously.
+# `AccuracySec` coalesces timer events within a specified time range in order to
+# minimize CPU wake-ups.
+#
+# If `RandomizedDelaySec` and `AccuracySec` are  both used, first the randomized
+# delay is  added, then the  result is possibly  further shifted to  coalesce it
+# with other timer events happening on the system.
+#
+# `RandomizedDelaySec` defaults to 0.
+# `AccuracySec` defaults to 1 minute.
+# }}}
+
+[Install]
+WantedBy=timers.target

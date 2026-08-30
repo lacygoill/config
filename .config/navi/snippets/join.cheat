@@ -1,0 +1,143 @@
+% join
+
+# join 2 files side by side, each in its column, using TAB as a delimiter
+paste <file1> <file2>
+    #     $ cat file1
+    #     a a
+    #     b b
+    #
+    #     $ cat file2
+    #     c c
+    #     d d
+    #
+    #     $ paste file1 file2
+    #     a a    c c
+    #     b b    d d
+    #        ^--^
+    #        TAB
+
+# join 3 files side by side, each in its column, using given delimiters
+paste --delimiters='<delimiters>' <file1> <file2> <file3>
+    #     $ cat file1
+    #     a a
+    #     b b
+    #
+    #     $ cat file2
+    #     c c
+    #     d d
+    #
+    #     $ cat file3
+    #     e e
+    #     f f
+    #
+    #     $ paste --delimiters='-+' file1 file2 file3
+    #     a a-c c+e e
+    #     b b-d d+f f
+
+# join 2 files side by side, duplicating the lines of the first
+paste <file1> <file2> <file1>
+    #     $ cat file1
+    #     a a
+    #     b b
+    #
+    #     $ cat file2
+    #     c c
+    #     d d
+    #
+    #     $ paste file1 file2 file1
+    #     a a    c c    a a
+    #     b b    d d    b b
+    #        ^--^
+    #        TAB
+
+# join 2 files, in a single column, with alternating lines
+paste --delimiters='\n' <file1> <file2>
+    #     $ cat file1
+    #     a a
+    #     b b
+    #
+    #     $ cat file2
+    #     c c
+    #     d d
+    #
+    #     $ paste --delimiters='\n' file1 file2
+    #     a a
+    #     c c
+    #     b b
+    #     d d
+
+# join all the lines of given file on the same line
+paste --serial <file>
+    # Works with several files too:
+    #
+    #     $ cat file1
+    #     a a
+    #     b b
+    #
+    #     $ cat file2
+    #     c c
+    #     d d
+    #
+    #     $ paste --serial file1 file2
+    #     a a    b b
+    #     c c    d d
+    #        ^--^
+    #        TAB
+
+# join every 3 lines of standard input on same output line
+<cmd> | paste - - -
+    #     $ seq 9 | paste - - -
+    #     1       2       3
+    #     4       5       6
+    #     7       8       9
+    #      ^-----^
+    #        TAB
+    #
+    # Notice that the lines of the standard input are not repeated:
+    #
+    #    > If '-' is specified for one or more  of the files, the standard input shall be
+    #    > used; the  standard input shall  be read one line  at a time,  **circularly**, for
+    #    > each instance of '-'.
+    #
+    # For more info: https://pubs.opengroup.org/onlinepubs/9699919799/utilities/paste.html
+    #
+    # The result would have been different if  the lines had come from a regular
+    # file:
+    #
+    #     $ seq 9 >file
+    #     $ paste file file file
+    #     1       1       1
+    #     2       2       2
+    #     3       3       3
+    #     ...
+    #
+    # ---
+    #
+    # This is  extremely useful  when you  copy-paste some  text formatted  as a
+    # table from a PDF into Vim, and the formatting has been lost (newlines have
+    # been inserted between consecutive cells):
+    #
+    #     :*!paste - - -
+    #              ^---^
+    #              as many as there were columns in the original table
+
+# join every N lines of standard input on different output columns
+<cmd> | awk -v N=<N> \
+    '{ if (NR <= N)
+        joined[(NR - 1) % N] = $0
+    else
+        joined[(NR - 1) % N] = joined[(NR - 1) % N] " " $0 }
+    END { for (i = 0; i <= N - 1; i++) print joined[i] }'
+    # With `gawk(1)`, you *might* simplify the `for` loop into:
+    #
+    #     for (i in joined) print joined[i]
+    #
+    # But there is no guarantee that it produces the expected result:
+    #
+    #    > By default, when a 'for' loop traverses an array, the order is
+    #    > undefined, meaning that the 'awk' implementation determines the order in
+    #    > which the array is traversed.  This order is usually based on the
+    #    > internal implementation of arrays and will vary from one version of
+    #    > 'awk' to the next.
+    #
+    # Source: `info '(gawk)Controlling Scanning'`

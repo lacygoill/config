@@ -1,0 +1,6 @@
+[Unit]
+Description=perform various tasks to make sure systemd remains sane and stable
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/timers/systemd-maintenance

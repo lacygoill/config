@@ -1,0 +1,84 @@
+*quickhl.txt*      Quickly highlight multiple pattern.
+
+GitHub : https://github.com/t9md/vim-quickhl
+==============================================================================
+CONTENTS                                                      *quickhl-contents*
+
+Commands				    |quickhl-commands|
+Variables				    |quickhl-variables|
+Configuration Examples			    |quickhl-examples|
+FAQ			                    |quickhl-faq|
+
+==============================================================================
+COMMANDS                                                      *quickhl-commands*
+
+*:QuickhlManualEnable*		Enable.
+*:QuickhlManualDisable*		Disable.
+*:QuickhlManualAdd* {pattern}	Add {pattern} with meta string escaped.
+*:QuickhlManualAdd!* {pattern}	Add {pattern} as-is, means you can use |regexp|.
+*:QuickhlManualDelete* {pattern}  Delete {pattern} with escaped.
+*:QuickhlManualDelete!* {pattern} Delete {pattern} as-is.
+*:QuickhlManualReset*		Reset all keywords except static ones.
+*:QuickhlManualList*		Show list of keyword with color.
+*:QuickhlManualColors*		Show color list.
+*:QuickhlManualLock*		Disable highlight temporarily.
+*:QuickhlManualUnlock*		Unlock.
+*:QuickhlManualLockToggle*	Toggle global lock.
+*:QuickhlManualLockWindow*	Lock version of current window.
+*:QuickhlManualUnlockWindow*	Unlock current window.
+*:QuickhlManualLockWindowToggle*  Toggle window lock.
+
+==============================================================================
+VARIABLES                                                    *quickhl-variables*
+
+*g:quickhl_manual_colors*
+	Default: 13 colors defined. see 'plugin/quickhl.vim' for detail.
+
+	|List| of color's definition used to quick-highlight.
+	see |quickhl-examples|.
+	You can add as many colors as you want.
+	If you want to highlight 20 keyword at a time, you need to set 20
+	variation of color in this |List|.
+
+==============================================================================
+CONFIGURATION EXAMPLE                                         *quickhl-examples*
+
+set in your '.vimrc'
+>
+    nmap <Space>m <Plug>(quickhl-manual-this)
+    xmap <Space>m <Plug>(quickhl-manual-this)
+    nmap <F9>     <Plug>(quickhl-manual-toggle)
+    xmap <F9>     <Plug>(quickhl-manual-toggle)
+
+    nmap <Space>M <Plug>(quickhl-manual-reset)
+    xmap <Space>M <Plug>(quickhl-manual-reset)
+
+    map H <Plug>(operator-quickhl-manual-this-motion)
+<
+
+Want to change default color?
+>
+  let g:quickhl_manual_colors = [
+        \ "gui=bold ctermfg=16  ctermbg=153 guifg=#ffffff guibg=#0a7383",
+        \ "gui=bold ctermfg=7   ctermbg=1   guibg=#a07040 guifg=#ffffff",
+        \ "gui=bold ctermfg=7   ctermbg=2   guibg=#4070a0 guifg=#ffffff",
+        \ "gui=bold ctermfg=7   ctermbg=3   guibg=#40a070 guifg=#ffffff",
+        \ ]
+
+==============================================================================
+FAQ                                                                *quickhl-faq*
+
+How to clear a highlight installed from a visual selection?
+
+Reselect the same selection and press `<m-m>`.
+
+Note that you  could also press `<m-m>`  from normal mode, but if  the motion or
+text-object you provide to  the operator does not cover the  exact same text, no
+highlight will be cleared.
+Instead,  a new  one  will be  added;  even  if it  results  in two  overlapping
+highlights. This can be confusing, and difficult to undo.
+
+
+How to clear a highlight installed via the `<m-m>` operator?
+
+Select the same text-object/motion and press `m<m-m>`.

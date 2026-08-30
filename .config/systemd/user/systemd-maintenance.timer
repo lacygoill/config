@@ -1,0 +1,9 @@
+[Unit]
+Description=perform various tasks to make sure systemd remains sane and stable
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

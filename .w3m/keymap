@@ -1,0 +1,392 @@
+# If `man w3m` is not enough :
+# http://w3m.sourceforge.net/MANUAL
+
+# What are the names of the functions that I can write in the RHS of a key binding?{{{
+#
+#     ABORT              Quit w3m without confirmation
+#     ACCESSSKEY         Popup acceskey menu
+#     ADD_BOOKMARK       Add current page to bookmark
+#     ALARM              Set alarm
+#     BACK               Back to previous buffer
+#     BEGIN              Go to the first line
+#     BOOKMARK           Read bookmark
+#     CENTER_H           Move to the center line
+#     CENTER_V           Move to the center column
+#     CHARSET            Change the current document charset
+#     CLOSE_TAB          Close current tab
+#     CLOSE_TAB_MOUSE    Close tab on mouse cursor (for mouse action)
+#     COMMAND            Execute w3m command(s)
+#     COOKIE             View cookie list
+#     DEFAULT_CHARSET    Change the default document charset
+#     DEFINE_KEY         Define a binding between a key stroke and a user command
+#     DELETE_PREVBUF     Delete previous buffer (mainly for local-CGI)
+#     DICT_WORD          Execute dictionary command (see README.dict)
+#     DICT_WORD_AT       Execute dictionary command for word at cursor
+#     DISPLAY_IMAGE      Restart loading and drawing of images
+#     DOWN               Scroll down one line
+#     DOWNLOAD           Save document source to file
+#     DOWNLOAD_LIST      Display download list panel
+#     EDIT               Edit current document
+#     EDIT_SCREEN        Edit currently rendered document
+#     END                Go to the last line
+#     EXEC_SHELL         Execute shell command
+#     EXIT               Quit w3m without confirmation
+#     EXTERN             Execute external browser
+#     EXTERN_LINK        View current link using external browser
+#     FRAME              Render frame
+#     GOTO               Go to URL
+#     GOTO_LINE          Go to specified line
+#     GOTO_LINK          Go to current link
+#     GOTO_RELATIVE      Go to relative URL
+#     HELP               View help
+#     HISTORY            View history of URL
+#     INFO               View info of current document
+#     INTERRUPT          Stop loading document
+#     INIT_MAILCAP       Reread mailcap (mainly for local-CGI)
+#     ISEARCH            Incremental search forward
+#     ISEARCH_BACK       Incremental search backward
+#     LEFT               Shift screen one column
+#     LINE_BEGIN         Go to the beginning of line
+#     LINE_END           Go to the end of line
+#     LINE_INFO          Show current line number
+#     LINK_BEGIN         Go to the first link
+#     LINK_END           Go to the last link
+#     LINK_MENU          Popup link element menu
+#     LIST               Show all links and images
+#     LIST_MENU          Popup link list menu and go to selected link
+#     LOAD               Load local file
+#     MAIN_MENU          Popup menu
+#     MARK               Set/unset mark
+#     MARK_MID           Mark Message-ID-like strings as anchors
+#     MARK_URL           Mark URL-like strings as anchors
+#     MARK_WORD          Mark current word as anchor
+#     MENU               Popup menu
+#     MENU_MOUSE         Popup menu at mouse cursor (for mouse action)
+#     MOUSE_TOGGLE       Toggle activity of mouse
+#     MOVE_DOWN          Move cursor down (a half screen scroll at the end of screen)
+#     MOVE_DOWN1         Move cursor down (1 line scroll at the end of screen)
+#     MOVE_LEFT          Move cursor left (a half screen shift at the left edge)
+#     MOVE_LEFT1         Move cursor left (1 columns shift at the left edge)
+#     MOVE_LIST_MENU     Popup link list menu and move cursor to selected link
+#     MOVE_MOUSE         Move cursor to mouse cursor (for mouse action)
+#     MOVE_RIGHT         Move cursor right (a half screen shift at the right edge)
+#     MOVE_RIGHT1        Move cursor right (1 columns shift at the right edge)
+#     MOVE_UP            Move cursor up (a half screen scroll at the top of screen)
+#     MOVE_UP1           Move cursor up (1 line scrol at the top of screen)
+#     MSGS               Display error messages
+#     NEW_TAB            Open new tab
+#     NEXT               Move to next buffer
+#     NEXT_DOWN          Move to next downward link
+#     NEXT_LEFT          Move to next left link
+#     NEXT_LEFT_UP       Move to next left (or upward) link
+#     NEXT_LINK          Move to next link
+#     NEXT_MARK          Move to next word
+#     NEXT_PAGE          Move to next page
+#     NEXT_RIGHT         Move to next right link
+#     NEXT_RIGHT_DOWN    Move to next right (or downward) link
+#     NEXT_TAB           Move to next tab
+#     NEXT_UP            Move to next upward link
+#     NEXT_VISITED       Move to next visited link
+#     NEXT_WORD          Move to next word
+#     NOTHING            Do nothing
+#     NULL               Do nothing
+#     OPTIONS            Option setting panel
+#     PEEK               Peek current URL
+#     PEEK_IMG           Peek image URL
+#     PEEK_LINK          Peek link URL
+#     PIPE_BUF           Send rendered document to pipe
+#     PIPE_SHELL         Execute shell command and browse
+#     PREV               Move to previous buffer
+#     PREV_LINK          Move to previous link
+#     PREV_MARK          Move to previous mark
+#     PREV_PAGE          Move to previous page
+#     PREV_TAB           Move to previous tab
+#     PREV_VISITED       Move to previous visited link
+#     PREV_WORD          Move to previous word
+#     PRINT              Save buffer to file
+#     QUIT               Quit w3m
+#     READ_SHELL         Execute shell command and load
+#     REDO               Cancel the last undo
+#     REDRAW             Redraw screen
+#     REG_MARK           Set mark using regexp
+#     REINIT             Reload configuration files
+#     RELOAD             Reload buffer
+#     RESHAPE            Re-render buffer
+#     RIGHT              Shift screen one column right
+#     SAVE               Save document source to file
+#     SAVE_IMAGE         Save image to file
+#     SAVE_LINK          Save link to file
+#     SAVE_SCREEN        Save rendered document to file
+#     SEARCH             Search forward
+#     SEARCH_BACK        Search backward
+#     SEARCH_FORE        Search forward
+#     SEARCH_NEXT        Search next regexp
+#     SEARCH_PREV        Search previous regexp
+#     SELECT             Go to buffer selection panel
+#     SELECT_MENU        Popup buffer selection menu
+#     SETENV             Set environment variable
+#     SET_OPTION         Set option
+#     SHELL              Execute shell command
+#     SHIFT_LEFT         Shift screen left
+#     SHIFT_RIGHT        Shift screen right
+#     SOURCE             View HTML source
+#     STOP_IMAGE         Stop loading and drawing of images
+#     SUBMIT             Submit form
+#     SUSPEND            Stop loading document
+#     TAB_GOTO           Open URL on new tab
+#     TAB_GOTO_RELATIVE  Open relative URL on new tab
+#     TAB_LEFT           Move current tab left
+#     TAB_LINK           Open current link on new tab
+#     TAB_MENU           Popup tab selection menu
+#     TAB_MOUSE          Move to tab on mouse cursor (for mouse action)
+#     TAB_RIGHT          Move current tab right
+#     UNDO               Cancel the last cursor movement
+#     UP                 Scroll up one line
+#     VERSION            Display version of w3m
+#     VIEW               View HTML source
+#     VIEW_BOOKMARK      View bookmark
+#     VIEW_IMAGE         View image
+#     WHEREIS            Search forward
+#     WRAP_TOGGLE        Toggle wrap search mode
+#}}}
+#   Where did you find these names?{{{
+#
+# Download the source code:
+#
+#     https://sourceforge.net/projects/w3m/files/
+#
+# Then look for the file `README.func`:
+#
+#     w3m-0.5.3/doc/README.func
+#}}}
+
+# Which environment variables does `w3m(1)` set?{{{
+#
+#     CONTENT_LENGTH
+#     CONTENT_TYPE
+#     GATEWAY_INTERFACE
+#     HTTP_REFERER
+#     LOCAL_COOKIE_FILE
+#     PATH_INFO
+#     QUERY_STRING
+#     REMOTE_ADDR
+#     REMOTE_HOST
+#     REQUEST_METHOD
+#     REQUEST_URI
+#     SCRIPT_FILENAME
+#     SCRIPT_NAME
+#     SERVER_NAME
+#     SERVER_PORT
+#     SERVER_PROTOCOL
+#     SERVER_SOFTWARE
+#     W3M_CHARSET
+#     W3M_CURRENT_COLUMN
+#     W3M_CURRENT_FORM
+#     W3M_CURRENT_IMG
+#     W3M_CURRENT_LINE
+#     W3M_CURRENT_LINK
+#     W3M_CURRENT_WORD
+#     W3M_FILENAME
+#     W3M_SOURCEFILE
+#     W3M_TITLE
+#     W3M_TTY
+#     W3M_TYPE
+#     W3M_URL
+#}}}
+#   Where did you find these?{{{
+#
+# By grepping for `set_environ(` in the source code.
+#}}}
+
+# Let's disable all the keys we're not using.{{{
+
+# Rationale: To prevent unexpected behavior when we hit keys by accident.
+
+# But don't  disable `C-j`;  it would break  `C-m`, and we  wouldn't be  able to
+# write text into a field.
+
+keymap '"' NOTHING
+keymap '#' NOTHING
+keymap ';' NOTHING
+keymap + NOTHING
+keymap , NOTHING
+keymap - NOTHING
+keymap . NOTHING
+keymap : NOTHING
+keymap < NOTHING
+keymap > NOTHING
+keymap @ NOTHING
+keymap B NOTHING
+keymap C-h NOTHING
+keymap C-k NOTHING
+keymap C-q NOTHING
+keymap C-v NOTHING
+keymap C-w NOTHING
+keymap D NOTHING
+keymap I NOTHING
+keymap J NOTHING
+keymap K NOTHING
+keymap L NOTHING
+keymap M NOTHING
+keymap M-: NOTHING
+keymap M-< NOTHING
+keymap M-> NOTHING
+keymap M-C-j NOTHING
+keymap M-C-m NOTHING
+keymap M-I NOTHING
+keymap M-M NOTHING
+keymap M-TAB NOTHING
+keymap M-W NOTHING
+keymap M-a NOTHING
+keymap M-b NOTHING
+keymap M-c NOTHING
+keymap M-e NOTHING
+keymap M-k NOTHING
+keymap M-l NOTHING
+keymap M-m NOTHING
+keymap M-o NOTHING
+keymap M-s NOTHING
+keymap M-t NOTHING
+keymap M-v NOTHING
+keymap M-w NOTHING
+keymap T NOTHING
+keymap V NOTHING
+keymap Z NOTHING
+keymap c NOTHING
+keymap v NOTHING
+keymap { NOTHING
+keymap | NOTHING
+keymap } NOTHING
+keymap ^[[1~ NOTHING
+keymap ^[[28~ NOTHING
+keymap ^[[2~ NOTHING
+keymap ^[[4~ NOTHING
+keymap ^[[5~ NOTHING
+keymap ^[[6~ NOTHING
+keymap ^[[E NOTHING
+keymap ^[[L NOTHING
+#}}}
+
+keymap C-d NEXT_PAGE
+keymap C-u PREV_PAGE
+
+keymap C-e UP
+keymap C-y DOWN
+
+keymap C-n NEXT_TAB
+keymap C-p PREV_TAB
+
+keymap C-o LOAD
+
+keymap C-s SAVE_LINK
+
+keymap C-xC-r REINIT
+
+keymap SPCq CLOSE_TAB
+# Remove clutter/noise from current webpage.{{{
+#
+# Depends on `readability-cli`:
+# https://gitlab.com/gardenappl/readability-cli
+#
+#     $ readable --properties html-title,html-content -- <URL>
+#                             ^---------------------^
+#                             output specific properties of the parsed article:
+#                             here, we only want the title and the contents
+#
+# ---
+#
+#    - `COMMAND`: Execute w3m command(s)
+#    - `SHELL`: Execute shell command
+#    - `LOAD`: Load local file
+#}}}
+keymap SPCr COMMAND "SHELL 'readable --properties html-title,html-content -- $W3M_URL >/tmp/.readable.html'; LOAD /tmp/.readable.html"
+keymap SPCt NEW_TAB
+
+keymap / ISEARCH
+keymap ? ISEARCH_BACK
+
+keymap _ LINE_BEGIN
+
+keymap ( LINK_BEGIN
+keymap ) LINK_BEGIN
+
+# Easier to navigate between fields with `[` and `]`, then with `Tab` and `S-Tab`.
+# Don't use `NEXT_RIGHT` and `NEXT_LEFT`.{{{
+#
+# We could not use them to access the next link if it's on a different line.
+#}}}
+keymap ] NEXT_RIGHT_DOWN
+keymap [ NEXT_LEFT_UP
+
+keymap b PREV_WORD
+
+keymap cw WRAP_TOGGLE
+
+keymap E EDIT_SCREEN
+keymap e NEXT_WORD
+
+keymap g? HELP
+keymap g! MSGS
+
+keymap gb SELECT_MENU
+keymap gt TAB_MENU
+
+# print link of current page
+keymap gc PEEK
+
+keymap gd DOWNLOAD_LIST
+
+keymap gh HISTORY
+keymap gk COOKIE
+
+keymap gg BEGIN
+
+keymap gl MOVE_LIST_MENU
+keymap gL LIST_MENU
+
+keymap gm CENTER_H
+
+keymap gs STOP_IMAGE
+
+keymap gv SOURCE
+
+keymap gx EXTERN_LINK
+
+keymap H BACK
+
+# do something similar for `h` and `l` (could be useful for long non-wrapped lines)
+keymap h MOVE_LEFT1
+keymap l MOVE_RIGHT1
+
+# default scrolling with `j` and `k` makes us lose context
+keymap j MOVE_DOWN1
+keymap k MOVE_UP1
+
+# same thing for `up` and `down` arrow keys
+keymap ^[[A MOVE_UP1
+keymap ^[[B MOVE_DOWN1
+
+keymap i GOTO_LINK
+keymap M-i VIEW_IMAGE
+
+keymap a ADD_BOOKMARK
+keymap "'" VIEW_BOOKMARK
+
+keymap m, TAB_LEFT
+keymap "m;" TAB_RIGHT
+
+keymap mu MARK_URL
+keymap mw MARK_WORD
+
+keymap s SAVE_LINK
+keymap C-s SAVE_SCREEN
+
+keymap u UNDO
+keymap C-r REDO
+
+keymap zh LEFT
+keymap zl RIGHT
+keymap zH SHIFT_LEFT
+keymap zL SHIFT_RIGHT
+
+keymap zz CENTER_V

@@ -1,0 +1,37 @@
+snippet t01 "ignore directory but re-include given subdirectory" Am
+# Ignore everything in \`a/b/c/\`.
+a/b/c/**
+# Except entries in \`a/b/c/d/e/f/\`.
+!a/b/c/d/
+!a/b/c/d/e/
+!a/b/c/d/e/f/
+!a/b/c/d/e/f/**
+
+# In the first rule, we need the trailing wildcards.
+# Without, \`a/b/c/\` would be ignored unconditionally; there would be no way to
+# re-include anything with a later negative exclusion pattern:
+#
+#    > It is not possible to re-include a file if a parent directory of that
+#    > file is excluded.
+#
+# Source: \`man gitignore /PATTERN FORMAT/;/re-include\`
+#
+# ---
+#
+# In  the subsequent  rules,  we  need to  unignore  every  parent directory  of
+# anything that we want to unignore.  See: https://stackoverflow.com/a/5534865
+#
+# ---
+#
+# In  the first  rule, we  need 2  wildcards, not  just one.   With only  one, a
+# subsequent negative  exclusion directory pattern would  immediately re-include
+# all the latter's entries.  For example, let's re-visit the previous example:
+#
+#     a/b/c/*
+#     !a/b/c/d/
+#
+# Because  the  first  rule  uses  only  a  single  wildcard,  the  second  rule
+# re-includes all entries in \`/a/b/c/d/\`.  That's  not what you want; you want
+# to re-include *only* the entries in \`a/b/c/d/e/f/\`.
+$0
+endsnippet

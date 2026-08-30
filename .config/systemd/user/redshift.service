@@ -1,0 +1,19 @@
+# TODO: Read these:
+# https://github.com/swaywm/sway/wiki
+# https://github.com/swaywm/sway/wiki/Systemd-integration
+# https://pychao.com/2021/02/24/difference-between-partof-and-bindsto-in-a-systemd-unit/
+#
+# On the sway wiki, there are links at the bottom in the "related projects" section.
+# They  link to  a  few projects  whose  code seem  very  interesting to  better
+# understand systemd.  Assimilate as much code as possible.
+
+[Unit]
+Description=set color temperature of display according to time of day
+PartOf=graphical-session.target
+# FIXME:  redfhift no  longer works  after  we kill  the X  server (by  pressing
+# `C-A-BS`) and log back in.
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/redshift
+ExecStop=/usr/bin/kill -STOP $MAINPID ; /usr/bin/redshift -x

@@ -1,0 +1,1 @@
+--exclude-type=tmpfs --exclude-type=devtmpfs --human-readable --print-type
