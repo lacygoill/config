@@ -208,7 +208,8 @@ representing tiny values accurately.
  #include <stdio.h>
  #include <float.h>
 
-int main(void) {
+    int
+main(void) {
     float ok_value  = 1e-37f;   // within range, close to the limit
     float subnormal = 1e-45f;   // way past FLT_MIN_10_EXP (-37)
     float below_subnormal = 1e-46f;

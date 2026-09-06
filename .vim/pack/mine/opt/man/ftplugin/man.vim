@@ -33,7 +33,7 @@ nnoremap <buffer><expr><nowait> q reg_recording() != '' ? 'q' : '<ScriptCmd>quit
 nnoremap <buffer><nowait> ( <ScriptCmd>man.JumpToRef(false)<CR>
 nnoremap <buffer><nowait> ) <ScriptCmd>man.JumpToRef()<CR>
 nnoremap <buffer><nowait> -d <ScriptCmd>link.Main()<CR>
-nnoremap <buffer><nowait> <CR> <C-]>
+nnoremap <buffer><nowait> <CR> <ScriptCmd>&tagsecure = false<CR><C-]><ScriptCmd>&tagsecure = true<CR>
 
 &l:foldcolumn = 0
 &l:foldenable = true

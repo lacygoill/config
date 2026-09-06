@@ -8967,6 +8967,7 @@ nnoremap <Space>y y<ScriptCmd>SendToClipboard(@0)<CR>
 
 
 
+
 # fast lookup:
 #     cheatkeys
 #     config files (options)
