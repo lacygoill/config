@@ -63,6 +63,7 @@ syntax match awkFieldVars /\$\d\+/
 # catch errors caused by wrong parenthesis
 syntax region awkParen transparent start=/(/ end=/)/ contains=
     \ ALLBUT,
+    \ awkMyCustomGroups,
     \ awkParenError,
     \ awkSpecialCharacter,
     \ awkArrayArray,

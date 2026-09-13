@@ -185,6 +185,7 @@ syntax keyword tmuxOptsSetw
     \ pane-border-lines
     \ pane-border-style
     \ pane-border-indicators
+    \ popup-border-style
     \ remain-on-exit
     \ synchronize-panes
     \ utf8

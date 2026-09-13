@@ -26,7 +26,7 @@
 #     ^-------^
 #}}}
 
-readonly PREFIX="$HOME/.local/"
+readonly PREFIX="$HOME/.local"
 
 # `libcanberra-*`:  `+sound`
 # `libgtk-3-dev`, `libxt-dev`:  GTK3 GUI, `+clientserver`, `+clipboard`, `+dnd`, `+mouseshape`
@@ -134,10 +134,25 @@ readonly -a NAMES=(
   'vimdiff'
 )
 for name in "${NAMES[@]}"; do
-  ln --symbolic --force "$HOME/.local/bin/vim" "$HOME/.local/bin/$name"
+  ln --symbolic --force "$PREFIX/bin/vim" "$PREFIX/bin/$name"
 done
 
 # Rebecca is more familiar with mousepad than with Vim.
 if [[ "$USER" != 'lgc' ]]; then
   _Set_App_As_Mimetype_Handler 'org.xfce.mousepad'
 fi
+
+# let's make sure all our custom syntax groups are ignored by `ALLBUT`s
+cd "$PREFIX/share/vim/" || exit 1
+cd "$(find . -maxdepth 1 -type d -name 'vim*' -printf '%f\n' | sort --version-sort | tail --lines=1)" || exit 1
+cd syntax || exit 1
+for file in *; do
+  if [[ -d "$file" ]]; then
+    continue
+  fi
+  filetype="${file%%.vim}"
+
+  sed -i "s/ALLBUT,\(@${filetype}MyCustomGroups,\)*/ALLBUT,@${filetype}MyCustomGroups,/" "$file"
+  #                ^^                           ^^^
+  # let's make sure we don't append duplicate clusters
+done

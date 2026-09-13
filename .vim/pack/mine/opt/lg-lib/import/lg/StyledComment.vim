@@ -17,7 +17,7 @@ vim9script
 # Otherwise, you may have a broken syntax highlighting in any filetype whose
 # default syntax plugin uses `ALLBUT`.
 #
-# `CUSTOM_GROUPS` is used by `FixAllBut()` to define `@xMyCustomGroups`.
+# `CUSTOM_GROUPS` is used by `SetCustomGroups()` to define `@xMyCustomGroups`.
 # We use this cluster to exclude our  custom groups from the ones installed by a
 # default syntax plugin.
 # In the future, it may be useful in a `after/syntax/x.vim`.
@@ -409,14 +409,13 @@ export def Syntax() #{{{2
     SynBolditalic(filetype, comment_group)
     # TODO: This invocation of `SynOption()` doesn't require several arguments.
     # This  is neat;  study how  it's possible,  and try  to redefine  the other
-    # syntax groups, so that we have less arguments to pass.
+    # syntax groups, so that we have fewer arguments to pass.
     SynOption(filetype)
     SynUrl(filetype, comment_group)
     SynFoldMarkers(filetype, cml_0_1, comment_group)
 
     FixCommentRegion(filetype)
-    FixAllBut(filetype)
-
+    SetCustomGroups(filetype)
     HighlightGroupsLinks(filetype)
     # TODO: Read: https://daringfireball.net/projects/markdown/syntax{{{
     # and   https://daringfireball.net/projects/markdown/basics
@@ -432,19 +431,13 @@ export def Syntax() #{{{2
     #}}}
 enddef
 
-def FixAllBut(filetype: string) #{{{2
+def SetCustomGroups(filetype: string) #{{{2
     # What's the purpose of this function?{{{
     #
     # Some default syntax plugins define groups with the argument `contains=ALLBUT`.
     # It means that they can contain *anything* except a few specific groups.
     # Because of this, they can contain our custom groups.
-    # And as a result, our code may be applied wrong graphical attributes:
-    #
-    #     $ tee /tmp/lua.lua <<'EOF'
-    #     ( 1 * 2 * 3 )
-    #     EOF
-    #
-    #     $ vim /tmp/lua.lua
+    # And as a result, our code may be applied wrong graphical attributes.
     #
     # We need  an easy  way to tell  Vim that these  default groups  must *also*
     # exclude our custom groups.
@@ -467,142 +460,6 @@ def FixAllBut(filetype: string) #{{{2
                     :     filetype .. v
         )->join(',')
     execute $'syntax cluster {filetype}MyCustomGroups contains={groups}'
-
-    # get the list of groups using `ALLBUT`, and save it in a script-local variable
-    # to avoid having to recompute it every time we reload the same kind of buffer
-    if !allbut_groups->has_key(filetype)
-        # Don't try to read and parse the original syntax plugin.{{{
-        #
-        # `ALLBUT` could be  on a continuation line, and in  this case, it would
-        # be hard to get the name of the syntax group.
-        #}}}
-        allbut_groups[filetype] = execute('syntax list')
-            ->split('\n')
-            ->filter((_, v: string): bool => v =~ '\CALLBUT,' && v !~ '^\s')
-            ->map((_, v: string) => v->matchstr('\S\+'))
-            # Ignore groups defined for embedding another language.{{{
-            #
-            # Otherwise, this  function breaks  the syntax highlighting  in some
-            # Vim files, when we embed the code of another language.
-            #
-            # For example in `$VIMRUNTIME/autoload/rubycomplete.vim`.
-            # Move at the end, and press `=d` to redraw/reload the syntax plugin.
-            #
-            # The issue is not in the  syntax of the `:syntax` commands executed
-            # at the end of the function.
-            # Maybe they're executed too soon, or too late, I don't know.
-            #
-            # If you duplicate the ruby syntax plugin in `~/.vim/syntax/ruby.vim`,
-            # and if you edit `$VIMRUNTIME/syntax/vim.vim:689`:
-            #
-            #     # this line makes Vim source the default ruby syntax plugin
-            #     # when defining the cluster/region used to embed ruby inside Vim
-            #     s:rubypath= fnameescape(expand("<sfile>:p:h")."/ruby.vim")
-            #
-            #     # this new line makes Vim source our custom ruby syntax plugin instead
-            #     s:rubypath= split(globpath(&rtp,"syntax/ruby.vim"),"\n")[0]
-            #
-            # Then, if you  edit all the items using `ALLBUT`  so that they also
-            # ignore `@xMyCustomGroups`, then the issue disappears.
-            # And yet, the definition of the items is the same as in this function.
-            # So, again, the issue is *not* in the syntax of the command.
-            #
-            # ---
-            #
-            # Note  that Vim  doesn't  need this  function,  because there's  no
-            # `ALLBUT` in its syntax plugin.
-            #
-            # Besides, Vim  is a special  case, because  I doubt there  are many
-            # languages where the default syntax plugin supports embedding other
-            # languages.
-            # For  example,  these  languages  do not  support  it:  awk,  conf,
-            # css, desktop,  dircolors, gitconfig,  lua, python,  readline, sed,
-            # snippets, tmux, xdefaults, xkb...
-            #
-            # To check this yourself, search for `syn\%[tax]\s*include`.
-            #
-            # OTOH, another language may be embedded in C and html.
-            # But I  don't think they  will cause  an issue, because  there's no
-            # `ALLBUT` in the html syntax plugin.
-            # And the embedding in C seems very limited/simple.
-            # It defines the cluster `@cAutodoc` which contains all the items in:
-            #
-            #     /usr/local/share/vim/vim81/syntax/autodoc.vim
-            #
-            # But none of them contains `ALLBUT`.
-            #
-            # ---
-            #
-            # If you need  to ignore another filetype, but you  can't because it
-            # would break sth else, consider maintaining your own version of the
-            # syntax  plugin, in  which you  ignore `@xMyCustomGroups`  whenever
-            # it's necessary.
-            #}}}
-            ->filter((_, v: string): bool => v =~ $'^{filetype}')
-    endif
-
-    # FIXME: Clearing and re-installing a syntax group can cause issues.{{{
-    #
-    # Because that changes the order of the rules.
-    # For example, clearing and re-installing `cParen`:
-    #
-    #     syntax clear cParen
-    #     syntax region cParen start=/(/ end=/)/ contains=ALLBUT,xFoo
-    #
-    # can cause issues in a C file:
-    #
-    #     int main(void) {
-    #         printf("");
-    #         printf("");
-    #         printf("");
-    #         // stack of syntax items:
-    #         //     cCommentL cParen cParen cParen cParen
-    #         // that's wrong; it should be:
-    #         //     cCommentL
-    #     }
-    #
-    # We could fix this by appending `keepend` in `GetCmdsToResetGroup()`:
-    #
-    #     ?     $'syntax region {group} {v} keepend'
-    #                                       ^-----^
-    #
-    # But then, it would break the highlighting in a fish file:
-    #
-    #     set -f venv $(printf '(%s%s%s)' $(set_color magenta) $venv $reset)
-    #                                  ^
-    #                                  ✘
-    #                                  not end of command substitution
-    #
-    # It seems that `ALLBUT` is "evaluated" at "install-time".
-    # When the `cParen` rule is installed, `cDelimiter` has not been installed yet.
-    # So, `ALLBUT` does not match `cDelimiter`, and `cParen` does not contain it.
-    # But  if   we  re-install   `cParen`  later,   then  `ALLBUT`   does  match
-    # `cDelimiter`, and `cParen` does contain it.
-    #
-    # For  the moment,  we  just fix  this  particular case  in  C, by  clearing
-    # `cDelimiter`  and  re-installing  it  later,  to  prevent  it  from  being
-    # contained in `cParen`.
-    #}}}
-    if &filetype == 'c'
-        syntax clear cDelimiter
-    endif
-
-    for group: string in allbut_groups[filetype]
-        var cmds: list<string> = GetCmdsToResetGroup(group)
-            ->map((_, cmd: string) =>
-                # add `@xMyCustomGroups` after `ALLBUT`
-                cmd->substitute('\CALLBUT,', $'ALLBUT,@{filetype}MyCustomGroups,', ''))
-
-        # clear and redefine all the items in the group
-        execute $'syntax clear {group}'
-        for cmd: string in cmds
-            execute cmd
-        endfor
-    endfor
-
-    if &filetype == 'c'
-        syntax match cDelimiter /[();\\]/
-    endif
 enddef
 
 def FixCommentRegion(filetype: string) #{{{2
@@ -711,7 +568,7 @@ enddef
 
 def GetCommentGroup(filetype: string): string #{{{2
     if filetype == 'bash'
-        return 'bashComment,bashQuickComment'
+        return 'bshComment'
     endif
     if filetype == 'c'
         # What's the difference between `cComment` and `cCommentL`?{{{
@@ -777,7 +634,7 @@ enddef
 
 def GetFiletype(): string #{{{2
     var filetype: string = expand('<amatch>')
-    if filetype == 'vim' && get(b:, 'current_syntax', '')  == 'vim9'
+    if filetype == 'vim' && get(b:, 'current_syntax', '') == 'vim9'
         filetype = 'vi9'
     elseif filetype == 'bash'
         filetype = 'bsh'

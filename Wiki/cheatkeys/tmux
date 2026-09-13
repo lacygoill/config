@@ -11,10 +11,6 @@ Kill {{{1
 kill pane                               «pfx» Q Q
 kill window                             «pfx» Q q
 
-Search {{{1
-
-selected text                           S                                      C
-
 Paste {{{1
 
 paste buffer                            «pfx» «C-p»                            N
@@ -27,6 +23,26 @@ paste hinted text                       «pfx» f                               
 Move {{{1
 
 start of previous prompt                !                                      C
+
+Misc {{{1
+
+list key bindings and their description «pfx» ?
+# Alternative:
+#
+#     $ tmux list-keys -N | less
+#
+# Note: All default key bindings have a description.  But your custom ones might
+# not have one.   If they haven't, they  aren't listed.  Also, only  keys in the
+# root and prefix key  tables are listed by default.  For  other key tables, use
+# `-T` ; for example:
+#
+#     $ tmux list-keys -T buffer
+#                         ^----^
+#                         given key-table
+
+create new window                       «pfx» c
+
+detach tmux                             «pfx» @
 
 Annex {{{1
 Labels used in modes {{{2
