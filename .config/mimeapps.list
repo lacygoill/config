@@ -206,8 +206,10 @@ audio/vnd.wave=mpv.desktop
 video/vnd.avi=mpv.desktop
 x-scheme-handler/http=firefox.desktop
 x-scheme-handler/https=firefox.desktop
+application/vnd.oasis.opendocument.text=libreoffice-writer.desktop
 
 [Added Associations]
 text/plain=org.xfce.mousepad.desktop;
 application/vnd.openxmlformats-officedocument.wordprocessingml.document=libreoffice-writer.desktop;
 video/x-matroska=com.stremio.Stremio.desktop;
+application/vnd.oasis.opendocument.text=libreoffice-writer.desktop;
