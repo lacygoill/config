@@ -489,7 +489,7 @@ $ screenkey_pos: printf '%s\n' 'screenkey position (number between 0 and 1)' 0.8
     --- --header-lines 1
 
 # audio stream
-/usr/bin/ffmpeg -f pulse -i default -y out.wav
+/usr/bin/ffmpeg -f pulse -i @DEFAULT_MONITOR@ out.mp3
     # Found here: `man ffmpeg-devices /INPUT DEVICES/;/pulse/;/Record`
     #
     # ---
@@ -502,15 +502,6 @@ $ screenkey_pos: printf '%s\n' 'screenkey position (number between 0 and 1)' 0.8
     #
     # `-f pulse` forces  the input file format  (by default, the format  is auto
     # detected).
-    #
-    # ---
-    #
-    # `-i default`:
-    #
-    #    > The filename to provide to the input device
-    #    > is a source device or the string "default".
-    #
-    # Source: `man ffmpeg-devices /INPUT DEVICES/;/pulse/;/"default"`
 
 # desktop (X11 only)
 set title $(xdotool getactivewindow getwindowname) \

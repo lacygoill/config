@@ -213,3 +213,4 @@ text/plain=org.xfce.mousepad.desktop;
 application/vnd.openxmlformats-officedocument.wordprocessingml.document=libreoffice-writer.desktop;
 video/x-matroska=com.stremio.Stremio.desktop;
 application/vnd.oasis.opendocument.text=libreoffice-writer.desktop;
+audio/mpeg=org.xfce.Parole.desktop;

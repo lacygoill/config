@@ -282,6 +282,7 @@ export def BackwardKillWord(): string #{{{2
     var mode: string = Mode()
     var iskeyword_save: string = &l:iskeyword
     var bufnr: number = bufnr('%')
+    var seq: string
 
     try
         var line: string
@@ -303,17 +304,16 @@ export def BackwardKillWord(): string #{{{2
         # It might happen when the cursor is  after a sequence of whitespace (1 BS =
         # `&shiftwidth` chars deleted).  Instead, feed `<Left><Del>`.
 
-        var seq: string = CloseUndoBeforeDeletions(mode)
+        seq = CloseUndoBeforeDeletions(mode)
         if mode == 'i'
             seq ..= repeat("\<C-G>U\<Left>\<Del>", strcharlen(killed_text)) .. "\<C-G>u"
         else
             seq ..= repeat("\<Left>\<Del>", strcharlen(killed_text))
         endif
-        return seq
     finally
         setbufvar(bufnr, '&iskeyword', iskeyword_save)
     endtry
-    return ''
+    return seq
 enddef
 
 export def BeginningOfLine(): string #{{{2
@@ -372,7 +372,6 @@ export def ChangeCaseWord(upcase = false, type = ''): string #{{{2
             setline('.', new_line)
             cursor(0, new_pos)
         endif
-        return ''
     finally
         setbufvar(bufnr, '&iskeyword', iskeyword_save)
     endtry
@@ -489,6 +488,7 @@ export def KillWord(): string #{{{2
     var mode: string = Mode()
     var iskeyword_save: string = &l:iskeyword
     var bufnr: number = bufnr('%')
+    var killed_text: string
     try
         var line: string
         var pos: number
@@ -508,15 +508,14 @@ export def KillWord(): string #{{{2
             .. '[^[:keyword:]]\+'
             .. '\)'
 
-        var killed_text: string = line->matchstr(pat)
+        killed_text = line->matchstr(pat)
         AddToKillRing(killed_text, mode, true, false)
 
-        return CloseUndoBeforeDeletions(mode)
-            .. repeat("\<Del>", strcharlen(killed_text))
     finally
         setbufvar(bufnr, '&iskeyword', iskeyword_save)
     endtry
-    return ''
+    return CloseUndoBeforeDeletions(mode)
+        .. repeat("\<Del>", strcharlen(killed_text))
 enddef
 
 export def MoveByWords( #{{{2
@@ -623,7 +622,6 @@ export def MoveByWords( #{{{2
             return seq .. "\<C-G>u"
         endif
         feedkeys(seq, 'in')
-        return ''
     finally
         setbufvar(bufnr, '&iskeyword', iskeyword_save)
     endtry
