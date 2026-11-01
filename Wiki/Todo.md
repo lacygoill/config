@@ -38,6 +38,10 @@
    - treesitter
    - unit test
 
+   - Signal / DeltaChat (android)
+   - ZeroBin
+   - NextCloud (to send files)
+
 ---
 
 Michael  Lucas wrote  a book  about DNS  Security Extensions: "DNSSEC  Mastery".
