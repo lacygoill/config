@@ -1,0 +1,170 @@
+# Commands to open media in separate window without pausing execution of the calling program {{{1
+# Images {{{2
+
+# `--autofit=50%x50%` makes the window as large as possible, without being wider
+# than 50% of the screen width, or higher than 50% of the screen height
+# `--loop-file=inf` makes the file loop forever.
+# `--cache` enables network cache settings.{{{
+#
+# Caching can  reduce the amount  of buffering you  run into because  the player
+# will have some breathing room between receiving the data and playing it.
+#}}}
+image/gif \
+    ; mpv --autofit=50%x50% --loop-file=inf --cache=yes '%s' \
+    ; description='Image' \
+    ; test=test -n "$DISPLAY"
+
+# What does `--scale-down`?{{{
+#
+# It scales down the image so that it fits on the screen (if necessary).
+#}}}
+# Do *not* use the `-g` flag to set a default geometry.{{{
+#
+#     feh -g 640x480 ...
+#         ^--------^
+#             ✘
+#
+# It would prevent us from toggling off the fullscreen mode.
+#}}}
+image/* \
+    ; feh --scale-down '%s' \
+    ; description='Image' \
+    ; test=test -n "$DISPLAY" \
+    ; priority=4
+
+# Videos {{{2
+
+# youtube videos are assigned a custom mime-type
+# TODO: Prioritize 720p over higher resolutions.{{{
+#
+# In the past, we used this:
+#
+#     ; mpv --ytdl-format='[height <=? 720]/best' --autofit=50%x50% '%s'
+#
+# I think it worked.   But it prevents us from viewing videos  from rtv (when we
+# press `o` on a link).  I made a test outside of rtv which gave this error:
+#
+#     [ytdl_hook] ERROR: [Reddit] czq8j2tprada1: Requested format is not available.
+#     Use --list-formats for a list of available formats
+#
+# `--list-formats` included many weird formats.  The last one was named "fallback":
+#
+#              v------------v
+#     $ yt-dlp --list-formats https://v.redd.it/czq8j2tprada1
+#     ...
+#     fallback ...
+#     ^------^
+#
+# Including it in the command fixes the issue outside of rtv:
+#
+#     $ mpv --ytdl-format='[height <=? 720]/best/fallback' --autofit=50%x50% https://v.redd.it/czq8j2tprada1
+#                                                ^------^
+#
+# But not inside rtv.  Why?
+#}}}
+video/x-youtube \
+    ; mpv --autofit=50%x50% --cache=yes '%s' \
+    ; description='Video' \
+    ; test=test -n "$DISPLAY"
+
+video/* \
+    ; mpv --autofit=50%x50% --cache=yes '%s' \
+    ; description='Video' \
+    ; test=test -n "$DISPLAY" \
+    ; priority=4
+#}}}1
+# Commands to display media directly in the terminal when a display server is not available {{{1
+# (e.g. in the console or inside of an SSH session)
+# Images {{{2
+
+# View true images in the terminal, supported by rxvt-unicode, xterm and st
+# Requires the w3m-img package
+image/* \
+    ; w3m -o 'ext_image_viewer=off' '%s' \
+    ; description='Image' \
+    ; needsterminal \
+    ; priority=4
+
+# Display images in classic ascii using img2txt and libcaca
+image/* \
+    ;    curl --fail --location --show-error --silent '%s' | convert - jpg:/tmp/.mailcap.jpg \
+      && img2txt --format=utf8 /tmp/.mailcap.jpg \
+    ; description='Image' \
+    ; needsterminal \
+    ; priority=4
+
+# Videos {{{2
+
+# Full motion videos - requires a framebuffer to view
+# What is `drm`?{{{
+#
+# A video output driver using Direct Rendering Manager.
+# It must be used when there is no X server (e.g. in a console).
+#}}}
+#   What is an output driver?{{{
+#
+# An interface to an output facility.
+#}}}
+#   How can I get a list of all available output drivers?{{{
+#
+#     $ mpv --vo=help
+#}}}
+
+# Why the `--profile` option?{{{
+#
+# That's what the man page recommends.
+#
+#    > Since  mpv  0.30.0, you may need to use --profile=sw-fast to get
+#    > decent performance.
+#
+# Source: `man mpv /drm (Direct Rendering Manager)`
+#}}}
+#   What is a profile?{{{
+#
+# A group of options that you want to easily set with a telling name.
+#}}}
+#   How to get the list of all available profiles?{{{
+#
+#     $ mpv --profile=help
+#}}}
+#   How to print the settings applied by a given profile?{{{
+#
+#     $ mpv --show-profile=<profile name>
+#}}}
+#   Which options does the `sw-fast` profile set?{{{
+#
+# `sws-scaler` and `sws-fast`:
+#
+#     $ mpv --show-profile=sw-fast
+#     Profile sw-fast:
+#      sws-scaler=bilinear
+#      sws-fast=yes
+#
+# ---
+#
+# `--sws-fast`  allows  optimizations that  help  with  performance, but  reduce
+# quality.  A video output driver like drm benefits a lot from such an option.
+#
+# ---
+#
+# Here, `--sws-scaler`  specifies a **s**oft**w**are **s**caler  algorithm to be
+# used with a video output driver which lacks hardware acceleration like drm.
+#
+# To get a list of all available scalers:
+#
+#     $ mpv --sws-scaler=help
+#}}}
+video/x-youtube \
+    ; mpv --vo=drm --profile=sw-fast --really-quiet --cache=yes '%s' \
+    ; description='Video' \
+    ; needsterminal
+
+video/* \
+    ; mpv --vo=drm --profile=sw-fast --really-quiet --cache=yes '%s' \
+    ; description='Video' \
+    ; needsterminal \
+    ; priority=4
+#}}}1
+# Fall back on `xdg-open(1)` if no rule matched. {{{1
+
+*/*; xdg-open '%s'; test=test -n "$DISPLAY"; priority=0

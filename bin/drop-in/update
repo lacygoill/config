@@ -1,0 +1,11 @@
+#!/bin/bash -
+
+readonly lib="${0%/*}/lib"
+# shellcheck source=lib
+source "$lib"
+
+if ! script="$(_Get_Script_Path)"; then
+  exit 1
+fi
+
+echo "$script"

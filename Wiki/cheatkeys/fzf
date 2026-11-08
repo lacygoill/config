@@ -1,0 +1,16 @@
+mark file and select next one           «C-x»
+toggle preview window                   «M-w»
+increase preview window size            «M-S-w»
+
+Vim plugin {{{1
+
+# look for files
+under current directory                 :FZF
+under home directory                    :FZF ~
+under /tmp and with CLI options         :FZF --reverse --info=inline /tmp
+
+# open selected file(s)
+in current window                       «Enter»
+in new horizontal splits                «C-s»
+in new vertical splits                  «C-v»
+in new vertical tabs                    «M-S-t»

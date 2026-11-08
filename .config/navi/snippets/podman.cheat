@@ -1,0 +1,256 @@
+% podman, info
+
+$ container: printf '%s\n' "$(podman ps --all --format='{{.Names}}')" '--all' '--latest'
+
+$ field: printf '%s\n' \
+    'Architecture' \
+    'Author' \
+    'Config.Cmd' \
+    'Config.Env' \
+    'Config.StopSignal' \
+    'Config.WorkingDir' \
+    'Created' \
+    'ImageName' \
+    'Labels' \
+    'Os'
+
+$ image: printf '%s\n' ubuntu:24.04 fedora:latest --- --header 'repository:tag'
+$ signal: compgen -A signal
+$ UUID: podman image list --all --format='{{.ID}}  # {{.Names}}'
+
+# print local container storage
+podman info --format='{{.Store.GraphRoot}}'
+    #                 ^------------------^
+    #                     Go template
+    #
+    # Pitfall: If a field is written as  `abc` in the output of `$ podman info`,
+    # you must write it as `Abc` in the template variable, hence why `Store` and
+    # `GraphRoot` are capitalized here.
+
+# list images
+podman image list --all
+
+# list layers of given image
+podman image tree <image>
+
+# list port mappings for given container
+podman container port <container>
+
+# inspect given manifest list
+skopeo inspect --raw docker://<registry>/<image>
+
+# extract given field from image manifest (or container runtime JSON file)
+podman image inspect --format='{{.<field>}}' <image>
+    # For a container, replace the `image` subcommand with `container`:
+    #
+    #     $ podman container inspect --format='{{.❬field❭}}' ❬container❭
+    #              ^-------^
+
+# print size of given container
+podman container inspect --format='{{.SizeRootFs}} {{.SizeRw}}' --size <container> \
+    | numfmt --field=- --to=si
+    # `SizeRootFs` = size of the image on which the container is based
+    # `SizeRw` = size of the changes made to the container
+    # For more info: https://github.com/docker/docs/issues/1520#issuecomment-305179362
+    #
+    # ---
+    #
+    # Contrary  to other  fields,  `SizeRootFs` and  `SizeRw`  require an  extra
+    # option (`--size`).   Maybe because computing  the size takes a  long time,
+    # and `podman-inspect(1)` skips this computing by default.
+
+% podman, container
+@ podman, info
+
+# run given linux OS in container
+podman container run --name=<name> --rm --interactive --tty <image> bash
+    # `--name`  assigns a  name to  the container  which makes  it easier  to be
+    # referred to inside future Podman commands (e.g. `$ podman stop myapp`).  A
+    # container  UUID  is also  automatically  generated.   A container  can  be
+    # referred to via its name in most Podman commands; if not, use its UUID.
+    #
+    # ---
+    #
+    # `--rm` automatically removes the container when we quit it.
+    #
+    # ---
+    #
+    # Use  `--interactive`  whenever  you  need   to  pass  some  input  to  the
+    # containerized application.  If it comes from the terminal (i.e. you typing
+    # on  the keyboard),  also  use `--tty`.   If it  comes  from a  redirection
+    # (pipe/heredoc/here string) , do *not* use `--tty`.
+    #
+    # Without  `--interactive`, and  without  `--tty`,  Bash exits  immediately,
+    # because its STDIN is closed.
+    #
+    # With `--interactive`, but without `--tty`, Bash does not print its prompt,
+    # nor the output of your commands (except their errors).
+    #
+    # ---
+    #
+    # An image has almost  always a default command it executes.   But it can be
+    # overridden by the last argument of `podman-run(1)` (e.g. here `bash`).
+
+# run containerized web server
+podman container run --name=<name> --rm --detach --publish=8080:8080 <image>
+    # Image example: `registry.access.redhat.com/ubi8/httpd-24`
+    #
+    # ---
+    #
+    # `--detach` runs the  container in the background,  so that `podman-run(1)`
+    # can exit.
+    #
+    # ---
+    #
+    # `--publish` publishes/binds  the container  port `8080`  to the  host port
+    # `8080`:
+    #
+    #     --publish=8080:8080
+    #               ^--^ ^--^
+    #               host container
+    #
+    # It's necessary to  let a process outside the container  communicate with a
+    # process inside.  For example, we might  want to access a containerized web
+    # server from a web browser in our host:
+    #
+    #     $ browse http://localhost:8080
+    #
+    # But a container is not bound to  the host network; only to its virtualised
+    # network (because it's created within  its own network namespace).  We need
+    # `--publish` to  connect the  port on  which the web  server listens,  to a
+    # given port on the host to which the browser can send its requests.
+    #
+    # ---
+    #
+    # The host  port should  be >=  1024 because  the kernel  does not  allow an
+    # unprivileged user to expose a privileged port.
+    #
+    # ---
+    #
+    # If you specify only one port:
+    #
+    #     --publish=1234
+    #
+    # It's used to set the container port; the host port is picked at random.
+
+# run container as given user
+podman container run --name=<name> --rm --user=<user> <image>
+    # `❬user❭` must have an account in the image.
+    #
+    # ---
+    #
+    # By default, Podman runs a container  as root, unless the image specifies a
+    # default  user.   If  it  does,  and  you want  to  start  as  root,  write
+    # `--user=root`.
+
+# run container with given stop signal
+podman container run --name=<name> --rm --stop-signal=<signal> <image>
+    # For example, this is useful if the primary process (PID1) of the container
+    # is systemd, which specifies that it shuts down using `SIGRTMIN+3`:
+    # https://www.freedesktop.org/software/systemd/man/systemd.html#SIGRTMIN+3
+
+# create new container from given image
+podman container create <image>
+    # Almost identical to `podman-run(1)`.  Pulls an  image if it's not in local
+    # container  storage and  configures the  container information  to make  it
+    # ready to run, but never executes  the container.  Often used together with
+    # `podman-start(1)`, when the container is intended to be started/stopped by
+    # a systemd unit file.
+
+# stop given container right away
+podman container stop --time=0 <container>
+    # `--time=0`: don't wait  the default 10 seconds after  sending `SIGTERM` to
+    # the primary process (PID1) of the container, before sending `SIGKILL`.
+    #
+    # By default, Podman waits 10 seconds to give containerized processes enough
+    # time  to clean  up and  commit changes.   But, the  primary process  might
+    # ignore `SIGTERM` (e.g. systemd).
+
+# start and attach to interactive container
+podman container start --attach <container>
+
+# send given signal to given container
+podman container kill --signal=<signal> <container>
+
+% podman, remove
+@ podman, info
+
+# given container from local storage
+podman container stop <container>; podman container rm --force <container>
+    # `--force` forces the removal of:
+    #
+    #    - running and paused containers
+    #    - unknown containers (created by container engines which are not Podman)
+    #    - unusable containers (e.g. their OCI runtime have become unavailable)
+
+# all unused pods, containers, images and volume data
+podman system prune --all
+    # `--all` makes  the command  recursive (removing  some resource  might also
+    # trigger the removal of another resource that was associated with it)
+
+# all images
+podman rmi --all --force
+    # `--force` first removes containers that are currently using an image
+
+# given image
+podman rmi <UUID>
+
+# lingering podman-pause process
+podman system migrate
+    # Also  useful  for  a  change   in  `/etc/sub{u,g}id`  to  take  effect  in
+    # containers,   after  a   podman   command  has   already  been   executed.
+    #
+    # ---
+    #
+    # Technically, this  stops the `podman-pause(1)` process  and re-creates the
+    # user namespace.
+    #
+    # The pause process remains running until you  log out.  Its role is to keep
+    # the user  namespace alive, for  all rootless containers  to be run  in the
+    # same user  namespace (so that they  can share contents and  other types of
+    # namespaces like the network namespace).
+    #
+    # You can kill it  at any time, but it will be re-created  the next time you
+    # execute a Podman command.
+
+% podman, misc
+@ podman, info
+
+# copy file from given container to host
+podman container cp <container>:<source> <dest>
+
+# execute given command into given running container
+podman container exec <container> <cmd>
+    # Use `--interactive` whenever  you need to pass some input  to the command.
+    # If it comes from the terminal (i.e.  you typing on the keyboard), also use
+    # `--tty`.  If it  comes from a redirection (pipe/heredoc/here  string) , do
+    # *not* use `--tty`.
+    #
+    # ---
+    #
+    # `podman-exec(1)` is  useful to  execute a given  command within  a running
+    # container to:
+    #
+    #    - debug or examine what is going on
+    #    - modify some of the content the container is using
+
+# pull given image onto your host
+podman image pull <image>
+    # Prefer a fully qualified name over a short one:
+    #
+    #                                  tag
+    #                                 v----v
+    #     registry.redhat.io/ubi8/ubi:latest
+    #     ^----------------^      ^^^
+    #           domain           image
+    #
+    # Rationale: With a short name, the image  being pulled might not be the one
+    # you expect  (i.e. spoofed by an  attacker).  It depends on  the registries
+    # you specified in `registries.conf`, and in which order.
+    #
+    # ---
+    #
+    # A tag is still ambiguous.  If that concerns you, pull by digest instead:
+    #
+    #     registry.redhat.io/ubi8/ubi@digest
+    #                                ^-----^

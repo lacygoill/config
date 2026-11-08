@@ -1,0 +1,68 @@
+#!/bin/bash -
+
+readonly DIR="${0%/*}"
+source "$DIR/lib"
+
+if (( curpos == ${#query} )); then
+  echo "$query"
+  exit
+fi
+
+# adapted from our `readline` Vim plugin
+pat='\(.\{'$curpos'\}\)'
+pat+='\('
+pat+='[[:alnum:]]\+'
+pat+='\|[^[:alnum:]]\+[[:alnum:]]\+'
+pat+='\|[^[:alnum:]]\+'
+pat+='\)'
+
+transformation="$2"
+case $transformation in
+up)
+  new_case='\U'
+;;
+down)
+  new_case='\L'
+;;
+esac
+
+shopt -s lastpipe
+# shellcheck disable=SC2001
+if [[ "$transformation" == 'capital' ]]; then
+  sed '
+    # split line at cursor
+    s/'"$pat"'/\1\n\2/
+    h
+    # remove post-cursor
+    s/\n.*//
+    x
+    # pattern space = splitted line
+    # hold space = pre-cursor
+
+    # remove pre-cursor
+    s/.*\n//
+    # capitalize
+    s/\([[:alnum:]]\)\([[:alnum:]]*\)/\u\1\L\2/
+    H
+    # pattern space = new post-cursor
+    # hold space = pre-cursor + new post-cursor
+
+    # extract first word from post-cursor
+    s/\([[:alnum:]]\+\).*/\1/
+
+    G
+    # pattern space = first word post-cursor + pre-cursor + new post-cursor
+
+    # re-order lines  to get new  query (i.e.  pre-cursor + new  post-cursor) on
+    # first line, and first word post-cursor on second line
+    s/\(.*\)\n\(.*\)\n\(.*\)/\1\n\2\3/' <<<"$query" \
+    | IFS=$'\n' read -d '' -r word query
+else
+  sed 's/'"$pat"'/\2\n\1'"$new_case"'\2/' <<<"$query" \
+    | IFS=$'\n' read -d '' -r word query
+fi
+shopt -u lastpipe
+
+printf '%s' "$query"
+
+_Set_Cursor_Position $(( curpos + ${#word} ))

@@ -1,0 +1,1 @@
+-Wno-error=WARNING  # prevent GCC warning from being turned into error

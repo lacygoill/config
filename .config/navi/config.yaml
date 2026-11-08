@@ -1,0 +1,202 @@
+# Some keys have an equivalent CLI option or environment variable:{{{
+#
+#     ┌──────────────────────┬─────────────────────┬────────────────────────┐
+#     │ yaml key             │ CLI option          │ environment variable   │
+#     ├──────────────────────┼─────────────────────┼────────────────────────┤
+#     │ finder.command       │ --finder            │ ✘                      │
+#     ├──────────────────────┼─────────────────────┼────────────────────────┤
+#     │ finder.overrides     │ --fzf-overrides     │ NAVI_FZF_OVERRIDES     │
+#     ├──────────────────────┼─────────────────────┼────────────────────────┤
+#     │ finder.overrides_var │ --fzf-overrides-var │ NAVI_FZF_OVERRIDES_VAR │
+#     ├──────────────────────┼─────────────────────┼────────────────────────┤
+#     │ search.tags          │ --tag-rules         │ ✘                      │
+#     └──────────────────────┴─────────────────────┴────────────────────────┘
+#}}}
+
+finder: #{{{1
+  command: fzf
+  # https://github.com/denisidoro/navi/blob/master/docs/customization.md#overriding-fzf-options
+  # `--preview`: remove a possible trailing comment via `sed(1)`
+  # `--no-expect`, `--expect enter`{{{
+  #
+  # Problem: Pressing `C-o` might start `$VISUAL` in a broken way.
+  # Solution: Make navi ignore `C-o`.
+  #
+  # By default, navi sets `--expect` to `ctrl-y,ctrl-o,enter`:
+  #
+  #     $ cd <navi source code>
+  #     $ grepc ctrl-o
+  #     src/finder/mod.rs:106:51: command.args(["--expect", "ctrl-y,ctrl-o,enter"]);
+  #                                                                 ^----^
+  #
+  # The purpose is to make navi start  `$VISUAL` to edit the file containing the
+  # definition of the  currently selected snippet.  However, it  doesn't work as
+  # expected when navi is started from a command substitution:
+  #
+  #     Vim: Warning: Output is not to a terminal
+  #
+  # The editor is stuck, and never draws its TUI (`C-c` needs to be pressed).
+  #
+  # To avoid  this, we remove `C-o`  from `--expect`.  But before  resetting the
+  # option, we first need to clear it; hence `--no-expect`:
+  #
+  #    > If --expect option is specified multiple times, fzf will expect the union of
+  #    > the keys. --no-expect will clear the list.
+  #
+  # MRE:
+  #
+  #     $ bash --norc --noprofile
+  #     $ echo $(navi --path=$HOME/.config/navi/snippets/)
+  #     # press: C-o  (make sure to select a snippet which comes from a file;
+  #                    a few which are few hard-coded and navi-related don't come from any file)
+  #
+  # ---
+  #
+  # Besides, we often press `C-o` by accident while navi is running; e.g.:
+  #
+  #     start navi
+  #     v-----v
+  #     C-g C-g C-o
+  #         ^^^
+  #         accident
+  #
+  # Instead of:
+  #
+  #     C-g C-o
+  #     ^-----^
+  #     run fish omni-TUI function
+  #
+  # When that happens, it's better for navi not to react.
+  #
+  # ---
+  #
+  # We  also ignore  `C-y`  because it  shadows  `yank` (readline-like  `fzf(1)`
+  # function).  Also, it seems broken when we use it from bash.
+  #}}}
+  # `--bind='alt-e:execute(...)'`{{{
+  #
+  # Problem: We can't edit the file containing the currently selected snippet.
+  # Solution: Install a (new) key binding.
+  #
+  # Contrary to the default `C-o`, it  correctly handles the case where navi has
+  # been started from a command  substitution, because our script reconnects the
+  # editor's STDOUT to the terminal with `>"$(tty)"`.
+  #}}}
+  # `--bind=ctrl-j:ignore`{{{
+  #
+  # Since we're going to re-bind `C-k`, there is no point in keeping the default
+  # behavior of `C-j` (which is to select the next remaining match).  That would
+  # be confusing.
+  #}}}
+  # `--bind=ctrl-k:kill-line`{{{
+  #
+  # By default  navi re-binds  `C-j` and `C-k`  so that when  we press  them, we
+  # select the  next/previous remaining  match.  We prefer  to re-bind  `C-k` to
+  # `kill-line` which is more useful.
+  #}}}
+  overrides: >-
+    --preview 'navi preview {} | sed "2s/\s\+#\s\+.*//"'
+    --preview-window=border
+    --no-expect
+    --expect enter
+    --bind='alt-e:execute($HOME/bin/navi-edit {+})'
+    --bind=ctrl-j:ignore
+    --bind='ctrl-k:execute-silent($HOME/bin/util/fzf-readline/undo {q} save)+kill-line'
+  # `>-` is a syntax which lets us split a long string on multiple lines.{{{
+  #
+  # It's called “Line Folding”: https://yaml.org/spec/1.2.2/#65-line-folding
+  #}}}
+  # `--no-select-1` lets us input an arbitrary argument value, even if we only specified 1 default value.{{{
+  #
+  # With this option, we can write this in a `.cheat` file:
+  #
+  #     $ argument: printf 'value'
+  #
+  # And still be able to input something else than `value`.
+  #
+  # Without, we would need to write this:
+  #
+  #     $ argument: printf 'value\n '
+  #                              ^^^
+  #                              awkward
+  #}}}
+  # `preview-window` lets us give more lines to the preview window.{{{
+  #
+  # It might be necessary when providing an argument value.
+  # If the fzf window is not given enough lines, we can't see for which argument
+  # we're being prompted (except for the first one).
+  # This is especially noticeable with our shell snippet which starts a git bisect.
+  #}}}
+  overrides_var: >-
+    --no-select-1
+    --preview-window=right:border-left:75%:wrap
+    --bind='alt-e:execute($HOME/bin/navi-edit {+})'
+    --bind=alt-j:preview-down
+    --bind=alt-k:preview-up
+    --bind=ctrl-j:ignore
+    --bind='ctrl-k:execute-silent($HOME/bin/util/fzf-readline/undo {q} save)+kill-line'
+
+# search {{{1
+
+#     search:
+#       tags: only_this,or_this,!but_not_that
+
+shell: #{{{1
+  # If navi needs to start a shell, we want it to be bash.{{{
+  #
+  # Do not  use fish, it  could cause issues because  navi might use  a heredoc,
+  # which is not a syntax supported by fish.
+  #}}}
+  command: bash
+  # if fzf needs to start a shell, we want it to be bash
+  finder_command: bash
+
+style: #{{{1
+  # tags column
+  tag:
+    # text color
+    # Possible values:{{{
+    #
+    #     black
+    #     blue
+    #     cyan
+    #     green
+    #     grey
+    #     magenta
+    #     red
+    #     white
+    #     yellow
+    #     dark_blue
+    #     dark_cyan
+    #     dark_green
+    #     dark_grey
+    #     dark_magenta
+    #     dark_red
+    #     dark_yellow
+    #
+    # https://github.com/crossterm-rs/crossterm/blob/a9d9aff3f0397643be6f834f3f2777f6d8d996e9/src/style/types/color.rs#L174-L189
+    #}}}
+    color: cyan
+    # width in percentage of the total terminal window
+    # Do not make it too narrow.{{{
+    #
+    # If the tags need more space, they will be truncated with an ellipsis.
+    # But more importantly, your query won't be able to match any text which has
+    # been truncated in the tags column.
+    #}}}
+    width_percentage: 20
+    # minimum width in characters
+    min_width: 20
+
+  # comments column
+  comment:
+    color: blue
+    # Warning: Make sure  the column is wide  enough for `fzf(1)` to  be able to
+    # find text  which is  not displayed (i.e.  far away from  the start  of the
+    # comment).
+    width_percentage: 80
+    min_width: 80
+
+  # snippets column
+  snippet:
+    color: green

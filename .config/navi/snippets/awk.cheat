@@ -1,0 +1,32 @@
+% awk
+
+# run awk program from given file
+awk -f <program_file> <input_files>
+    # No need to make `❬program_file❭` executable.
+
+# run awk interactively
+rlwrap awk '<code>'
+    # This is useful when  you need to test a simple piece of  code, and see how
+    # it reacts to different inputs:
+    #
+    #    1. write the code, and run the command
+    #    2. write some arbitrary input
+    #    3. watch the output
+    #    4. repeat steps 2 and 3 as many times as you want
+    #
+    # ---
+    #
+    # To exit,  press `C-d`;  it sends  the end-of-file  signal to  the `awk(1)`
+    # foreground process.
+
+# remove duplicate lines in given file
+awk '!seen[$0] { print $0; seen[$0] = 1 }' <file>
+
+# extract section from file (from first line matching pat1 to nth occurrence of line matching pat2)
+awk '/<pat1>/,(/<pat2>/ && ++n == <nth>) { print $0 }' <file>
+
+# apply positive offset to line specifier
+awk '
+    /<pattern>/ { found = 1 }
+    found && n++ == <offset> { print $0; exit }
+' <file>

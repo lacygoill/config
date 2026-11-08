@@ -1,0 +1,36 @@
+% lua
+
+# start lua interpreter in interactive mode
+lua -i
+    # To execute a script before entering interactive mode, pass its path:
+    #     $ lua -i /path/to/script.lua
+    # To quit, press C-d, or run `os.exit()`
+
+# start lua interpreter after loading given module
+lua -l '<module>'
+  #  ^
+  #  *l*ibrary
+
+# make lua interpreter execute given statement
+lua -e '<statement>'
+
+# format lua script file
+stylua --indent-type=Spaces --indent-width=2 <script>
+    # Require the stylua binary:
+    # https://github.com/JohnnyMorganz/StyLua/releases
+    #
+    # Move it under `~/.local/bin/`.
+
+# test regex
+lua -e 'if string.find("<text>", "<regex>") then os.exit(0) else os.exit(1) end'
+
+% luarocks
+
+# print help for given subcommand
+luarocks help <subcommand>
+
+# install given rock
+luarocks --local install <rock>
+
+# show information about given rock
+luarocks show <rock>

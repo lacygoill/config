@@ -1,0 +1,27 @@
+#!/bin/bash -
+
+# We call this script via XTerm:{{{
+#
+#     jumpapp -m -r xterm -geometry 90x15+350+200 -e 'fish --interactive --command="exec /path/to/this/script"'
+#                                      ^^
+#                                      custom height for the FZF window
+#}}}
+# And bind the latter command to `Super+o` via our window manager.
+# Note: it's important to run the script from an interactive `fish(1)` shell.{{{
+#
+# It makes sure our FZF-related customizations are taken into account.
+# More generally, it makes sure that  we're running in the same environment that
+# we're working in  most of the time.   That might prevent some  weird issues; I
+# don't want to lose time debugging those.
+#}}}
+
+readonly lib="${0%/*}/lib"
+# shellcheck source=lib
+source "$lib"
+
+if ! script="$(_Get_Script_Path)"; then
+  exit 1
+fi
+
+# `exec` to avoid `SHLVL` from being incremented if we open a terminal running fish
+exec "$script"

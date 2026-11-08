@@ -1,0 +1,49 @@
+#!/bin/bash -
+
+# Tip: If you can't install it as a .deb package, try to use a Python wheels instead:{{{
+#
+#     $ python3 -m venv pyenv
+#     $ pyenv/bin/pip install --upgrade pip
+#     $ pyenv/bin/pip install --upgrade --pre 'aqt[qt6]'
+#     $ pyenv/bin/anki
+#
+# Source: https://betas.ankiweb.net/#via-pypipip
+#}}}
+
+# The installation documentation is at:
+# https://docs.ankiweb.net/platform/linux/installing.html
+#
+# It says that you need these dependencies:
+# `libxcb-xinerama0`, `libxcb-cursor0`, `libnss3`
+#
+# But in practice, you also need:
+# `libxcb-keysyms1`, `libxcb-icccm4`
+#
+# Anyway, if you're still missing some  dependencies, start Anki from a terminal
+# like this:
+#
+#     $ QT_DEBUG_PLUGINS=1 anki
+#
+# It should print the missing `.so` files.
+# Find the packages which provide them.
+
+readonly -a DEPENDENCIES=(
+  'libnss3'
+  'libxcb-cursor0'
+  'libxcb-icccm4'
+  'libxcb-keysyms1'
+  'libxcb-xinerama0'
+)
+
+# Let's make sure that we compile from a `tar.zst`; not from a `tar.gz`.
+rm --force --verbose ./fish-*.tar.gz
+
+bold="$(tput bold)"
+reset="$(tput sgr0)"
+source "${0%/*}/_lib"
+_Extract_Archive 'anki' "https://github.com/ankitects/anki/releases
+
+${bold}Choose a \"tar.zst\"; not \"tar.gz\"${reset}."
+
+_Install_Dependencies "${DEPENDENCIES[@]}"
+PREFIX="$HOME/.local" ./install.sh

@@ -1,0 +1,89 @@
+#!/bin/bash -
+
+# This script is automatically started via:
+# `~/.config/autostart/user-session.desktop`
+#
+# This means that it only runs when you log in graphically; not in a console.
+
+# Sometimes, when I log back in, `vim-persistent-clipboard.service` is temporarily failed!{{{
+#
+# Right.  That happens if you copy some text in the clipboard from Vim, `:quit`,
+# log out, then log back in:
+#
+#     $ systemctl --user --state=failed
+#       UNIT             LOAD   ACTIVE SUB    DESCRIPTION
+#     ● vim-persistent-clipboard.service loaded failed failed Make clipboard persist after quitting/suspending Vim
+#
+# That's because an  `xsel(1x)` process was running when you  logged out, and it
+# lost  its connection  to the  X server.   Just copy  yet another  text in  the
+# clipboard from Vim.  Or manually reset the failed state of the service:
+#
+#     $ systemctl --user reset-failed vim-persistent-clipboard.service
+#
+# You could also run `reset-failed` here, without arguments, to reset the failed
+# state of  all units.   But it  seems wrong.  A  unit might  have failed  for a
+# different reason  than a process losing  its connection to the  X server.  For
+# such a unit, there is no guarantee that  it will work again after you log back
+# in.
+#}}}
+
+# `{WAYLAND_,}DISPLAY`: for some applications such as redshift.{{{
+# https://github.com/jonls/redshift#when-running-as-a-systemd-service-redshift-fails-to-connect-to-the-graphical-environment
+#
+# The command is adapted from sway's wiki:
+# https://github.com/swaywm/sway/wiki/Systemd-integration#managing-user-applications-with-systemd
+#
+# Note that  you can  omit the  environment variable names;  in which  case, the
+# entire environment block is imported.
+# See: `man systemctl /COMMANDS/;/Environment Commands/;/import-environment`.
+#}}}
+systemctl --user import-environment {,WAYLAND_}DISPLAY
+
+# What happens the first time we start the system?{{{
+#
+# In that  case, `user-session.target` cannot  be active right now.   Because it
+# can only be  started manually.  And the  only place where we start  it is from
+# this script.  This means that our test works as expected; it won't be true the
+# first time we start the system.
+#}}}
+if ! systemctl --user is-active user-session.target >/dev/null; then
+  systemctl --user start user-session.target
+  exit
+fi
+
+# To be able to reliably `start` the target, we need to stop it first.{{{
+#
+# If `foo.target` is already active, `start foo.target` will not re-start all of
+# `foo`'s services; only the ones which are not already running.  That's because
+# `start foo.service` does not re-start `foo.service` if it's already running.
+#
+# But we  want *all* our  services to be re-started,  because we don't  have the
+# guarantee that  their processes are  still working as expected.   For example,
+# suppose we log out then log in  back: the `redshift` service is still running,
+# but  its process  is no  longer setting  the color  temperature of  the screen
+# (probably because it was temporarily disconnected from the display server).
+#
+# Besides, it  seems good practice to  first stop the target  before starting it
+# again; if only to start from a known state (and avoid weird issues later).
+#}}}
+# And to  be even more  reliable, let's first reload  the manager in  case we've
+# modified one of our unit file in-between 2 logins.
+systemctl --user daemon-reload
+systemctl --user stop user-session.target
+
+# Close past sessions which are still in the "closing" state.{{{
+#
+# For example,  ATM, each  time we log  out /  log back in,  we have  one more
+# closing session because of a lingering `agent` process; it's a known bug:
+# https://bugs.launchpad.net/ubuntu/+source/geoclue-2.0/+bug/1871728
+#}}}
+loginctl list-sessions \
+  | awk '/^[[:blank:]]*c[[:digit:]]+/ { print $1 }' \
+  | while IFS= read -r ID; do
+      state="$(loginctl show-session --property=State --value -- "$ID")"
+      if [[ "$state" == 'closing' ]]; then
+        loginctl kill-session -- "$ID"
+      fi
+    done
+
+systemctl --user start user-session.target

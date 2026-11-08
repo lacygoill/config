@@ -1,0 +1,533 @@
+/fset {{{1
+filter {{{2
+all options (no filter)                 *
+
+options with "xxx" in value             =xxx
+options with exact value "xxx"          ==xxx
+options with "xxx" in description       he=xxx
+# Pitfall: To search for a value starting with `=`, use `c:{value} =~ =...` instead.
+
+changed options                         d
+changed options with "xxx" in name      d:xxx
+changed options with "xxx" in value     d=xxx
+changed options with exact value "xxx"  d==xxx
+
+boolean options                         t:bool
+# works for any type: `t:color`, `t:enum`, `t:int`, `t:str`
+
+options satisfying given condition      c:‹condition›
+# `<condition>` can use various operators:{{{
+#
+#    - grouping: `(`, `)`
+#    - logical: `&&`, `||`
+#    - comparison: `==`, `!=`, `=~`, `!~`
+#
+# And variables:
+#
+#    - `${description}`
+#    - `${marked}`
+#    - `${name}`
+#    - `${section}`
+#    - `${type}`
+#    - `${value}`
+#    - `${value_changed}`
+#}}}
+# For example, to list all options whose type is `color` or `string`, and value contains `white`:{{{
+#
+#     /fset c:${value} =~ white && (${type} == color || ${type} == string)
+#}}}
+
+marks {{{2
+# Marks let you apply an operation (e.g. reset) on an arbitrary set of options.
+# They're lost whenever you change the filter.
+
+toggle mark on current option           «M-m»
+unmark all options                      «C-l»
+
+mark options matching filter "xxx"      m:xxx
+unmark options matching filter "xxx"    u:xxx
+# only displayed options are affected
+#}}}2
+
+# Some commands can be executed in 2 or 3 ways.{{{
+#
+# Via an input, a key binding, or  an `/fset` command.  For example, you can set
+# the currently selected option with:
+#
+#    - `s` input
+#    - `M-Enter` key binding
+#    - `/fset -set` command
+#
+# But here, we  only give one way: the  easiest one to use, which  is usually an
+# input or  a key binding  (when you might want  to execute the  command several
+# times consecutively).
+#}}}
+# This means that you can't use some filters.{{{
+#
+# For example, you can't filter options to  only keep the ones containing an "x"
+# by typing `x Enter`, because `x` is a valid input to change the format used to
+# display options.  If that's an issue, prefix your filter with a space; that is
+# type `Space x Enter`.
+#}}}
+
+toggle /fset buffer                     «M-o»
+
+toggle boolean value                    t «Enter»
+reset value                             r «Enter»
+unset value                             u «Enter»
+set value                               s «Enter»
+append to value                         a «Enter»
+
+decrement integer/color value           «M--»
+increment integer/color value           «M-+»
+# works even with color names
+
+scroll option description               «C-x» «M-[hl]»
+# `C-x` cycles the format used to display options between `fset.format.option1` and `fset.format.option2`.{{{
+#
+# Inside the  default value,  `${empty_name}` is  used to  align some  fields (I
+# think it evaluates to the name of the option with all characters replaced with
+# spaces).
+#
+# The  default value  of  `*.option2`  is useful  when  the  description of  the
+# currently  selected option  is too  long to  fit in  the top  bar, because  it
+# re-prints the latter  inside the buffer (via `${description}`).   You can then
+# scroll it with our custom key bindings `M-h` and `M-l`.
+#}}}
+# It also toggles the title bar which displays more information like the current filter.
+
+sort by type, then name (in reverse)    s:type,-name
+use default sort                        s:
+
+export displayed options in given file  w-:‹/path/to/file›
+# Each line has format: `/set name value` or `/unset name`.
+# `-` (in `w-`) suppresses help comments.
+
+Buffers {{{1
+
+clear buffer                            «C-g» «C-l»
+close buffer                            «C-g» «C-q»
+
+jump to next buffer with unread msg     «M-a»
+# `~/.config/weechat/python/jump_smart.py`
+
+jump to previous buffer                 «C-p»
+                                        «M-Left»
+
+jump to next buffer                     «C-n»
+                                        «M-Right»
+
+jump to previous visited buffer         «M-<»
+jump to next visited buffer             «M->»
+
+move buffer up                          /buffer move -1
+                                        «M-Up»
+move buffer down                        /buffer move +1
+                                        «M-Down»
+# Useful in combination with `M-Left` and `M-Right` which select the buffer down
+# or up.
+
+jump to buffer with given number        /‹num› «Enter»
+# For numbers below 10, pressing `M-[1-9]` is simpler.
+
+jump to server buffer                   «M-S-j» «M-S-j»
+
+jump loop between a list of buffers     /buffer cycle {#‹chan›|‹num›} [...]
+
+hide buffer(s)                          /buffer hide #‹chan› [...]
+unhide buffer(s)                        /buffer unhide #‹chan› [...]
+# Alternative: `/buffer unhide -all`
+
+remove unread marker (horizontal rule)  /buffer set unread
+move unread marker                      /buffer set unread {+|-}‹num›
+# If you use a relative number, the marker is moved relative to its current position:{{{
+#
+#     # N lines *down* from its current position
+#     /buffer set unread +N
+#
+#     # N lines *up* from its current position
+#     /buffer set unread -N
+#}}}
+# Otherwise, it's placed N lines above the last line.
+
+save buffer in given file               /bufsave
+
+set variable local to current buffer    /buffer setvar ‹name› ‹value›
+                                        /buffer set localvar_set_‹name› ‹value›
+
+delete variable local to current buffer /buffer delvar ‹name›
+                                        /buffer set localvar_del_‹name›
+
+set buffer property automatically       /buffer setauto ‹property› ‹value›
+# This only works for the current buffer.
+# For an arbitrary buffer:{{{
+#
+#     /set weechat.buffer.<buffer>.<property> <value>
+#
+# For more info: https://github.com/weechat/weechat/issues/352#issuecomment-1691204685
+#}}}
+
+print given property of current buffer  /buffer get ‹property›
+# Full list of buffer properties:
+# https://weechat.org/files/doc/weechat/stable/weechat_plugin_api.en.html#_buffer_set
+
+execute command in all buffers          /allbuf ‹cmd›
+execute command in all server buffers   /allserv ‹cmd›
+execute command in all channel buffers  /allchan ‹cmd›
+execute command in all private buffers  /allpv ‹cmd›
+# `/all*` commands accept the optional arguments `-include=` and `-exclude=`.{{{
+#
+# They expect  a comma-separated  list of  buffer names  (which can  include the
+# wildcard `*`) used to specify resp. a whitelist or a blacklist.
+#
+# For example:
+#
+#     /allserv -include=*abc* ‹cmd›
+#
+# This executes `<cmd>` in all server buffers whose name contain `abc`.
+#}}}
+
+Channels {{{1
+
+join channels in autojoin option        /autojoin join
+
+leave channel(s) giving reason          /part #‹chan›,[...] ‹reason›
+# Example:{{{
+#
+#     /part #chan1,#chan2 going to bed
+#}}}
+
+Debug {{{1
+
+refresh screen                          «C-l»
+# Alternative: `/window refresh`
+# Useful when the screen has been messed up (e.g. by loading a broken script).
+
+break down evaluation of expression     /eval -d ‹expr›
+# a second `-d` gives an even more verbose output
+
+read LHS for given key binding          /debug key
+read RHS for given key binding          «C-v» ‹LHS›
+# After pressing `<LHS>`, there is a small delay (less than 1s) before the RHS is printed.{{{
+#
+# You'll read something like:
+#
+#     ctrl-g,ctrl-r /_reload_config
+#
+# In this example, `C-g C-r` is bound to `/_reload_config`.  If it was not bound
+# to anything, you would just read:
+#
+#     ctrl-g,ctrl-r
+#}}}
+
+display tags for lines                  /debug tags
+# Tip: When the  tags are displayed, you  might get lost because  the added text
+# changes the  view.  To prevent  this, before  running the command,  scroll the
+# window so that the line you're interested in is at the top.
+
+inspect variables held by hdata         /debug hdata
+
+execute Python code from CLI            /python eval ‹code›
+# Examples:{{{
+#
+#     /python eval weechat.command('', '/uptime')
+#     WeeChat uptime: 0 days 01:23:45, started on ...
+#
+#     /python eval weechat.prnt('', str(weechat.string_match('abcdef', '*b*d*', 0)))
+#     1
+#
+#     /python eval weechat.prnt('', weechat.buffer_get_string(weechat.current_buffer(), 'localvar_plugin'))
+#     core
+#}}}
+
+open buffer with raw IRC data           /server raw
+
+Getting Information {{{1
+
+toggle all filters globally             «M-=»
+# By default, you  can also toggle them  in the current buffer  only with `M--`,
+# but we've unbound the latter.
+# Rationale: `M--` and `M-=` can interfere with one another in a jarring way.{{{
+#
+# If filters are disabled globally, you  can no longer enable them locally.  And
+# vice  versa, if  they're disabled  locally, re-enabling  them globally  has no
+# effect locally.
+#}}}
+
+list all bars                           /bar listfull
+list all filters                        /filter list
+
+toggle given filter                     /filter toggle ‹name›
+
+list buffers being logged               /logger list
+# for each of them, the logging level as well as the logfile are also given
+
+write all log files now                 /logger flush
+# useful to get immediate feedback after a change in our log settings
+
+print channel modes                     /mode [‹chan›]
+# The meaning of a given mode depends on the network hosting the channel.
+# For the libera network, you can get more information from here:
+# https://libera.chat/guides/channelmodes
+
+print user modes                        /mode ‹nick›
+add/remove given mode to your nick      /mode ‹your_nick› {+|-}‹flag›
+# Example:{{{
+#
+#     /mode john +i
+#
+# This marks your  user ("john") as invisible.   That is, only a  user who knows
+# your nick, or connected  to the same channel can read your  nick in the output
+# of `/who`.
+
+#}}}
+
+list plugins currently loaded           /plugin
+
+list capabilities supported by server   /cap ls
+list capabilities currently enabled     /cap list
+
+open log of current channel             /log
+
+Key Bindings {{{1
+
+list all key bindings                   /key list
+list all changed key bindings           /key listdiff
+list all default key bindings           /key listdefault
+reset key to its default binding        /key reset ‹LHS›
+
+Messages {{{1
+
+send msg to nick on other server        /query -noswitch -server ‹server› ‹nick› ‹text›
+
+send memo to registered nick            /msg memoserv send ‹nick› ‹text›
+# Most networks support memos, but not all (OFTC and Undernet do not).
+# Also, on Libera, the text length is limited to 300 characters.
+# For more info: `/msg memoserv help [cmd]`
+
+NickServ {{{1
+
+register nick                           /msg NickServ register ‹password› ‹e-mail›
+# https://web.archive.org/web/20210919130056/http://abjects.net/page.php?5
+# https://irchighway.net/help/nickserv-help
+# https://libera.chat/guides/registration
+# https://www.oftc.net/Services/#register-your-account
+# https://wiki.rizon.net/index.php?title=Register_your_nickname
+
+list NickServ commands                  /msg NickServ help
+# more commands might be available when you're identified
+
+get help for NickServ command           /msg NickServ help ‹cmd› ...
+# Examples:
+#
+#     /msg NickServ help set password
+#     /msg NickServ help set email
+
+Scripts {{{1
+
+list loaded scripts                     /script list
+load script                             /script load ‹script›
+unload script                           /script unload ‹script›
+reload script                           /script reload ‹script›
+# Warning: The file extension can be omitted for `<script>`, but *not* for `load`:{{{
+#
+#     ✘
+#     /script load foo
+#     script: unknown language for script "foo"
+#
+#     ✔
+#     /script load foo.py
+#}}}
+
+Search {{{1
+
+start search                            «C-s»
+# press C-x to process the pattern as a regex instead of a literal string
+
+stop search                             «C-q»
+# `Enter` does the same thing but preserves the cursor current position
+
+scroll to previous search match         «M-p»
+scroll to next search match             «M-n»
+
+switch search in messages/prefixes      «Tab»
+
+Server {{{1
+
+add server on non-standard port         /server add ‹name› ‹hostname›/‹port›
+# The standard port is 6697 for TLS, 6667 otherwise.{{{
+#
+#    > - hostname/port or IP/port, port is 6697 by default for TLS, 6667 otherwise
+#
+# Source: `/help connect`
+#
+# This implies that  the standard port depends  on how `irc.server.<server>.tls`
+# is set.  When the option is left alone, it defaults to `on`, and WeeChat tries
+# to connect to the standard port 6697.  But if it's set to `off`, WeeChat tries
+# to connect to the standard port 6667.
+#
+# Also:
+#
+#     $ grep '^irc' /etc/services
+#     ircs-u          6697/tcp                # Internet Relay Chat via TLS/SSL
+#     ircd            6667/tcp                # Internet Relay Chat
+#}}}
+
+connect to given server                 /connect ‹server›
+list all known servers                  /server list
+
+list all server-local options           /server listfull [‹name›]
+# You could also execute:{{{
+#
+#     /set irc.server[.<name>].*
+#
+# But it would open a new `/fset` buffer.
+# The benefit of `/server listfull` is that its output is easier to copy.
+#}}}
+
+duplicate given server                  /server copy ‹orig› ‹copy›
+rename given server                     /server rename ‹old› ‹new›
+delete given server                     /server del ‹name›
+
+Text Attributes {{{1
+
+set bold attribute                      «C-c» b
+set italic attribute                    «C-c» i
+set underline attribute                 «C-c» _
+set reverse color attribute             «C-c» v
+reset all attributes                    «C-c» o
+# My text attribute is ignored!{{{
+#
+# On Libera, make sure the channel doesn't have the `+c` mode.
+#
+#    > Strip colour and formatting codes from channel messages.
+#
+# Source: https://libera.chat/guides/channelmodes#available-channel-modes
+#}}}
+# Multiple attributes can be combined.{{{
+#
+#     /this is some C-c b C-c i bold and italicized C-c o text
+#                   ^---^ ^---^
+#}}}
+# To only reset the attribute you've just set, press the same chord again.{{{
+#
+# This is useful, for  example, when you post a message  containing a bold text.
+# With `C-c o`,  the rest  of the  message would  no longer  be colored  by your
+# trigger `my_name_is_mentioned`.
+#}}}
+
+Triggers {{{1
+
+list triggers                           /trigger list
+                                        /trigger listfull
+# The output might contain some special tokens.{{{
+#
+#    - `=?`: the trigger depends on a condition
+#    - `~N`: the trigger executes N substitution (`s///`) or translation (`y///`) commands
+#    - `/N`: the trigger executes N WeeChat commands (`/cmd`; e.g. `/exec`)
+#}}}
+
+monitor given trigger                   /trigger monitor ‹trigger_name›
+read/set arguments of given trigger     /set trigger.trigger.‹trigger_name›
+
+Windows {{{1
+
+split window horizontally               «C-z» j
+split window vertically                 «C-z» l
+
+close window                            «C-g» «C-q»
+                                        /window close
+# This might fail.{{{
+#
+#     /window splith
+#     /window splitv
+#     /window down
+#     /window close
+#
+#     Can not close window, there's no other window with same size near current one
+#
+# In that case, try to close another window.
+# If you only want to keep one specific window, focus it then press `C-z o`.
+#}}}
+# `close` and `merge` are similar subcommands.{{{
+#
+# They both close a window, but not the same.
+# `close` removes the current window; `merge` keeps it.
+#}}}
+
+focus next window                       «C-z» «C-z»
+swap buffers of 2 windows               «C-z» «C-x»
+
+toggle zoom on current window           «C-z» «C-o»
+close all windows except current one    «C-z» o
+balance windows                         «C-z» =
+
+scroll to top                           «C-g» g
+scroll to bottom                        «C-g» G
+
+scroll to first unread message          «M-u»
+scroll to previous highlight            «M-S-p»
+scroll to next highlight                «M-S-n»
+
+toggle bare display                     «M-r»
+# Useful to copy URL split on multiple lines.
+# Or to download a pack via XDCC.
+
+Misc {{{1
+
+reload config                           «C-g» «C-r»
+
+write input in text editor              «C-g» «C-e»
+# after quitting Vim, you still need to paste the clipboard on Weechat's input line
+
+insert newline in input bar             «C-j»
+# Useful to write multi-line message.{{{
+#
+# In particular to quote someone and answer immediately afterward:
+#
+#     > quote
+#     answer
+#}}}
+
+toggle buflist                          «M-S-f»
+toggle nicklist                         «M-S-c»
+toggle title bar                        «M-S-t»
+toggle /xfer buffer                     «M-x»
+
+print help about given option           /help ‹option›
+
+reset non-saved options changes         /reload
+# This reloads  the configuration files.   Only works  if you didn't  `/save` or
+# `/quit` after changing the option(s).  Useful after a temporary experiment.
+
+send given file to given nick           /dcc send ‹nick› ‹file›
+
+get info about nick                     /whois [‹nick›]
+# If `<nick>` is omitted, `/whois` will target:{{{
+#
+#    - your nick if the `${type}` of the current buffer is `server` or `channel`
+#    - the remote nick if `${type}` is `private`
+# }}}
+
+change your nick                        /nick [-all] ‹nick›
+# `-all` changes your nick on *all* connected servers, instead of just the current one
+
+# `<message>` should explain why you're away; e.g. `/aaway food`; it can be read
+# in a `/whois`. `/aaway` is an alias for `/allserv /away`.
+# NOTE: When you're away, your nick is grayed out in the nicklist.
+set away status                         /aaway ‹message›
+unset away status                       /aaway
+
+send output of shell command to buffer  /exec [-o|-n] ‹cmd›
+# `-o`: current buffer
+# `-n`: new buffer
+
+remove current buffer from hotlist      /hotlist remove
+remove all buffers from hotlist         /hotlist clear
+restore hotlist                         /hotlist restore [-all]
+# without `-all`, only the current buffer is restored
+
+get statistics about size of network    /lusers
+
+print WeeChat version in channel        /v -o
+# `/v` is a default alias for `/command core version`

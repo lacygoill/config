@@ -1,0 +1,30 @@
+#!/bin/bash -
+
+if (( $# == 0 )); then
+  tee >&2 <<EOF
+Usage:
+  ${0##*/} <PID>
+EOF
+
+  exit 1
+fi
+
+# https://unix.stackexchange.com/a/85365/289772
+function Bitmask2signals {
+  local bits
+  bits="$(python -c "print(bin(0x$1))")"
+
+  local -i i=0
+  while [[ -n "$bits" ]]; do
+    (( i++ ))
+    if [[ "$bits" == *1 ]]; then
+      printf ' %s(%s)' "$(kill -l "$i")" "$i"
+    fi
+    bits="${bits%?}"
+  done
+}
+
+grep -E '^Sig(Blk|Ign|Cgt):' "/proc/$1/status" \
+  | while read -r a b; do
+      printf '%s%s\n' "$a" "$(Bitmask2signals "$b")"
+    done

@@ -1,0 +1,96 @@
+#!/bin/bash -
+
+tmp_dir="$(mktemp --directory)"
+trap 'rm -rf "$tmp_dir"' ABRT EXIT HUP INT QUIT TERM
+cd "$tmp_dir" || exit 1
+
+# `IFS=$'\r\n'`: Vim (here, `$ vim -r`) terminates lines with CR-LF sequences.{{{
+#
+# If we just made `IFS` empty, `read`  would split on newlines (LFs), but not on
+# carriage  returns (CRs);  as a  result, `$line`  would unexpectedly  contain a
+# trailing CR.
+#}}}
+vim -r 2>&1 \
+  | while IFS=$'\r\n' read -r line; do
+      if [[ "$line" =~  ^[[:blank:]]*In[[:blank:]]directory ]]; then
+        # Vim's directory for swapfiles.
+        directory="${line#* In\ directory }"
+        directory="${directory%:}"
+        directory="${directory/~\//"$HOME"/}"
+
+      elif [[ "$line" =~ ^[[:digit:]]+\. ]]; then
+        # Now, `$fname` contains a stale value.
+        # The correct name is on a later line.
+        # Clear the variable.
+        unset -v fname
+
+        swapfile="${line#*%}"
+        swapfile="%$swapfile"
+
+      elif [[ "$line" =~ ^[[:blank:]]*file[[:blank:]]name: ]] \
+          && ! [[ "$line" =~ ^[[:blank:]]*file[[:blank:]]name:[[:blank:]]\[No[[:blank:]]Name\]$ ]]; then
+        fname="${line#* file name: }"
+        # `~user/` → `/home/user/`
+        if [[ "$fname" =~ ^~ ]]; then
+          # We can't use `${parameter/pattern/string}` here (even if it supports
+          # the `#` anchor) because of the wildcard in the pattern.  It would be
+          # greedy, while we want  it to be lazy.  But we can  make it lazy with
+          # `${parameter#word}`.
+          fname="${fname#*/}"
+          fname="/home/$USER/$fname"
+        fi
+
+      elif [[ "$line" =~ ^[[:blank:]]*process[[:blank:]]ID: ]] \
+          && [[ -n "$fname" ]]; then
+
+        if [[ "$line" =~ STILL[[:blank:]]RUNNING ]]; then
+          # No need to indent the `$line` line.
+          # The variable already contains an indent.
+          tee >&2 <<EOF
+
+Cannot recover the file:
+        "$fname"
+It is still open in a running Vim instance:
+$line
+To recover the file, terminate the Vim process, then re-run this script.
+
+EOF
+          continue
+        fi
+
+        # Vim code meant to either remove  the swapfile if it didn't contain any
+        # change, or  to diff the current  file against the recovered  one.  For
+        # more info: `:help 11.1`.
+        # `:noautocmd`: make sure `edit!` gets us back the original file.{{{
+        #
+        # Otherwise, we  might get  back something  else.  For  example, suppose
+        # there was no original file; in that  case, we should get back an empty
+        # buffer; but we might have some autocmd which reads a skeleton file; we
+        # want to ignore that autocmd.
+        #}}}
+        IFS= read -r -d '' cmd_to_diff_multiline <<EOS
+if !&l:modified
+  call delete('$directory/$swapfile')
+else
+  set cpoptions+=A noswapfile switchbuf+=useopen
+  write! $tmp_dir/recovered
+  noautocmd edit!
+  diffsplit #
+  echomsg 'If the recovered version of the file (right) looks better than the current one (left), run:'
+  echomsg ':sbuffer 1 | :1,$+1 diffget | update!'
+  call popup_notification('for more help, read your :messages', {'pos': 'center'})
+endif
+EOS
+
+        cmd_to_diff="$(tr '\n' '|' <<<"$cmd_to_diff_multiline")"
+        # The here-doc  contains an  explicit trailing newline;  the here-string
+        # appends an implicit one.  That's why we end up with 2 trailing bars.
+        #                                vv
+        cmd_to_diff="${cmd_to_diff/%endif||/endif}"
+
+        # Vim's STDIN  is connected to  the pipe, which  reads `$ vim -r 2>&1`'s
+        # output.  Re-connect it to the terminal.
+        #                               v-------v
+        vim -r "$fname" +"$cmd_to_diff" </dev/tty
+      fi
+    done

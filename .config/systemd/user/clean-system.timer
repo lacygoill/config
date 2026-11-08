@@ -1,0 +1,9 @@
+[Unit]
+Description=Clean user files which might take too much space (e.g. Vim backup/undo files)
+
+[Timer]
+OnCalendar=monthly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

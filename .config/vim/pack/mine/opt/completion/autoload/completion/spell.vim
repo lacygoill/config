@@ -1,0 +1,86 @@
+vim9script
+
+export def Suggest(): string #{{{1
+    var word_to_complete: string = getline('.')
+        ->strpart(0, col('.') - 1)
+        ->matchstr('\k\+$')
+    var badword: list<string> = spellbadword(word_to_complete)
+    var matches: list<string> = !empty(badword[1])
+        ?     spellsuggest(badword[0])
+        :     []
+
+    var from_where: number = col('.') - strlen(word_to_complete)
+
+    if !empty(matches)
+        matches->complete(from_where)
+    endif
+    return ''
+enddef
+
+export def Fix(): string #{{{1
+    # don't close undo sequence:
+    #
+    #    - it seems messed up (performs an undo then a redo which gets us in a weird state)
+    #    - not necessary here, Vim already breaks the undo sequence
+
+    # Alternative:
+    #
+    #     var winview: dict<number> = winsaveview()
+    #     normal! [S1z=
+    #     normal! `^
+    #     winrestview(winview)
+
+    var spell_save: bool = &l:spell
+    var winid: number = win_getid()
+    var bufnr: number = bufnr('%')
+    &l:spell = true
+    try
+        var before_cursor: string = getline('.')
+            ->strpart(0, col('.') - 1)
+        var words: list<string> = split(before_cursor,
+            '\%('
+            # don't eliminate a keyword nor a single quote when you split the line
+            .. '\%(\k\|''\)\@!'
+            .. '.\)\+'
+            )->reverse()
+
+        var badword: string
+        var suggestion: string
+        var found_a_badword: bool = false
+        for word: string in words
+            badword = spellbadword(word)->get(0, '')
+            if empty(badword)
+                continue
+            endif
+            suggestion = spellsuggest(badword)->get(0, '')
+            if empty(suggestion)
+                continue
+            else
+                found_a_badword = true
+                break
+            endif
+        endfor
+
+        if found_a_badword
+            if exists('#User#AddToUndolistI')
+                doautocmd <nomodeline> User AddToUndolistI
+            endif
+            var new_line: string = getline('.')
+                ->substitute('\V\<' .. badword .. '\>', suggestion, 'g')
+            FixWord = () => setline('.', new_line)
+            autocmd SafeState * ++once FixWord()
+        endif
+    finally
+        if winbufnr(winid) == bufnr
+            var tabnr: number
+            var winnr: number
+            [tabnr, winnr] = win_id2tabwin(winid)
+            settabwinvar(tabnr, winnr, '&spell', spell_save)
+        endif
+    endtry
+    # Close undo sequence before `setline()` edits the line, so that we can undo
+    # if the fix is wrong.
+    return "\<C-G>u"
+enddef
+
+var FixWord: func

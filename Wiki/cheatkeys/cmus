@@ -1,0 +1,4 @@
+toggle shuffle                          s
+
+toggle repeat_current                   «C-r»
+# repeat current track forever

@@ -1,0 +1,1392 @@
+# address {{{1
+
+snippet t01 "commands accepting only 1 address, or none" Am
+# Commands accepting only 1 address:
+#
+#    - without GNU extensions: \`a\`, \`i\`, \`l\`, \`r\`, \`=\`
+#    - with/out: \`q\`
+#    - without: \`Q\`
+#
+# Commands accepting no address: \`#\` (comment) and \`:label\`
+#
+# ---
+#
+# In all cases, you can use a group as a workaround:
+#
+#                                   v                      v
+#     $ seq 5 | sed --posix -e '2,3 { r /etc/hostname' -e '}'
+#
+#     $ echo | sed '1 { :label }'
+#                     ^        ^
+endsnippet
+
+snippet t02 "negate address specification" Am
+${1:addr}!
+
+# Also works for a range:
+$1,${2:addr}!
+# In that case, \`!\` negates the whole range (not just \`$2\`).
+endsnippet
+
+snippet t03 "from line 1 to first line matching given regex" Am
+# \`0\` is  a special  address which  can only  be used  as the  first specifier
+# inside a  range.  It's useful  to handle the case  where the first  input line
+# matches \`$1\`.  In that case, if  you wrote \`1,/$1/\`, then that match would
+# be ignored  because an address  range must span at  least two lines,  which is
+# probably not what you want:
+#
+#     $ printf '%s\n' a b | sed '1,/a/d'
+#     # expected: b is output
+#     # actual: nothing is output
+#
+# This is a GNU extension.
+0,/${1:regex}/
+$0
+endsnippet
+
+snippet t04 "regex address surrounded by non-slash delimiter" Am
+# This is useful  when \`$2\` contains a  lot of slashes, and you  don't want to
+# escape each of  them.  For \`$1\`, a  common alternative to \`/\`  is \`%\` or
+# \`;\`.
+\\${1:delim}${2:regex}$1
+endsnippet
+
+snippet t05 "address matching every STEPth line starting from FIRST" Am
+# Example:
+#
+#     $ seq 15 | sed -n '3~5p'
+#     3
+#     8
+#     13
+#
+# ---
+#
+# This is a GNU extension.  For a POSIX alternative, try this:
+#
+#               (FIRST - 1) times           (STEP - 1) times
+#                            v--v           v--------v
+#     $ seq 15 | sed -n '1 { n; n; p ; b }; n; n; n; n; p'
+#     3
+#     8
+#     13
+#
+# If \`FIRST == 1\`, write \`1 { p; b }\`.
+# And if \`FIRST == 0\`, omit the \`1 { ... } \` block.
+${1:FIRST}~${2:STEP}
+endsnippet
+
+snippet t06 "range from given line to N lines afterward" Am
+# \`$1\` can be a line number or a regex.
+# This is a GNU extension.
+#
+# ---
+#
+# To end  the range  on the  next line whose  address is  a multiple  of \`$2\`,
+# replace \`+\` with \`~\`.
+${1:addr},+${2:123}
+endsnippet
+
+# regex {{{1
+
+snippet t07 "case-insensitive regex" Am
+# Used in an \`s\` command, append the \`i\` or \`I\` modifier:
+#
+#     s/regex/rep/i
+#                 ^
+#
+# Used in an address, append the \`I\` modifier:
+#
+#     /regex/I
+#            ^
+#
+# In  this  position,  \`i\`  can't  be used  because  it  already  has  another
+# semantics; it's the insert command.
+endsnippet
+
+snippet t08 "pitfall: [a-z] matches an uppercase letter or several letters" Am
+# The interpretation of  \`[a-z]\` depends on the current  locale.  Some locales
+# have a case-insensitive collation order, or might recognize several letters as
+# a single collating symbol  (e.g. \`aa\` in a Danish locale,  \`ij\` in a Dutch
+# one, and \`ll\` in a Spanish one).
+#
+# If you  get unexpected  results with your  locale, re-set it  to \`C\`  in the
+# environment of \`sed(1)\`:
+#
+#     $ LC_ALL=C sed ...
+endsnippet
+
+snippet t09 "pitfall: \x has different semantics compared to Vim" Am
+# For example, to match a no-break space with an escape sequence, do *not* write
+# \`\xa0\` without \`\xc2\` in front of it.   The \`a0\` byte can be used in the
+# multibyte sequence of another character:
+#
+#     à: c3 a0
+#     ^     ^^
+#
+#     ①: e2 91 a0
+#     ^        ^^
+#
+# Anyway, a no-break space (\` \`) is not merely the \`a0\` byte; it's a 2-byte
+# character (\`c2 a0\`).
+#
+# Don't be  confused by the fact  that you can  match it in Vim  with \`\%xa0\`:
+# \`\%x\` (like \`\%d\`,  \`\%o\`, \`\%u\`, \`\%U\`) is a syntax  which lets you
+# match a  character via its  *Unicode  code point* (!= encoded  byte sequence).
+# The only  difference between \`\%x\`,  \`\%u\`, \`\%U\`, \`\%d\`,  \`\%o\`, is
+# the base  and maximum number of  expected following digits; but  the resulting
+# number is *always* interpreted as a Unicode code point.
+#
+# BTW,  in a  double-quoted Vim  string,  numbers after  \`\u\`/\`\U\` are  also
+# interpreted  as  Unicode code  points.   However,  a  number after  \`\x\`  is
+# interpreted as  a byte;  like \`\x\`  in \`sed(1)\`,  and like  \`$'\x..'\` in
+# bash.
+$0
+endsnippet
+
+# commands {{{1
+# delete {{{2
+
+snippet t10 "delete contents of pattern space" Am
+# This is not equivalent to \`d\`; \`d\` also starts the next cycle immediately.
+#
+# ---
+#
+# As a GNU  extension, you can also execute \`z\`  ("zap").  It's more efficient
+# and works even for invalid multibyte  sequences (POSIX mandates that those are
+# not matched by \`.\`):
+#
+#     # whether \`�\` is displayed depends on the terminal; it is in xterm outside tmux
+#     $ printf 'a\xCEb\n' | sed 's/.*//'
+#     �b
+#
+#     $ printf 'a\xCEb\n' | sed 'z'
+#     # empty line
+#
+# Alternatively, set \`LC_ALL\` to \`C\`.
+s/.*//
+$0
+endsnippet
+
+snippet t11 "delete line(s)" Am
+# \`d\`  deletes the  pattern space,  and immediately  starts the  *next* cycle.
+#
+# \`D\`  deletes  up  to  the  next newline  character  in  the  pattern  space,
+# and  immediately re-starts  the *current*  cycle.   The pattern  space is  not
+# auto-printed; and the next input line is not loaded yet, unless \`D\` has just
+# emptied the  pattern space.  That's why,  usually, when your script  ends with
+# \`D\`, it doesn't matter whether \`sed(1)\` was invoked with \`-n\`.
+endsnippet
+
+snippet t12 "clear pattern and/or hold space" Am
+# \`z\`: clear pattern space
+# \`x; z; x\`: clear hold space
+# \`z; h\`: clear both spaces
+endsnippet
+
+# add {{{2
+
+snippet t13 "append, insert, change line(s)" Am
+# To append some text after the pattern space:
+#
+#     a\
+#     TEXT
+#
+# To insert some text before the pattern space:
+#
+#     i\
+#     TEXT
+#
+# To change/replace the pattern space with some text:
+#
+#     c\
+#     TEXT
+#
+# ---
+#
+# An  alternative  syntax  without  the  trailing  backslash  exists  as  a  GNU
+# extension:
+#
+#     a TEXT
+#     i TEXT
+#     c TEXT
+#
+# Any sequence of whitespace between the command and \`TEXT\` is ignored.
+# If \`TEXT\` starts with some whitespace, prepend it with a backslash:
+#
+#                       v
+#     $ seq 3 | sed '2a \    TEXT'
+#     1
+#     2
+#         TEXT
+#     3
+#
+# ---
+#
+# \`TEXT\` can be multiline, in which case  each line (except the last one) must
+# end with a backslash (that will be removed when the text is output):
+#
+#     a\
+#     SOME\
+#     MULTILINE\
+#     TEXT
+#
+# As a  GNU extension,  the lines  can be separated  into multiple  \`-e\` shell
+# options:
+#
+# 	 $ seq 3 | sed -e '2a\' -e 'SOME\' -e 'MULTILINE\' -e 'TEXT'
+# 	 1
+# 	 2
+#    SOME
+#    MULTILINE
+#    TEXT
+# 	 3
+#
+# This works because \`sed(1)\` joins all the statements with newlines.
+# Alternatively, you can separate the lines with the escape sequence \`\n\`.
+#
+# ---
+#
+# \`TEXT\` can include the escape sequences \`\n\` and \`\t\`.
+# For a literal backslash, write \`\\\\\`.
+#
+# ---
+#
+# \`TEXT\` is merely output.  It's not part of the pattern space, which is why:
+#
+#    - it's output no matter what, even if \`sed(1)\` was passed \`-n\`
+#    - it does not change the original addresses of the input lines
+#    - it can't be deleted by another \`c\` or \`d\`
+#
+# With \`i\` and \`c\`, it's output immediately.  With \`a\`, it's queued at the
+# end of the current cycle, or when the next input line is loaded.
+#
+# ---
+#
+# After \`c\` has been executed, a  new cycle starts immediately (because it has
+# deleted the pattern space).
+#
+# ---
+#
+# \`c\` accepts a range (POSIX).
+# \`a\` and \`i\` also accept a range (GNU extension).
+#
+# When \`a\`  or \`i\` is  passed a range, it  *repeats* the output  of \`TEXT\`
+# after/before every line in the range:
+#
+#     $ seq 3 | sed '1,2 a TEXT'
+#     1
+#     TEXT
+#     2
+#     TEXT
+#     3
+#
+# In contrast,  when \`c\`  is passed a  range, it replaces  the whole  range of
+# lines with \`TEXT\` *once*:
+#
+#     $ seq 3 | sed '1,2 c TEXT'
+#     TEXT
+#     3
+#
+# Unless it's separated from the range by a group:
+#
+#                           v             v
+#     $ seq 3 | sed -e '1,2 { c TEXT' -e '}'
+#     TEXT
+#     TEXT
+#     3
+#
+# Because in that case, the range is not  parsed by \`c\` but by \`{\`. And if a
+# group is  preceded by a  range, it re-executes all  of its commands  for every
+# single line inside the latter.
+endsnippet
+
+# replace {{{2
+
+snippet t14 "special sequences available in replacement field of substitution" Am
+# \`\1\`, ..., \`\9\`: N-th subexpression (also available in the pattern field)
+# \`&\`: whole match
+#
+# Only available as GNU extensions:
+#
+# \`\l\`, \`u\`: turn next character to lowercase/uppercase
+# \`\L\`, \`U\`: turn next characters to lowercase/uppercase, until next \`L\`/\`\U\` or \`\E\`
+# \`\E\`: stop case conversion started by \`\L\` or \`\U\`
+endsnippet
+
+snippet t15 "print or write pattern space after successful substitution" Am
+# Use the \`p\` or  \`w file\` flags of the \`s\` command.   Note that the first
+# execution of \`w file\` overwrites \`file\`; subsequent ones *appends* to it.
+endsnippet
+
+# read/write {{{2
+
+snippet t16 "read or write file" Am
+# To read a file, execute \`r file\` to read  all the lines of a file at the end
+# of a single cycle.  Or \`R file\` (GNU  extension) to read the lines of a file
+# one by one.  In  both cases, the reading occurs *after*  the pattern space has
+# been  auto-printed (like  with \`a\`).   The reading  of multiple  files (with
+# \`r\`) or lines (with \`R\`) can be queued during the same cycle.
+#
+# To write all the pattern space into a file, execute \`w file\`.  To write from
+# the start  of the  pattern space  up to the  first newline  character, execute
+# \`W file\` (GNU extension).  In both cases:
+#
+#    - the writing occurs immediately (it doesn't matter whether the pattern
+#      space is later changed; it's written exactly as it is when \`w\`/\`W\`
+#      is executed)
+#
+#    - only the first execution overwrites \`file\`; subsequent ones *appends*
+#      to it
+#
+#    - as a GNU extension, \`file\` can be \`/dev/stderr\` or \`/dev/stdout\`
+#      to write to the standard output/error
+endsnippet
+
+snippet t17 "read STDIN while editing file" Am
+# If \`sed(1)\` is passed  a file argument, it edits the  latter no matter what;
+# even if its STDIN is connected to a pipe or to a file.  But you can still read
+# STDIN via \`r /dev/stdin\` (GNU extension).  Examples:
+#
+#             v
+#     $ seq 3 | sed 'r /dev/stdin' /etc/hostname
+#     ubuntu
+#     1
+#     2
+#     3
+#
+#                                        v
+#     $ sed 'r /dev/stdin' /etc/hostname </etc/environment
+#     ubuntu
+#     PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games"
+endsnippet
+
+# flow control {{{2
+
+snippet t18 "queued edits and next command" Am
+# \`n\` processes  whatever edit was  queued by some command  at the end  of the
+# current cycle.   Only 3 commands queue  some edit: \`a\`, \`r\`,  \`R\`.  They
+# all output  some text  after the  pattern space  has been  auto-printed, which
+# happens when \`n\` is about to replace its contents with the next input line.
+endsnippet
+
+snippet t19 "jump (branch) to other location (label) in the script" Am
+# Put a label anywhere in your script  with \`:LABEL\`.  Then, you can branch to
+# it from anywhere with \`b LABEL\`, or \`t LABEL\`, or \`T LABEL\`.
+#
+# ---
+#
+# \`b\` branches unconditionally to \`LABEL\`.
+#
+# \`t\` branches on the condition that  there has been a successful substitution
+# since the last input line was loaded, or since the last conditional branch was
+# taken  (i.e. after  a  conditional branch  is  taken, the  result  of a  prior
+# substitution is ignored):
+#
+#     $ echo a | sed 's/a/b/; t label1; :label1; t label2; /c/ { :label2; l }'
+#     b
+#
+# Notice that  \`l\` was not executed,  because when \`t label2\` was,  the last
+# conditional branch taken was \`t label1\`.  And since that branch, there had
+# been no successful substitution.  In contrast, if you drop \`t label1\`, \`l\`
+# is executed:
+#
+#     $ echo a | sed 's/a/b/; t label2; /c/ { :label2; l }'
+#     b$
+#     b
+#
+# \`T\` is similar to  \`t\`, except that it reverses the  test: there must have
+# been no successful substitution.  Also, it's a GNU extension.
+#
+# ---
+#
+# You can jump backward *and* forward (i.e. to a label defined later).
+#
+# ---
+#
+# In a \`b\`, \`t\`,  or \`T\` command, \`LABEL\` can be  omitted, in which case
+# \`sed(1)\` branches  to the end of  the script (where it  can still auto-print
+# the pattern space) and starts the next cycle.
+#
+# ---
+#
+# For a posix alternative to \`T\`, try this:
+#
+#     s/pat/rep/
+#     T label
+#
+#     /pat/! b label
+#     s//rep/
+#
+# ---
+#
+# \`:LABEL\` does not accept an address:
+#
+#                   ✘
+#                   v
+#     $ echo | sed '1 :label'
+#     sed: -e expression #1, char 5: : doesn't want any addresses
+#
+# But for some reason, it does inside a group:
+#
+#     $ echo | sed '1 { :label }'
+#                     ^        ^
+endsnippet
+
+snippet t20 "jump to given different labels depending on whether substitution succeeds" Am
+# We want  \`t $3\` to test  whether \`s/$1/$2/\`  has succeeded.  But  we might
+# have  executed another  substitution before.   If so,  we want  to ignore  its
+# possible success.  That's the sole purpose of this otherwise useless \`t _\`.
+t _
+:_
+
+s/${1:pat}/${2:rep}/
+
+t ${3:label1}
+b ${4:label2}
+$0
+endsnippet
+
+snippet t21 "if-else based on pattern matching" Am
+# This executes \`$2\` if the pattern space matches \`$1\`, otherwise \`$3\`.
+/${1:pat}/! b no_match
+${2:command if match}
+b skip_no_match
+:no_match
+${3:command if no match}
+:skip_no_match
+$0
+endsnippet
+
+snippet t22 "C-like case block based on successful substitution" Am
+# Order your substitutions from the ones with the most specific patterns, to the
+# ones with  the most generic  patterns.  You'll get  a C-like case  block which
+# executes only 1 substitution based on the first matching pattern.
+${1:substitution1}
+t break
+${2:substitution2}
+t break
+# ... you can repeat as many of these 2-lines "clauses" as you want.
+
+:break
+$0
+endsnippet
+
+# miscellaneous {{{2
+
+snippet t23 "print pattern space replacing non-printable characters with C-style escape sequences" Am
+# Execute \`l\`.
+# It's especially useful if the pattern space contains multiple lines.
+# For example, suppose it contains \`line 1\` and \`line 2\`; \`l\` will print:
+#
+#     line 1\nline 2$
+#           ^^      ^
+#
+# In contrast, \`p\` would print:
+#
+#     line 1
+#     line 2
+#
+# Which  is ambiguous:  were \`line 1\`  and \`line 2\`  output during  the same
+# cycle, or during  different cycles?  Also, are there trailing  spaces on these
+# lines?
+#
+# Another example:
+#
+#     $ printf '|\e|' | sed -n 'p'
+#     |
+#
+#     $ printf '|\e|' | sed -n 'l'
+#     |\033|$
+#
+# Note that when \`l\` represents a non-printable character with its octal ASCII
+# value, it uses the  notation \`\123\`.  But when you write  code, you must use
+# the notation \`\o123\`.
+#
+# ---
+#
+# Long lines are wrapped right before  the 70th character (the 70th character is
+# a  trailing  backslash),  unless  \`-l N\`/\`--line-length=N\`  is  specified.
+# \`-l 0\` prevents long lines from being wrapped.
+#
+# The \`N\` parameter is a GNU extension.
+endsnippet
+
+snippet t24 "transliterate characters" Am
+# Replace any  character in  the pattern  space which  matches any  character of
+# \`$1\` with the character in \`$2\` which has the same index position.
+y/${1:src}/${2:dst}/
+$0
+endsnippet
+
+snippet t25 "commands terminating current cycle immediately" Am
+# Commands which delete the whole pattern space (i.e. \`d\` and \`c\`) terminate
+# the current cycle  immediately; and since the pattern space  has been deleted,
+# nothing can be auto-printed.
+#
+# \`z\` does not delete  the pattern space; it makes it empty.   As a result, it
+# doesn't terminate the current cycle, nor does it suppress the auto-printing of
+# the pattern space at the end of the  cycle (if it's empty, a single newline is
+# still auto-printed).
+#
+# \`D\` does  not terminate  the current  cycle; it  re-starts it.   The pattern
+# space is not auto-printed;  and the next input line is  not loaded yet, unless
+# \`D\` has just emptied the pattern space.
+#
+# \`b\`, \`t\`,  \`T\` terminate  the current cycle  immediately if  they're not
+# given a  label as argument.  The  pattern space is auto-printed;  if you don't
+# want  that,  either  pass  \`-n\`  to \`sed(1)\`,  or  use  \`d\`  instead  of
+# \`b\`/\`t\`/\`T\`.
+#
+# \`n\` and  \`N\` terminate the last  cycle immediately if they're  executed on
+# the last line.  Otherwise, they do *not* terminate the current cycle.
+# \`n\` auto-prints the  pattern space (even on the last  line) before replacing
+# it with the  next input line (if  any).  \`N\` appends a newline  and the next
+# input line to the pattern space without auto-printing the latter.
+#
+# \`q\` and  \`Q\` (GNU  extension suppressing  auto-printing of  pattern space)
+# terminate the current cycle immediately (and  make \`sed(1)\` quit).  As a GNU
+# extension,  they  both  accept  an optional  numeric  argument  specifying  an
+# arbitrary exit code.  The only alternative to \`Q\` is the shell option \`-n\`
+# (which  can unnecessarily  complicate  your script),  or  this snippet  (which
+# wastes time by loading all the rest of the file with no visible effect):
+#
+#     :loop
+#     N    # load another line, silently
+#     g    # clear pattern space to save memory
+#     $ d  # quit silently on last line
+#     b loop
+#
+# ---
+#
+# Corner case: On  the last  line, \`N\` auto-prints  the pattern  space, except
+# with \`--posix\`.  This way, whether the  pattern space is auto-printed in the
+# last cycle  does not depend  on whether the input  contains an even  number of
+# lines.  Also, it makes it easier to append a few lines after a pattern:
+#
+#     # GNU
+#     /pat/ { N; N; ... }
+#
+#     # --posix
+#     /pat/ { $! N; $! N; ... }
+#
+# Anyway, if your script executes \`N\`  and stops working with \`--posix\`, try
+# to prepend \`N\` with  \`$!\`. BTW, that's not the only  reason you might want
+# to do that. You  might also want to  prevent \`N\` from being  executed on the
+# last line because it ends the script too early.
+endsnippet
+#}}}1
+# recipes {{{1
+# empty lines {{{2
+
+snippet t26 "trim leading empty lines" Am
+0,/^./ {
+	/^$/ d
+}
+$0
+endsnippet
+
+snippet t27 "trim trailing empty lines" Am
+/^$/ {
+	:loop
+	$ d
+	N
+	/^\n*$/ b loop
+}
+$0
+endsnippet
+
+snippet t28 "squeeze consecutive empty lines into 1" Am
+/^$/ {
+	N
+	/^\n$/ D
+}
+$0
+endsnippet
+
+# operate on blocks of lines {{{2
+
+snippet t29 "operate on paragraphs (rather than lines)" Am
+/./ {
+	H
+	$! d
+}
+
+x
+# Now, the pattern space contains a  whole paragraph.  Edit it however you like;
+# e.g. with a  substitution, a transliteration, ... Note that  the pattern space
+# starts with  a newline,  because \`H\`  always inserts one  in the  hold space
+# before appending the pattern space.
+/^\n*$/! {
+#------^
+# only necessary if two paragraphs might be separated by more than 1 empty line
+	$0
+}
+endsnippet
+
+snippet t30 "sliding window" Am
+# A sliding window is a metaphor for  a contiguous sequence of input lines (with
+# a fixed length) which cycles through all possible positions.
+
+# For a 2-lines window:
+N; ...; D
+#  ^^^
+#  whatever you need to perform on the pattern space
+#
+# Without \`D\`, your window would *jump* from the couple of lines \`(1, 2)\` to
+# \`(3, 4)\`, and you would miss \`(2, 3)\`.  You want it to *slide* through all
+# couples: \`(1, 2)\`, \`(2, 3)\`, \`(3, 4)\`...
+
+# For an M-lines window:
+#
+#     1 { N; N; ... }; N; ...; D
+#         ^-------^
+#         repeated (M - 2) times
+#
+# If \`M\`  is quite big  (e.g. \`123\`), and you  don't like the  repetition of
+# \`N\`, try this:
+#
+#     1 h
+#     2,123 {
+#         H
+#         g
+#     }
+#     $ ...
+#     1,122 d
+#     N
+#     ...
+#     D
+#
+# \`$ ...\` handles  the case where the  input contains fewer lines  than \`M\`.
+# In that case, if you still want  to process your (incomplete) window, you need
+# to do it before \`d\` is executed, because the latter will terminate the cycle
+# before the last \`...\` (the one between \`N\` and \`D\`).
+$0
+endsnippet
+
+snippet t31 "multiline substitution " Am
+# This substitution is necessary to handle the  case where the first line of the
+# pattern space contains one complete match, *and* the start of another (but not
+# its end).  For example, suppose you  want to replace parentheses (and whatever
+# is inside) with \`X\`, and your text is:
+#
+#     (a) (b
+#     c
+#     d)
+#
+# If you  omit this  substitution, the  next one will  succeed (it  will replace
+# \`(a)\` with  \`X\`), and \`t PD\` will  transfer control to \`D\`  which will
+# delete the  line.  But  that would  be wrong,  because we  still needed  it to
+# accumulate  two  more lines  and  complete  \`(b\` into  \`(b\nc\nd)\`.   This
+# substitution is meant to make sure that the next one will fail in such a case,
+# letting \`b loop\` re-execute \`N\` to try to complete the match.
+s/${1:start}${2:end}/${3:rep}/g
+
+# Now, let's handle the case of an incomplete match.
+# This assumes that a match never breaks in the middle of \`$1\`; only afterward.
+/$1/ {
+	:loop
+	N
+	# In the previous substitution, \`$2\` does not need to be able to match
+	# a multiline text.  But here, it does.  For example, if your pattern is
+	# meant to match the inside of parentheses, you would write:
+	#
+	#       start
+	#       v
+	#     s/([^)]*)/rep/g
+	#        ^----^
+	#        end which can match multiple newlines (because \`[^)]\` can match one)
+	#
+	# ---
+	#
+	# Warning: To be reliable, your replacement should include a newline.
+	# For example, suppose you have this text:
+	#
+	#     (a
+	#     b) (c
+	#     d)
+	#
+	# And you try to replace the parentheses with \`X\`.
+	# After \`N\` has been executed, the pattern space contains \`(a\nb) (c\`.
+	# Then, \`s\` replaces it with \`X (c\`.
+	# Since \`s\` succeeds, it transfers control to \`D\` which deletes the line.
+	# But that's wrong; we still needed to complete \`(c\` into \`(c\nd)\`.
+	# No such issue if your replacement is \`\nX\`.
+	s/$1$2/$3/g
+	t PD
+	b loop
+}
+
+:PD
+P
+D
+$0
+endsnippet
+
+snippet t32 "multiline grep" Am
+#!/usr/bin/sed -f
+# This script can't find a match split on more than two lines.
+
+# Look for the pattern on the first input line.
+# Note that \`b\` transfers control to the very end of the script, *after* \`D\`.
+/${1:pat}/ b
+
+# There's no match; let's append another input line.
+# We'll maintain a 2-line window thanks to \`D\` at the end.
+$! N
+
+# The sole purpose of the hold space is  to save the pattern space to later undo
+# some substitutions with \`g\`.
+h
+
+# Let's check whether there's a match  on the second line.  We don't immediately
+# look for a multiline  match, because if we did and there  was a complete match
+# on the second line alone, the output  would include the previous line which is
+# noise/confusing.
+s/.*\n//
+/$1/ b
+g
+
+# There's no complete match on either the first or the second line.
+# But maybe the match starts on the first line and ends on the second one.
+s/[[:blank:]]*\n/ /
+/$1/ {
+	g
+	b
+}
+
+# There's no match anywhere.
+g
+D
+$0
+endsnippet
+
+snippet t33 "extract blocks of lines with ambiguous start" Am
+#!/usr/bin/sed -nf
+
+# If \`$1\` is ambiguous (i.e. it can be used to start different types of blocks
+# only distinguished  by their  last line),  and you're  only interested  in one
+# specific type, then you can't simply run this:
+#
+#     ... | sed -n '/$1/,/$2/ p'
+#
+# For example:
+#
+#     $ sed -n '/start/,/end_2/p' <<'EOF'
+#     start
+#     a
+#     b
+#     end_1
+#     start
+#     c
+#     d
+#     end_2
+#     EOF
+#
+#     # Expected:
+#         start
+#         c
+#         d
+#         end_2
+#
+#     # Actual:
+#         start
+#         a
+#         b
+#         end_1
+#         start
+#         c
+#         d
+#         end_2
+
+# hold start of block
+/${1:start}/ {
+	h
+	b
+}
+# hold body lines
+H
+# on end of block, the hold space should contain a whole block; print it
+/${2:end}/ {
+	x
+	p
+}
+$0
+endsnippet
+
+# formatting {{{2
+
+snippet t34 "join backslash-continued lines" Am
+#!/usr/bin/sed -f
+
+:loop
+N
+s/\\\\\n//
+t loop
+
+# When \`P\` is executed, no matter how many input lines \`N\` has loaded, there
+# are always only 2 lines.  If there were backslash-continued lines, they've all
+# been joined to  form the first line  in the pattern space.  In  any case, it's
+# complete; we  can print  it, then remove  it from the  pattern space.   But we
+# don't know whether the last loaded line is complete, so we keep it for now.
+P
+D
+
+# Alternative:
+#
+#     :loop
+#     /\\\\$/ {
+#         N
+#         s/\\\\\n\s*//
+#         t loop
+#     }
+#
+# It's a  bit uglier though, because  the code repeats itself  when matching the
+# trailing backslash.
+$0
+endsnippet
+
+snippet t35 "center lines" Am
+# prepare space padding in hold space with desired width (e.g. 80 columns)
+1 {
+	# temporarily move the text into the hold space
+	x
+	# start by putting 10 spaces in the pattern space
+	s/^$/          /
+	# write \`&\` as many times as 10 spaces can fit in your desired width;
+	# e.g. 8 \`&\`s will give you a line of 80 spaces
+	s/^ *$/${1:&&&&&&&&}/
+	# retrieve the original text, and move the padding back into the hold space
+	x
+}
+
+# Tabs should only be used for indenting code (not for alignment).
+# But we don't care about proper code indentation; we're dealing with prose.
+# IOW, tabs are useless no matter where they're written.
+y/\x09/ /
+
+# trim whitespace
+s/^ *\| *$//g
+
+# append space padding
+G
+
+# We need to trim the padding to make room for the text on our line.  We do this
+# by  cutting the  pattern space  after our  desired columns  width (+1  for the
+# newline).
+s/^\(.\\{${2:81}\\}\).*$/\1/
+# Center the line by capturing half of the remaining padding (\`\2\`) and moving
+# it before our text (\`\1\`).
+s/^\(.*\)\n\( *\)\2 \?$/\2\1/
+$0
+endsnippet
+
+snippet t36 "right-align text in field of given width" Am
+#   as many as $1
+#   vvv
+s/^/   /
+s/^ *\(.\\{${1:123}\\}\)/\1/
+# Alternative:
+#
+#     # prepend a space as long as the line is too short
+#     :loop
+#     # actually, here, subtract 1 from $1
+#     /^.\\{0,$1}\\}$/ {
+#     	s/^/ /
+#     	b loop
+#     }
+$0
+endsnippet
+
+snippet t37 "wrap lines at N characters" Am
+#!/usr/bin/sed -f
+
+:loop
+# load 1 more line in case the text in the pattern space is too short
+$! N
+s/\n/ /
+
+# try to wrap at $1 characters
+s/^.\\{${1:123}\\}/&\n/
+
+# If \`s\` failed to insert a newline, it means that the text in the pattern
+# space is too short.  We need more.  So loop back to load 1 more line.
+/\n/! {
+	# Unless we're on the last line, because in that case there's no more text.
+	$! b loop
+}
+
+# We now have the guarantee that the first line in the pattern space wraps
+# at $1 characters.  Print it.
+P
+# It's now useless, so delete it to restart the cycle.
+D
+$0
+endsnippet
+
+# reverse {{{2
+
+snippet t38 "reverse lines" Am
+# \`tac(1)\` workalike
+1! G
+h
+$! d
+$0
+endsnippet
+
+snippet t39 "reverse every N lines" Am
+#!/usr/bin/sed -nf
+# If you don't want  to pass \`-n\` to \`sed(1)\` in  the shebang, replace \`n\`
+# with \`N; s/.*\n//\`.
+
+h
+n
+G
+
+# repeat \`h\`, \`n\`, \`G\` as many times as necessary (i.e. \`N-1\`)
+...
+
+p
+$0
+
+# Alternative not using the hold space:
+#
+#     N
+#     N
+#     s/\(.*\)\n\(.*\)\n\(.*\)/\3\n\2\n\1/
+#
+# This is for \`N = 3\` but can easily be adapted to another number.
+
+# Alternative using GNU extension:
+#
+#     1~3 {
+#     	h
+#     	d
+#     }
+#
+#     # If \`N = 2\`, omit this block.
+#     # If \`N > 3\`, repeat it as many times as necessary.
+#     2~3 {
+#     	G
+#     	h
+#     	d
+#     }
+#
+#     3~3 G
+#
+# The addresses must follow the scheme  \`FIRST~N\` where \`N\` is the number of
+# lines which you want to reverse  (e.g. \`3\`), and \`FIRST\` iterates over all
+# integers from \`1\` to \`N\` (e.g. \`1\`, \`2\`, \`3\`).
+endsnippet
+
+snippet t40 "reverse characters" Am
+# \`rev(1)\`  workalike.   For  the  texts \`ab\`,  \`abc\`  and  \`abcd\`,  the
+# substitutions perform these successive transformations:
+#
+#     ab
+#     \nab\n
+#     b\na\n
+#     ba
+#
+#     abc
+#     \nabc\n
+#     c\nb\na
+#     cba
+#
+#     abcd
+#     \nabcd\n
+#     d\nbc\na
+#     dc\n\nba
+#     dcba
+#
+# We use the newline as a moving  marker to determine which characters should be
+# exchanged.  At  any given time, there  are always 2 markers.   We exchange the
+# character after the  first one with the character before  the second one.  The
+# newline character is the only reliable  choice for the marker; it can't appear
+# inside the text of a line.
+
+# If we can't even  find 2 characters on this line,  there's nothing to reverse;
+# bail out.
+/../! b
+
+# Insert the markers at the edges of the text.
+# They'll move toward the center as we exchange characters.
+s/.*/\n&\n/
+
+s/\(\n.\)\(.*\)\(.\n\)/\3\2\1/
+# The  loop will  break  when the  substitution fails,  which  happens when  the
+# markers have become so close that we  can no longer find at least 2 characters
+# between them.
+t loop
+
+# all the characters have been reversed, so we no longer need the markers
+s/\n//g
+$0
+endsnippet
+
+# arithmetic {{{2
+
+snippet t41 "increment number" Am
+#!/usr/bin/sed -f
+
+# The code can be found iteratively, by working on more and more complex cases:
+# 123, 129, 1299, 999
+# First naive attempt.  Never works:{{{
+#
+#     ✘
+#     # 123 → 124 → 125 → 126 → 127 → 128 → 129
+#
+#     s/0$/1/
+#     s/1$/2/
+#     s/2$/3/
+#     s/3$/4/
+#     s/4$/5/
+#     s/5$/6/
+#     s/6$/7/
+#     s/7$/8/
+#     s/8$/9/
+#     s/9$/0/
+#}}}
+# Second attempt.  Works for any number not ending with a \`9\`:{{{
+#
+#     ✔
+#     # 123 → 124
+#
+#     ✘
+#     # 129 → 120 → 121
+#
+#     s/9$/0/
+#     s/8$/9/
+#     s/7$/8/
+#     s/6$/7/
+#     s/5$/6/
+#     s/4$/5/
+#     s/3$/4/
+#     s/2$/3/
+#     s/1$/2/
+#     s/0$/1/
+#}}}
+# Third attempt.  Works for any number not ending with multiple \`9\`s:{{{
+#
+#     ✔
+#     # 129 → 12_ → 13_ → 130
+#
+#     ✘
+#     # 1299 → 129_ → 1290
+#
+#     s/9$/_/
+#     s/8\(_\?\)$/9\1/
+#     s/7\(_\?\)$/8\1/
+#     s/6\(_\?\)$/7\1/
+#     s/5\(_\?\)$/6\1/
+#     s/4\(_\?\)$/5\1/
+#     s/3\(_\?\)$/4\1/
+#     s/2\(_\?\)$/3\1/
+#     s/1\(_\?\)$/2\1/
+#     s/0\(_\?\)$/1\1/
+#
+#     y/_/0/
+#}}}
+# Fourth attempt.  Works for any number different than a sequence of \`9\`s:{{{
+#
+#     ✔
+#     # 1299 → 12__ → 13__ → 1300
+#
+#     ✘
+#     # 999 → ___ → 000
+#
+#     :loop
+#     s/9\(_*\)$/_\1/
+#     t loop
+#
+#     s/^\(_*\)$/1\1/
+#     s/8\(_*\)$/9\1/
+#     s/7\(_*\)$/8\1/
+#     s/6\(_*\)$/7\1/
+#     s/5\(_*\)$/6\1/
+#     s/4\(_*\)$/5\1/
+#     s/3\(_*\)$/4\1/
+#     s/2\(_*\)$/3\1/
+#     s/1\(_*\)$/2\1/
+#     s/0\(_*\)$/1\1/
+#
+#     y/_/0/
+#}}}
+
+# Temporarily replace trailing \`9\`s with trailing \`_\`s with same length.  We
+# can't replace  them with  \`0\`s yet.   Later, the last  one would  be wrongly
+# replaced by \`1\`.
+:loop
+s/9\(_*\)$/_\1/
+t loop
+
+# Special Case: The number is a sequence of \`9\`s.  We need to prepend a \`1\`.
+s/^\(_*\)$/1\1/; t done
+# From  here, we  don't  need  \`t done\`, because  as  soon  as a  substitution
+# succeeds, no other can (guaranteed by the order of the substitutions).  But it
+# makes the code clearer, and maybe a bit faster.
+s/8\(_*\)$/9\1/; t done
+s/7\(_*\)$/8\1/; t done
+s/6\(_*\)$/7\1/; t done
+s/5\(_*\)$/6\1/; t done
+s/4\(_*\)$/5\1/; t done
+s/3\(_*\)$/4\1/; t done
+s/2\(_*\)$/3\1/; t done
+s/1\(_*\)$/2\1/; t done
+s/0\(_*\)$/1\1/; t done
+
+:done
+y/_/0/
+$0
+
+# DRY-er alternative.   This one – contrary  to the previous one  – uses the
+# hold space:
+#
+#     # Special Case: for a sequence of \`9\`s, we'll need to increment an
+#     # implicit \`0\` which can be prepended.  Make it explicit for the next
+#     # transliteration.
+#     s/^9\+$/0&/
+#
+#     # mark end of non-changing digits with an underscore:
+#     #
+#     #                 changing digits
+#     #                 v--v
+#     #     123999 → 12_3999
+#     #              ^^
+#     #              non-changing digits
+#     s/.9*$/_&/
+#
+#     # save the number (actually, we're only interested in its non-changing digits)
+#     h
+#     # remove non-changing digits
+#     s/.*_//
+#     # increment changing digits
+#     y/0123456789/1234567890/
+#
+#     # append changing digits to old number
+#     x
+#     G
+#
+#     # remove old changing digits
+#     s/_.*\n//
+endsnippet
+
+snippet t42 "count characters" Am
+#!/usr/bin/sed -nf
+
+# Build  a  representation of  the  count  where  power  of \`10\`s  are  mapped
+# to  letters. \`a = 1\`,  \`b = 10\`,  \`c = 100\`, ...  For  example, in  this
+# representation, \`123\` is written as \`cbbaaa\`.   Each time a new input line
+# is loaded, we update the representation and save it in the hold space.  On the
+# last line, we'll convert back the representation into a decimal number.
+
+# normalize all characters into \`a\`s
+s/./a/g
+H
+x
+# count the newline character at the end of a line in a file
+s/\n/a/
+
+# now, express power of \`10\`s as sequences of letters (e.g. \`3000\` = \`ccc\`)
+s/a\\{10\\}/b/g; T done
+s/b\\{10\\}/c/g; T done
+s/c\\{10\\}/d/g; T done
+s/d\\{10\\}/e/g; T done
+s/e\\{10\\}/f/g; T done
+# We arbitrarily stop counting at one million characters, which should be enough
+# for most files.
+s/f\\{10\\}//g
+:done
+
+# Our representation is not finished until the last line.
+# Don't let our code run any further until then.
+$! {
+	# keep the current count in hold space
+	h
+	b
+}
+
+# Now, let's convert back our representation into a decimal number.
+:loop
+# The absence of an \`a\` must be expressed explicitly with a \`0\`.
+/a/! s/^[b-f]*/&0/
+# Replace a sequence of \`a\`s with the appropriate digit.
+/a/ {
+	s/a\\{9\\}/9/
+	s/a\\{8\\}/8/
+	s/a\\{7\\}/7/
+	s/a\\{6\\}/6/
+	s/a\\{5\\}/5/
+	s/a\\{4\\}/4/
+	s/a\\{3\\}/3/
+	s/a\\{2\\}/2/
+	s/a\\{1\\}/1/
+}
+# We've converted  one digit.   But we  still need  to convert  the rest  of the
+# letters on the left.  That is the quotient of the count in the division by 10.
+# We can get it by shifting the letters  to the left (\`b\` → \`a\`, \`c\` →
+# \`b\`, ...):
+y/bcdef/abcde/
+# loop as long as there are still letters to convert
+/[a-e]/ b loop
+p
+$0
+
+# Alternative:{{{
+#
+# Pro: No arbitrary limit on the characters count.
+# Con: Need to  save the whole  text in the hold  space, which might  exceed the
+# line limit on  some \`sed(1)\` implementations (e.g. 4000 bytes);  GNU sed has
+# no built-in limit on line length.
+#
+#     # Save all input lines in hold space.
+#     # Don't start counting characters until last line.
+#     H
+#     $! b
+#     # The hold space must be empty; we'll use it to save the decimal digits as
+#     # we progressively convert our \`bbb...aaa...\` representation.
+#     z
+#     x
+#
+#     # normalize all characters into \`a\`s
+#     s/./a/g
+#
+#     :outer_loop
+#     # make units distinct by reducing groups of 10 \`a\`s into \`b\`s
+#     s/a\\{10\\}/b/g
+#     # the absence of units should be converted into \`0\`
+#     /a/! s/b*/&0/
+#     # convert units into decimal digit
+#     /a/ s//1/
+#     :inner_loop
+#     /a/ {
+#         y/12345678/23456789/
+#         s/a//
+#         b inner_loop
+#     }
+#
+#     # Now, let's prepend the converted digit (e.g. \`3\`) to the hold space,
+#     # which should contain all subsequent digits (e.g. \`21\`).
+#
+#     # P: bbb...3
+#     # H: 21
+#     # →
+#     # P: bbb...321
+#     # H: bbb...321
+#     G
+#     s/\n//
+#     h
+#
+#     # P: bbb...321
+#     # H: bbb...321
+#     # →
+#     # P: bbb...
+#     # H: 321
+#     s/b*//
+#     x
+#     s/[0-9]*$//
+#
+#     # We've converted one digit.   But we still need to convert the remaining
+#     # \`b\`s.  Transliterate them into \`a\`s, and loop back unless there are
+#     # no letters anymore.
+#     y/b/a/
+#     /a/ b outer_loop
+#
+#     # There aren't any letters.  The hold space contains the converted number.
+#     # Get it back and print it.
+#     g
+#     p
+#}}}
+endsnippet
+
+# `uniq(1)` {{{2
+
+snippet t43 "delete consecutive duplicate lines (but keep first one)" Am
+#!/usr/bin/sed -f
+
+# \`uniq(1)\` workalike.
+
+# Here, we use \`h\`  to save the pattern space as it was  before \`N\`, so that
+# \`g\` can restore  it later if the  next line is a  duplicate.  An alternative
+# would be to remove  the next line with a \`s\`ubstitution.   But \`h\` + \`g\`
+# illustrates a technique  which might be simpler when the  commands to undo are
+# more complex than a single \`N\`.
+h
+
+# loop until you find a next line which is different
+:loop
+N
+# look for 2 consecutive identical lines
+/^\(.*\)\n\1$/ {
+	# The last loaded line is a duplicate.  Undo, and loop.
+	g
+	b loop
+}
+
+# The pattern  space contains  2 lines  which are different.   We can  print the
+# first one, but not  the second one.  That will be done when  the cycle will be
+# re-started.  Also, we need to keep this line in the pattern space, so we can't
+# let the cycle terminate.
+P
+D
+$0
+endsnippet
+
+snippet t44 "only print first lines of blocks of consecutive duplicates" Am
+#!/usr/bin/sed -f
+
+# \`$ uniq --repeated\` workalike.
+
+$! N
+
+# look for 2 consecutive identical lines
+/^\(.*\)\n\1$/ {
+	# remove the first line and print the second one
+	s/.*\n//
+	p
+
+	# loop until you find a next line which is different
+	:loop
+	$! N
+	/^\(.*\)\n\1$/ {
+		s/.*\n//
+		b loop
+	}
+}
+
+# The pattern space contains 2 lines which are different.  Whether the first one
+# should be printed has already been  decided and, if necessary, done.  We can't
+# decide here whether the second line should  be printed.  Also, we need to keep
+# it in the pattern space, so we can't let the cycle terminate.
+D
+$0
+endsnippet
+
+snippet t45 "delete consecutive duplicate lines (even first one)" Am
+#!/usr/bin/sed -f
+
+# \`$ uniq --unique\` workalike.
+
+# print lines as long as they're different
+N
+/^\(.*\)\n\1$/! {
+	P
+	D
+}
+
+# We've found 2 consecutive duplicate lines.
+# There might be more.  Loop until you found all of them.
+:loop
+# delete each duplicate
+s/.*\n//
+$! N
+/^\(.*\)\n\1$/ {
+	b loop
+}
+
+# The pattern  space contains 2  lines which are  different.  The first  one had
+# duplicates, and  thus should  be deleted.   We can't  decide here  whether the
+# second line should  be deleted too.  Also,  we need to keep it  in the pattern
+# space, so we can't let the cycle terminate.
+D
+$0
+endsnippet

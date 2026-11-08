@@ -1,0 +1,119 @@
+% vim
+
+# compare output of 2 commands
+vimdiff $(<cmd1> | psub) $(<cmd2> | psub)
+
+# measure startup time
+set tmp_file $(mktemp) \
+    ; vim --startuptime $tmp_file +'quitall!' startup_vim_file \
+    && tail --lines=+7 $tmp_file \
+        | sort --key=2bnr,2 --key=3bnr,3 \
+    && tail --lines=+7 $tmp_file \
+        | awk 'BEGIN { max = 0; print "=======\ntotal startup time: " }
+             NR == 1 { max = $1 + 0; next }
+                     { if ($1 > max) max = $1 }
+                 END { print max }' \
+    ; rm $tmp_file; set --erase tmp_file
+
+% vim, dev
+
+$ funcname: grep --perl-regexp '^\s*(fu(n(c(t(i(on?)?)?)?)?)?|def).*\bTest_' "$testfile" \
+    | sed 's/\s*\(fu\(n\(c\(t\(i\(on\?\)\?\)\?\)\?\)\?\)\?\|def\)\s\+Test_\|()$//g'
+
+$ testfile: find . -maxdepth 1 -name 'test_*.vim'
+
+# compile with debugging symbols
+cd "$(git rev-parse --show-toplevel)" \
+    && begin \
+        ; git reset --hard $(git rev-parse HEAD) \
+        ; make clean \
+        ; make distclean \
+        ; sed -i '
+              /^#ABORT_CFLAGS = -DABORT_ON_INTERNAL_ERROR/s/^#//
+            ; \@#STRIP = /bin/true@s/^#//
+            ; s/#CFLAGS = -g$/CFLAGS = -g -O0/
+            ' src/Makefile \
+        ; make \
+        ; tput bel \
+        ; notify-send 'Vim compilation finished' \
+    ; end
+    # To get a backtrace, look for our snippet "get backtrace without core dump".
+    # Use it to run this binary with debugging symbols.
+    #
+    # ---
+    #
+    # Note that you can't enable debugging symbols and ASAN at the same time.
+
+# compile ASAN-enabled Vim
+cd "$(git rev-parse --show-toplevel)" \
+    && begin \
+        ; git reset --hard $(git rev-parse HEAD) \
+        ; make clean \
+        ; make distclean \
+        ; sed -i '
+              /^#\s*SANITIZER_CFLAGS.*\\$/,/^$/ s/^#//
+            ; /^#LEAK_CFLAGS = -DEXITFREE/s/^#//
+            ' src/Makefile \
+        ; make \
+        ; tput bel \
+        ; notify-send 'Vim compilation finished' \
+    ; end
+    # Then, run:  `$ ./src/vim -Nu NONE -i NONE -S /tmp/issue.vim 2>asan.log`
+    #
+    # ---
+    #
+    # Uncommenting `SANITIZER_CFLAGS` sets these options:
+    #
+    #     -fsanitize=address (enables the Address SANitizer aka ASAN)
+    #     -fsanitize=undefined (enables the Undefined Behavior SANitizer aka UBSAN)
+
+# compile to get valgrind log
+cd "$(git rev-parse --show-toplevel)" \
+    && begin \
+        ; git reset --hard $(git rev-parse HEAD) \
+        ; make clean \
+        ; make distclean \
+        ; sed -i '
+              /^#LEAK_CFLAGS = -DEXITFREE/s/^#//
+            ; /^#ABORT_CFLAGS = -DABORT_ON_INTERNAL_ERROR/s/^#//
+            ; \@#STRIP = /bin/true@s/^#//
+            ; s/#CFLAGS = -g$/CFLAGS = -g -O0/
+            ' src/Makefile \
+        ; make \
+        ; tput bel \
+        ; notify-send 'Vim compilation finished' \
+    ; end
+    # Then, run:
+    #
+    #     $ valgrind --log-file=valgrind.log --leak-check=full --num-callers=50 --track-origins=yes \
+    #         ./src/vim -Nu NONE -i NONE -S /tmp/issue.vim
+
+# profile C code
+cd "$(git rev-parse --show-toplevel)" \
+    && begin \
+        ; git reset --hard $(git rev-parse HEAD) \
+        ; make clean \
+        ; make distclean \
+        ; sed -i '
+              /#PROFILE_CFLAGS = -pg -g -DWE_ARE_PROFILING/s/^#//
+            ; /#PROFILE_LIBS = -pg -no-pie/s/^#//
+            ' src/Makefile \
+        ; make \
+        ; tput bel \
+        ; notify-send 'Vim compilation finished' \
+        ; ./src/vim -Nu NONE -i NONE -S /tmp/issue.vim \
+    ; end
+    # Then, run:  `$ gprof ./src/vim ./gmon.out`
+
+# run given test
+rm test.log \
+    ; vim -u NONE -i NONE -S runtest.vim <testfile> <funcname> \
+    ; vim test.log
+
+# run set of ad-hoc test scripts (but bail out on `:cquit`)
+for f in *.vim \
+    ; vim -Nu $f +"echomsg '$f'" \
+    ;     if test "$status" != 0 \
+    ;         break \
+    ;     end \
+    ; end

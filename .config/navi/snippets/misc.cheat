@@ -1,0 +1,224 @@
+% misc
+
+$ service: find /etc/xdg/autostart/ -maxdepth 1 \
+    -name '*.desktop' \
+    -printf '%f\n' 2>/dev/null \
+    | sed 's/\.desktop$//'
+
+$ sound_level: printf '%s\n' 25 50 75 100
+
+# list available fonts
+fc-list : family
+    # The first argument is a filtering pattern; `:` being an empty pattern.
+    #
+    # `family` is the name of a font property.
+    # You can print other properties; see:
+    # `man fonts-conf /FUNCTIONAL OVERVIEW/;/FONT PROPERTIES`.
+    #
+    # For example:
+    #
+    #     # gives same output as `fc-list` without argument
+    #     $ fc-list : file family style
+
+# list PAM modules
+ls -- $(dirname -- $(locate --basename '\pam_unix.so' | grep -v "^$HOME" | head --lines=1))
+    #                                   ^
+    # Because  `\`  is   a  globbing  character,  this   disables  the  implicit
+    # replacement of `NAME` by `*NAME*`.
+    #
+    # ---
+    #
+    # Alternative: `$ man -k pam_`
+    # Less reliable though.
+    #
+    # ---
+    #
+    # `pam_unix.so` is a module that can check a user's password.
+
+# alter screen gamma correction through X server
+xgamma -gamma <correction>
+    # 1.0  is the  normal  (uncorrected)  gamma value.   Setting  a lower  gamma
+    # increases the contrast  of bright luminances, which  makes midtones darker
+    # and  decreases  white washing.   Setting  a  higher gamma  makes  midtones
+    # brighter and increases the contrast of dark luminances, but also increases
+    # white washing.
+    #
+    # Source: https://askubuntu.com/a/694988
+    #
+    # ---
+    #
+    # The current value is printed by runnning `xgamma` alone:
+    #
+    #     $ xgamma
+    #
+    # A line prefixed with `->` is for an old setting.
+    # A line prefixed with `<-` is for a new setting.
+
+# disable service automatically started by the desktop environment when we log in
+tee ~/.config/autostart/<service>.desktop <<'EOF'
+[Desktop Entry]
+Hidden=true
+EOF
+    # Useful to disable a service which would otherwise be automatically started
+    # when we log in because of  a `.desktop` file in `/etc/xdg/autostart/` with
+    # the same name.
+
+# download file from Imgur via Tor
+torsocks aria2c --async-dns=false <URL> --out=<out> && feh <out>
+    # Useful if they've blacklisted your AS:
+    #
+    #     $ download video https://i.imgur.com/23RwN1K.mp4
+    #     ...
+    #     ERROR: [Imgur] 23RwN1K: Unable to download webpage: HTTP Error 429 ...
+    #
+    # ---
+    #
+    # If you still get a 429 error:
+    #
+    #     -> [HttpSkipResponseCommand.cc:239] errorCode=22 The response status is not successful. status=429
+    #
+    # Then try again after restarting the Tor service:
+    #
+    #     $ sudo systemctl restart tor.service
+    #
+    # ---
+    #
+    # `--async-dns=false` prevents this error:
+    #
+    #     $ torsocks aria2c https://imgur.com/t/wholesome/58EZM5G
+    #     ... [ERROR] CUID#7 - Download aborted. URI=https://imgur.com/t/wholesome/58EZM5G
+    #     Exception: [...] errorCode=19 URI=https://imgur.com/t/wholesome/58EZM5G
+    #       -> [...] errorCode=19 CUID#7 - Name resolution for imgur.com failed:Could not contact DNS servers
+
+# extract longest line from given command output
+<cmd> \
+    | awk '{ printf("%s\t%s\n", length($0), $0) }' \
+    | sort --numeric-sort \
+    | tail --lines=1 \
+    | sed 's/^[0-9]\+\t//'
+
+# pretty-print JSON object
+jq '.' <file> | sponge <file>
+
+# change display server from Wayland to Xorg for GNOME desktop environment
+sudoedit /etc/gdm3/custom.conf
+    # Uncomment this line:
+    #WaylandEnable=false
+    #
+    # Then:
+    #
+    #     $ systemctl reboot
+
+# control volume at sound server level
+pactl set-sink-volume '@DEFAULT_SINK@' <sound_level>%
+
+# read local mail
+mail; mail --file=$HOME/mbox
+    # `$ mail`  handles  the  messages  from  the  system  mailbox  (located  at
+    # `/var/mail/$USER`), while `$ mail --file=$HOME/mbox`  handles the messages
+    # from the secondary mailbox (located at `$HOME/mbox`).
+    #
+    # ---
+    #
+    # For the root user:
+    #
+    #     $ sudo mail; sudo mail --file=/root/mbox
+
+# run xev with minimum of information (only KeyPress events; not the other ones like KeyRelease)
+xev | sed -n '/^KeyPress/,/^$/p'
+    #         ^---------------^
+    #         print every line between a line beginning with `KeyPress` and an empty line
+
+# run xev with minimum of information (only keycode and keysym of pressed keys)
+echo 'keysym_name  keycode  keysym_hexcode' ; \
+xev | grep --after-context=2 --line-buffered '^KeyPress' \
+    | sed -n '/keycode /s/^.*keycode \([0-9]*\).* (keysym \(0x[^,]*\), \(.*\)).*$/\3  \1  \2/p'
+    # `--after-context=2`:  the keycode  and keysym  of  a pressed  key are  not
+    # printed on the same line as the pattern `^Keypress`, but 2 lines below.
+    #
+    # ---
+    #
+    # `--line-buffered`: prevent `grep(1)` from buffering its output.
+    #
+    # When the output of `grep(1)` is connected  to a pipe, it's buffered into a
+    # 4K block.  That is, `grep(1)` doesn't write anything on the pipe, until it
+    # has filled a 4K buffer.
+    #
+    # Because of this, when we press  a key, `sed(1)` doesn't receive the output
+    # of  `grep(1)` immediately.   We have  to press  several keys  (22?) before
+    # `sed(1)` prints something.  That's confusing.
+    #
+    # We  want  `sed(1)`  to  print  something  as  soon  as  we  press  a  key.
+    # `--line-buffered` asks  `grep(1)` to  limit the  size of  its buffer  to a
+    # single line.  IOW, as soon as it has a line, it writes it to the pipe.
+    #
+    # ---
+    #
+    # The `sed(1)` command has to extract these texts:
+    #
+    #                         vv         v--v  v
+    #     state 0x10, keycode 24 (keysym 0x61, a), same_screen YES,
+    #     →
+    #     a  24  0x61
+
+# run given command, with modified buffering operations for its standard streams
+stdbuf <options> <cmd>
+    # For example, `stdbuf(1)` is an alternative to `grep(1)`'s `--line-buffered`:
+    #
+    #     $ xev \
+    #         | stdbuf --output=L grep --after-context=2 '^KeyPress' \
+    #         | sed -n '/keycode /s/^.*keycode \([0-9]*\).* (keysym \(0x[^,]*\), \(.*\)).*$/\3  \1  \2/p'
+    #
+    # Here, we  use `stdbuf(1)` to execute  `grep(1)` and limit the  size of its
+    # internal buffer to a single line (`--output=L`).
+    #
+    # For more info:
+    # https://unix.stackexchange.com/a/25378/289772
+
+# generate file of given size in mebibytes
+truncate --size=<N>M <file>  # `MB` = *Mega*Bytes
+
+# break long line
+<command> | fold --width=<width> --spaces
+    # Alternative:
+    #
+    #     $ ❬command❭ | fmt --width=❬width❭ --split-only
+    #
+    # `fmt(1)` is meant to format paragraphs,  while `fold(1)` is meant to break
+    # long lines.
+
+# count lines matching given pattern
+grep --count '<pattern>' <file>
+    # To count the lines *not* matching `❬pattern❭`, use `--invert-match`.
+
+# count duplicate lines
+uniq --count <file>
+    # Example:
+    #
+    #     $ printf '%s\n' a a a b b c | uniq --count
+    #           3 a
+    #           2 b
+    #           1 c
+
+# filter files with shebang on first line for given filetype
+<cmd> \
+    | while read file
+        sed '\%^#!/.*/<filetype>[0-9]*\(\.[0-9]\+\)\?\(\s\|$\)%! Q; F; Q' $file
+      end
+    # Useful for a command such as `config ls-files`.
+    #
+    # ---
+    #
+    # To be more reliable, `❬cmd❭` should separate file names with NULLs; if
+    # it does, pass `--null` to `read`.
+    #
+    # ---
+    #
+    # `[0-9]*\(\.[0-9]\+\)\?`: for `python3`, `lua5.1`, ...
+
+# change cursor color
+    # Settings
+    # Settings Editor
+    # xsettings
+    # In the Gtk section, change the name of "CursorThemeName"; for example from
+    # "ComixCursors-Opaque-Green" to "ComixCursors-Opaque-Red".

@@ -1,0 +1,188 @@
+vim9script
+
+import 'lg.vim'
+
+export def Output(what: dict<any>) #{{{1
+    # The dictionary passed to this function should have one of those set of keys:{{{
+    #
+    #      ┌ command we want to execute
+    #      │ (to read its output in the preview window)
+    #      │
+    #      │      ┌ desired level of verbosity
+    #      │      │
+    #    - excmd, level    for `:Verbose Cmd`
+    #    - excmd, lines    for `:RepeatableMotions`
+    #             │        or any custom command for which we manually build the output
+    #             │
+    #             └ lists of lines which we'll use as the output of the command
+    #}}}
+    if !what->has_key('excmd')
+    && !(what->has_key('level') && what->has_key('lines'))
+        return
+    endif
+
+    var tmp_file: string = tempname()
+
+    var excmd: string = what.excmd
+    # Don't run any single-character command.{{{
+    #
+    # This would give an error in the next line; specifically because of:
+    #
+    #     split(excmd[1 :])[0]
+    #     E684: list index out of range: 0˜
+    #
+    # We  could  fix it  with  `get()`,  but  there's  another issue  with  some
+    # single-character commands, such as `:a` (and possibly `:c`, `:i`).
+    # Trying to accept single-character commands is not worth it.
+    #}}}
+    if strlen(excmd) < 2
+        echohl ErrorMsg
+        echomsg 'Cannot run a single-character command; try to write it in its long form'
+        echohl NONE
+        return
+    endif
+    var pfx: string = exists(':' .. split(excmd)[0]) == 2
+        || split(excmd[1 :])[0]->executable()
+        ? ':' : ''
+    if what->has_key('lines')
+        var title: string = pfx .. excmd
+        var lines: list<string> = what.lines
+        writefile([title], tmp_file)
+        writefile(lines, tmp_file, 'a')
+    else
+        var level: number = what.level
+        var title: string = pfx
+            # if the level is 1, just write `:Verbose` instead of `:1Verbose`
+            .. (level == 1 ? '' : level)
+            .. 'Verbose ' .. excmd
+        writefile([title], tmp_file, 'b')
+        #                             │
+        #                             └ don't add a linefeed at the end
+        # How do you know Vim adds a linefeed?{{{
+        #
+        # MRE:
+        #
+        #     :!touch /tmp/file
+        #     :call writefile(['text'], '/tmp/file')
+        #     :!xxd /tmp/file
+        #     00000000: 7465 7874 0a    text.˜
+        #                         ├┘        │
+        #                         │         └ LF glyph
+        #                         └ LF hex code
+        #}}}
+
+        # 1. `Redirect...()` executes `excmd`,
+        #     and redirects its output in a temporary file
+        #
+        # 2. `typename(...)` checks the output of `Redirect...()`
+        #
+        #        it should be `0`
+        #        if, instead, it's a string, then an error has occurred: bail out
+        if RedirectToTmpFile(tmp_file, level, excmd)->typename() == 'string'
+            return
+        endif
+    endif
+
+    try
+        # Load the file in the preview  window.  Useful to avoid having to close
+        # it if we execute another `:Verbose` command.  From `:help :ptag`:
+        #    > If a "Preview" window already exists, it is re-used
+        #    > (like a help window is).
+        execute 'pedit ' .. tmp_file
+    # if we're in the command-line window, `:pedit` might fail
+    catch /^Vim\%((\a\+)\)\=:E11:/
+        lg.Catch()
+        return
+    endtry
+
+    # Vim doesn't focus the preview window.  Jump to it.
+    wincmd P
+    # check we really got there ...
+    if !&l:previewwindow
+        return
+    endif
+    &l:buftype = 'nofile'
+    &l:buflisted = false
+    &l:swapfile = false
+    &l:wrap = false
+    nmap <buffer><nowait> q <Plug>(my-quit)
+    search('Last set from \zs')
+    nnoremap <buffer><nowait> DD <ScriptCmd>silent keepjumps keeppatterns global/^\s*Last set from/delete _<CR>
+enddef
+
+def RedirectToTmpFile( #{{{1
+    tmp_file: string,
+    level: number,
+    arg_excmd: string
+): any
+
+    try
+        # Purpose: if `excmd` is `!ls` we want to capture the output of `ls(1)`, not `:ls`
+        var excmd: string = arg_excmd[0] == '!'
+            ? 'echo system(' .. string(arg_excmd[1 :]) .. ')'
+            : arg_excmd
+
+        var output: string = execute(
+            level .. 'verbose '
+            # From `:help :verbose`:{{{
+            #
+            #     When concatenating another command,
+            #     the ":verbose" only applies to the first one.
+            #
+            # We want `:Verbose` to apply to the whole “pipeline“.
+            # Not just the part before the 1st bar.
+            #}}}
+            .. 'execute '
+            .. string(excmd))
+
+        # We set `'verbosefile'` to `tmp_file`.
+        # It will redirect (append) all messages to the end of this file.
+        &verbosefile = tmp_file
+        # Why not executing the command and `:echo`ing its output in a single command?{{{
+        #
+        # Two issues.
+        #
+        # First, you would need to run the command silently:
+        #
+        #     silent execute level .. 'verbose execute ' .. string(excmd)
+        #     ^
+        #     even though verbose messages are redirected to a file,
+        #     regular messages are  still displayed on the  command-line;
+        #     we don't want that
+        #     MRE:
+        #         Verbose ls
+        #
+        # ---
+        #
+        # Second, sometimes, you would get undesired messages:
+        #
+        #     &verbosefile = '/tmp/log'
+        #     echo execute('autocmd')->split('\n')->filter((_, v: string): bool => v =~ 'pattern')
+        #     &verbosefile = ''
+        #
+        # The previous  snippet should have  output only the  lines containing
+        # `pattern` inside  the output  of `:autocmd`.   Because of  this, the
+        # next command wouldn't work as expected:
+        #
+        #     :Verbose Filter /pattern/ autocmd
+        #}}}
+        silent echo output
+        &verbosefile = ''
+
+        silent execute level .. 'verbose execute ' .. string(excmd)
+    catch
+        return lg.Catch()
+    finally
+        # We empty the value of `'verbosefile'` for 2 reasons:{{{
+        #
+        #    1. to restore the original value
+        #
+        #    2. writes are buffered, thus may not show up for some time
+        #       Writing to the file ends when [...] 'verbosefile' is made empty.
+        #
+        # See `:help 'verbosefile'`.
+        #}}}
+        &verbosefile = ''
+    endtry
+    return false
+enddef
