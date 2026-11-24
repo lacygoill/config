@@ -1,0 +1,287 @@
+#!/bin/bash -
+# The "c" in "grepc" stands for "custom".
+
+# I can't `grep(1)` anything under `~/bin`!{{{
+#
+# That's because we purposefully ignore  files under any `bin/` directory.  It's
+# as if you ran:
+#
+#                                      read from ~/.cvsignore
+#                                      vvv
+#     $ grep --recursive --exclude-dir=bin pattern ~/bin
+#                        ^---------------^
+#
+# As a workaround, append a trailing slash:
+#
+#     $ grepc pattern ~/bin/
+#                          ^
+#}}}
+
+readonly SCRIPT="${0##*/}"
+
+# `grep(1)` doesn't support  a `--column` option.  Let's fix this.{{{
+#
+# If we  pipe its  output to  Vim (or if  Vim calls  `grep(1)`), entries  in the
+# quickfix list  are missing their column  number.  This script should  give the
+# same output as `grep(1)`, with just one extra field for the column numbers:
+#
+#     file:lnum:text
+#     →
+#     file:lnum:col:text
+#               ^--^
+#}}}
+readonly INSERT_COLUMNS="$HOME/bin/util/grep-column"
+
+# For some options, it doesn't make sense to try to insert column numbers.{{{
+#
+# Actually,  it makes  sense for  `--null`, `--null-data`,  `-z`, `-Z`,  but the
+# `$INSERT_COLUMNS` script would need to be updated to support those.
+#}}}
+readonly -a NO_COLUMN_OPTIONS=(
+  --after-context
+  --before-context
+  --byte-offset
+  --context
+  --count
+  --files-with-matches
+  --files-without-match
+  --initial-tab
+  --invert-match
+  --no-filename
+  --null
+  --null-data
+  --only-matching
+  --quiet
+  --silent
+  -A
+  -B
+  -C
+  -D
+  -L
+  -T
+  -Z
+  -b
+  -c
+  -d
+  -h
+  -l
+  -o
+  -q
+  -z
+)
+
+readonly CACHE_DIR="$HOME/.cache/grep"
+readonly EXCLUDE="$CACHE_DIR/exclude"
+readonly EXCLUDE_DIR="${EXCLUDE}-dir"
+readonly CVS_IGNORE="$HOME/.cvsignore"
+
+[[ -d "$CACHE_DIR" ]] || mkdir -p "$CACHE_DIR"
+
+# Extract and cache glob patterns out of `$CVS_IGNORE` to be passed to `grep(1)`
+# via `--exclude-(dir|from)` later.
+# NOTE: Whenever you update `$CVS_IGNORE`, you need to invalidate the cache.{{{
+#
+# We do via a systemd service:
+#
+#     $ systemctl --user show grep-exclude-cache-invalidation.service --property=ExecStart --value
+#     { [...] ; argv[]=/usr/bin/rm -rf /home/lgc/.cache/grep ; [...] }
+#
+# Which is started by a systemd path unit whenever `$CVS_IGNORE` is changed:
+#
+#     $ systemctl --user show grep-exclude-cache-invalidation.path --property=Paths --value
+#     /home/lgc/.cvsignore (PathChanged)
+#}}}
+if ! [[ -f "$EXCLUDE" ]]; then
+  sed '/^\s*\(#\|$\)/ d; \%/% d' "$CVS_IGNORE" >"$EXCLUDE"
+fi
+if ! [[ -f "$EXCLUDE_DIR" ]]; then
+  sed -n '/^\s*#\|!\|\*\*/ d; \%/$% s/^/--exclude-dir=/p' "$CVS_IGNORE" >"$EXCLUDE_DIR"
+fi
+mapfile -t exclude_dir < "$EXCLUDE_DIR"
+
+readonly -a DEFAULT_OPTIONS=(
+  --binary-files=without-match
+  # ignore files and directories matching globs extracted from `$CVS_IGNORE`
+  --exclude-from="$EXCLUDE"
+  # JSON files often create way too much noise
+  --exclude='*.json'
+  --exclude='*.ipynb'
+  "${exclude_dir[@]}"
+  --ignore-case
+  --line-number
+  --no-messages
+  --recursive
+  --with-filename
+)
+
+# Our script assumes `grep(1)` uses the default colors.{{{
+#
+#    > GREP_COLORS
+#    >        Specifies  the  colors  and  other  attributes used to highlight
+#    >        various parts of the output.  Its  value  is  a  colon-separated
+#    >        list       of       capabilities      that      defaults      to
+#    >        **ms=01;31:mc=01;31:sl=:cx=:fn=35:ln=32:bn=32:se=36**  with  the  rv
+#    >        and  ne  boolean  capabilities omitted (i.e., false).  Supported
+#    >        capabilities are as follows.
+#
+# Source: `man grep /^\s*GREP_COLORS`
+#}}}
+# Make sure it does.
+export GREP_COLORS='ms=01;31:mc=01;31:sl=:cx=:fn=35:ln=32:bn=32:se=36'
+
+declare -a opts=("${DEFAULT_OPTIONS[@]}")
+while true; do
+  case $1 in
+  --)
+    shift
+    break
+  ;;
+
+  -[ABCDdefm])
+    opts+=("$1" "$2")
+    shift 2
+  ;;
+
+  -*)
+    opts+=("$1")
+    shift
+  ;;
+
+  *)
+    break
+  ;;
+  esac
+done
+
+readonly PAT="$1"
+shift
+if [[ -z "$PAT" ]]; then
+  printf 'Usage: %s [OPTION]... PATTERN [FILE]...\n' "$SCRIPT" >&2
+  # `grep(1)` already uses `1` and `2` as exit statuses.
+  # To avoid any confusion, let's use a different one.
+  exit 3
+fi
+
+declare -a files
+if (( $# == 0 )); then
+  # When  started by  Vim's `:grep`  or  `system()`, `grepc`'s  STDIN is  closed
+  # (`/dev/null`) and `[[ -t 0 ]]` fails (because  the latter asserts that STDIN
+  # is opened  on a terminal, which  `/dev/null` is not).  That  does *not* mean
+  # that STDIN  is opened on  a pipe,  and that our  script should read  `-`. We
+  # still want to read `*` to grep all files under the CWD.
+  # For a more general solution, you might try to test the target of `/proc/$BASHPID/fd/0`:{{{
+  #
+  #     if [[ "$(stat --format='%N' /proc/$BASHPID/fd/0)" =~ [[:blank:]]-\>[[:blank:]]\'pipe:[[[:digit:]]*]\'$ ]]; then
+  #       files=(-)
+  #     else
+  #       files=(*)
+  #     fi
+  #
+  # Not sure how reliable/portable this is though.
+  #}}}
+  if [[ -n "$VIM" ]] && [[ -z "$VIM_TERMINAL" ]];then
+    files=(*)
+  else
+    # Without file  arguments, assume  `*` or  `-` depending  on whether  STDIN is
+    # opened on a terminal.
+    [[ -t 0 ]] && files=(*) || files=(-)
+  fi
+else
+  files=("$@")
+fi
+
+# Support PDFs, EPUBs, ...
+to_be_preprocessed="$(<"$HOME/.cache/convert2text/supported-extensions")"
+to_be_preprocessed="${to_be_preprocessed// /|}"
+
+# To get better performance, ignore hidden nodes, unless we explicitly specified
+# one on the command-line.
+ignore_hidden_nodes='yes'
+
+# We can't write `for file in "${files[@]}"`.{{{
+#
+# We might need to reset some file in the array:
+#
+#     ✘
+#     file="$(convert2text ...)"
+#
+#     ✔
+#     files[idx]="$(convert2text ...)"
+#           ^^^
+#
+# We need its index.
+#}}}
+for idx in "${!files[@]}"; do
+  # This block must come *before* the next one, which clears `ignore_hidden_nodes`.{{{
+  #
+  # `convert2text` might cache the conversion of a file under a hidden directory
+  # (e.g. `~/.cache/`).  If it does, `grep(1)`  must not ignore hidden nodes, so
+  # that it can descend into that directory.
+  #}}}
+  if [[ "${files[idx]}" =~ .*\.($to_be_preprocessed)$ ]]; then
+    # pre-process a PDF, EPUB, ... into plain text, and cache the result
+    convert2text "${files[idx]}" >/dev/null
+    # replace the path to the PDF with the path to the plain text file
+    files[idx]="$(convert2text --print-cached-filepath "${files[idx]}")"
+  fi
+
+  if [[ "${files[idx]}" =~ (^|/)\.[^/] ]]; then
+    unset -v ignore_hidden_nodes
+  fi
+done
+
+if [[ -n "$ignore_hidden_nodes" ]]; then
+  opts+=(--exclude='.[^/]*' --exclude-dir='.[^/]*')
+fi
+
+# output color codes only if the script's STDOUT is opened on a terminal
+[[ -t 1 ]] && output_colors='yes'
+if [[ -z "$output_colors" ]]; then
+  OFS=':'
+else
+  OFS='\x1b[36m\x1b[K:\x1b[m\x1b[K'
+fi
+
+no_column="$(printf '%s\n' "${NO_COLUMN_OPTIONS[@]}" \
+  | paste --delimiters='|' --serial -)"
+if [[ " ${opts[*]} " =~ .*[[:blank:]]($no_column)[[:blank:]=].* ]]; then
+  # we only need color codes if STDOUT is connected to a terminal
+  opts+=(--color='auto')
+  grep "${opts[@]}" -- "$PAT" "${files[@]}"
+else
+  # we always need color codes to infer the missing column positions
+  opts+=(--color='always')
+  # Let us know if `$PAT` fails to match.{{{
+  #
+  # In  that case,  `grep(1)`'s  exit status  will be  non-zero,  and should  be
+  # printed in  our shell  prompt.  Without `set -o pipefail`,  `grep(1)`'s exit
+  # status  would be  ignored  in favor  of  the last  command  in the  pipeline
+  # (i.e. `$INSERT_COLUMNS`).
+  #}}}
+  set -o pipefail
+  # Warning: If you change the pattern passed to `-F`, update `OFS` accordingly.{{{
+  #
+  # Their values  must match.  Right  now, the  only differences come  from `[`;
+  # it's escaped in `-F`,  but not in `OFS` (the latter  holds a literal string,
+  # while the former is given a pattern).
+  #}}}
+  # If you think you could drop `\x1b\[36m\x1b\[K` from the `-F` pattern, test this:{{{
+  #
+  #     $ echo 'x:y' | grepc '.'
+  #
+  # The output should be:
+  #
+  #     (standard input)1:1:x:y
+  #     (standard input)1:2:x:y
+  #     (standard input)1:3:x:y
+  #
+  # And not:
+  #
+  #     (standard input):1:1:x
+  #     (standard input):1:2:x
+  #}}}
+  grep "${opts[@]}" -- "$PAT" "${files[@]}" \
+    | "$INSERT_COLUMNS" -F'\x1b\[36m\x1b\[K:\x1b\[m\x1b\[K' \
+        -v OFS="$OFS" \
+        -v output_colors="$output_colors"
+fi

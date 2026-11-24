@@ -1,0 +1,32 @@
+#!/bin/bash -
+
+readonly INSTALL_DIR="$HOME/.fzf"
+
+source "${0%/*}/_lib"
+bold="$(tput bold)"
+reset="$(tput sgr0)"
+_Extract_Archive 'fzf' "https://github.com/junegunn/fzf/releases
+
+To get the man page and the Vim plugin, make sure to download the ${bold}source code tarball${reset}."
+
+# Do *not* move that block after `./install`.{{{
+#
+# Otherwise, the latter would create a broken symlink:
+#
+#     Downloading bin/fzf ...
+#       - Found in $PATH
+#       - Creating symlink: bin/fzf -> /home/lgc/.fzf/bin/fzf
+#}}}
+rm -rf "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR"
+
+# `--bin`: install fzf binary only.{{{
+#
+# Don't  generate  files  for  fuzzy   auto-completion  or  key  bindings  (e.g.
+# `~/.fzf.bash`, and don't update our shell configuration files.
+#}}}
+# You can pass more arguments to the fzf installer:
+#     $ ~/.fzf/install --help
+yes | ./install --bin
+
+cp -R ./* "$INSTALL_DIR"

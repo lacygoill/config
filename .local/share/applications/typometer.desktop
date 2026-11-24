@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=typometer
+Comment= Text / code editor typing latency analyzer
+Exec=sh -c "java -jar \\$HOME/.local/bin/typometer.jar"
+Terminal=false
+Type=Application
+StartupNotify=false

@@ -1,0 +1,265 @@
+# control flow {{{1
+
+snippet t01 "if block" Am
+if ${1:cond} then
+	$0
+end
+endsnippet
+
+snippet t02 "if elseif block" Am
+if ${1:cond} then
+elseif ${2:cond} then
+	$0
+end
+endsnippet
+
+snippet t03 "for block" Am
+for ${1:i = 12, 34} do
+	$0
+end
+endsnippet
+
+# data types {{{1
+# number {{{2
+
+snippet t04 "coerce number into string" Am
+tostring(${1:123})
+endsnippet
+
+# string {{{2
+
+snippet t05 "get byte length of string" Am
+-- \`#\` is called the length operator.
+#${1:string}
+endsnippet
+
+snippet t06 "coerce string into number" Am
+tonumber('${1:string}')
+endsnippet
+
+snippet t07 "replace all occurrences of pat with rep in string" Am
+string.gsub(${1:string}, ${2:pat}, ${3:rep})
+endsnippet
+
+snippet t08 "get substring specified by indexes" Am
+${1:string}:sub(${2:start_index}, ${3:end_index})
+endsnippet
+
+snippet t09 "match string against regex" Am
+-- Returns the match as a string, or \`nil\` if there is no match.
+${1:string}:match('${2:regex}')
+endsnippet
+
+# table/list {{{2
+
+# Lists are also called arrays or sequences.
+
+snippet t10 "get length of list" Am
+-- The length operator \`#\` returns the last numeric key whose value is not nil.
+-- If the list contains a nil element, the evaluation is undefined.
+-- See \`:help luaref-langLength\` and notice the words "may"; not "will".
+-- Avoid using \`#\` on a list with holes; use \`:help table.maxn()\` instead.
+#${1:list (variable name, or literal)}
+endsnippet
+
+snippet t11 "get last item in list" Am
+${1:list}[#$1]
+endsnippet
+
+snippet t12 "remove last item from list" Am
+${1:list}[#$1] = nil
+$0
+endsnippet
+
+snippet t13 "append item to end of list" Am
+${1:list}[#$1 + 1] = ${2:value}
+$0
+endsnippet
+
+snippet t14 "index table without error" Am
+-- The output of \`type()\` is always a string.
+-- Even for \`nil\`:  \`type(nil) == 'nil'\`
+type(${1:table}) == 'table' and $1.${2:key}
+endsnippet
+# }}}1
+# math {{{1
+
+snippet t15 "numeric constant in scientific notation" Am
+-- $1 is the significand
+-- $2 is the exponent
+${1:12.34}e${2:56}
+endsnippet
+
+snippet t16 "π constant" Am
+math.pi
+endsnippet
+
+snippet t17 "floor function" Am
+math.floor(${1:12.34})
+endsnippet
+
+snippet t18 "square root function" Am
+math.sqrt(${1:123})
+endsnippet
+
+snippet t19 "integer part of real number" Am
+${1:real} - $1 % 1
+-- \`$1 % 1\`: fractional part after decimal point
+endsnippet
+
+snippet t20 "real number with only 2 digits after the decimal point" Am
+${1:real} - $1 % 0.01
+-- \`$1 % 0.01\`: fractional part 2 digits after decimal point
+endsnippet
+
+snippet t21 "absolute value of relative number" Am
+math.abs(${1:num})
+endsnippet
+
+# stdlib {{{1
+# io {{{2
+
+snippet t22 "read input as a string" Am
+io.read()
+$0
+endsnippet
+
+snippet t23 "read input as a number" Am
+io.read('*n')
+$0
+endsnippet
+
+snippet t24 "iterate over input lines" Am
+-- terminate when the user does not input anything (i.e. press Enter immediately)
+for ${1:line} in io.lines() do
+	$0
+end
+endsnippet
+
+snippet t25 "write a file" Am
+local f = io.open('${1:file}', 'w')
+f:write('${1:msg}')
+f:close()
+$0
+endsnippet
+# }}}1
+# user functions {{{1
+
+snippet t26 "function" Am
+function ${1:name}(${2:param})
+	$0
+end
+endsnippet
+
+snippet t27 "call/evaluate Lua function from Vim script context" Am
+${1:call|∅} v:lua.${2:func}()
+$0
+endsnippet
+
+snippet t28 "keyword arguments, aka kwargs" Am
+-- See \`:help kwargs\`
+local ${1:funcname} = function(${2:kwargs})
+	local ${3:var1} = $2.${4:param1}
+	local ${5:var2} = $2.${6:param2}
+end
+
+-- Note that the parens can be omitted.
+$1({ $4 = ${7:arg1}, $6 = ${8:arg2} })
+$0
+endsnippet
+
+snippet t29 "override function definition" Am
+-- change definition of \`${1:orig}()\` function
+$1 = (function(overridden)
+	return function(${2:params})
+		-- Write new definition here.
+		-- From the body of this anonymous function, if you need to call \`$1()\`,
+		-- never write its original name.  Instead write \`overridden()\`.
+		-- Otherwise, Lua would give a stack overflow error at runtime.
+		${3:new definition}
+	end
+end)($1)
+
+-- call overridden function
+$1()
+$0
+endsnippet
+
+# miscellaneous {{{1
+
+snippet t30 "generate error" Am
+error('${1:msg}')
+$0
+endsnippet
+
+snippet t31 "load given library" Am
+dofile('${1:/path/to/lib}')
+$0
+endsnippet
+
+snippet t32 "conditional expression" Am
+-- Equivalent to \`a ? b : c\` in C.
+-- Exception: if \`b\` is false, this evaluates to \`c\`, even if \`a\` is true.
+-- This works  because \`and\`  and \`or\` use  short-cut evaluation:  they only
+-- evaluate their 2nd operand if necessary.
+${1:test} and ${2:expr1} or ${3:expr2}
+endsnippet
+
+snippet t33 "set variable to default value" Am
+-- This assumes that \`$1\` is not \`false\`.
+-- Also, \`or\` is not equivalent to the null coalescing operator.
+-- By definition, the latter should only coalesce nulls or undefined values;
+-- \`or\` also coalesces \`false\`.
+${1:variable} = $1 or ${2:default}
+$0
+endsnippet
+
+snippet t34 "delete variable" Am
+${1:variable} = nil
+$0
+endsnippet
+
+snippet t35 "comment out block of code" Am
+-- Note  that  commenting \`]]\`  is  not  necessary,  but  makes it  easier  to
+-- temporarily activate  the block again  (by adding an  extra dash in  front of
+-- \`--[[\`).
+
+--[[
+${1:block
+of
+code}
+--]]
+$0
+endsnippet
+
+snippet t36 "comment out block of code which includes ]]" Am
+--[=[
+${1:block
+of
+code}
+--]=]
+$0
+endsnippet
+
+snippet t37 "unload given module" Am
+-- Unload a module so that it can be reloaded via \`require()\` (which then
+-- ignores the cache).
+-- Useful to see effects of changes while developing a plugin.
+package.loaded[${1:module}] = nil
+$0
+endsnippet
+
+snippet t38 "operators precedence/associativity" Am
+--     ^
+--     not   #   -(unary)
+--     *     /   %
+--     +     -
+--     ..
+--     <     >   <=   >=   ~=   ==
+--     and
+--     or
+
+-- All binary operators are left associative, except exponentiation
+-- and concatenation which are right associative.
+endsnippet
+

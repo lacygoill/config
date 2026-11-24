@@ -1,0 +1,1 @@
+--no-resume-playback  # forget about where we stopped last time; read from start again

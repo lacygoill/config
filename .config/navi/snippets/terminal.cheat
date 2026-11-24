@@ -1,0 +1,190 @@
+% terminal
+
+$ script_cmd: printf '%s\n' 'Record current interactive shell session?' yes no \
+    --- --header-lines 1 \
+        --map "\
+            case $(cat) in \
+                yes) ;; \
+                no) printf -- '--command=\"some command\"' ;; \
+            esac \
+        "
+
+; Speed  up the  replay displaying  this  number of  times.  The  argument is  a
+; floating point number.  It's called divisor  because it divides the timings by
+; this factor.
+$ speed: printf '1.0\n1.25\n1.5\n1.75\n2.0\n0.25\n0.5\n0.75'
+
+# print description of given terminal
+infocmp -1 -x <termname>
+    # `❬termname❭` can be omitted, in which case `$TERM` is used.
+    #
+    # ---
+    #
+    # `-1`: print only 1 field per line.
+    # `-x`: print information for user-defined capabilities (see `user_caps(5)`).
+
+# edit description of given terminal
+infocmp -1 -x <termname> >/tmp/<termname>.terminfo \
+    && editor /tmp/<termname>.terminfo \
+    && sudo tic -s -x /tmp/<termname>.terminfo
+    # `infocmp(1)` decompiles  the current description, `editor(1)`  changes it,
+    # and `tic(1)` recompiles the new description.
+    #
+    # ---
+    #
+    # `-s`: summarize  the compile by  showing the database location  into which
+    # entries are written, and the number of entries which are compiled.
+    #
+    # `-x`:  treat unknown  capabilities as  user-defined (see  `user_caps(5)`).
+    # That is, infer their type (boolean,  number or string) from the syntax and
+    # make an  extended table entry  for that.  User-defined  capability strings
+    # whose name begins with “k” are treated as function keys.
+    #
+    # ---
+    #
+    # `tic(1)` is the `terminfo` compiler.
+    #
+    # It compiles the data into a file  named according to the canonical name of
+    # the  terminal  (first  alias  in  the  first  field  of  the  entry).   It
+    # also  creates links  for  all other  aliases, except  the  last one  (long
+    # description), so that  if your `$TERM` does not use  the canonical name of
+    # the terminal but an alias, programs  running in the terminal will still be
+    # able to find its description.
+    #
+    # ---
+    #
+    # Indented lines must be indented with a tab character.
+    #
+    # The description can be broken down into fields, separated with commas.
+    # All fields **must** be followed by a comma; even the last one.
+    #
+    # The first field lists aliase names for the terminal, separated with bars:
+    #
+    #    - the first alias is the canonical name of the terminal
+    #    - the last alias is a long description of the terminal
+    #
+    # The next fields specify the  terminal capabilities sorted according to the
+    # type of their value:
+    #
+    #    1. boolean
+    #    2. numeric
+    #    3. string
+
+# list all known terminal descriptions
+toe -a -s
+    # `-a`: look in all terminal databases; not just the first one you find.
+    # `-s`: sort the output according to the names of the terminals.
+    #
+    # ---
+    #
+    # Each of the listed directories at the top is a database:
+    #
+    #    - `~/.terminfo`
+    #    - `/etc/terminfo`
+    #    - `/usr/lib/terminfo`
+    #    - `/usr/share/terminfo`
+    #
+    # Each database  contains a set  of subdirectories, with 1-char  names.  The
+    # compiled terminal  descriptions are placed  inside them, according  to the
+    # first character in their canonical name.  For example, the description for
+    # `tmux` is inside the subdirectory `t/`.
+    #
+    # ---
+    #
+    # On  each line  where  a  terminal type  is  listed,  `*`/`+` represents  a
+    # database where a description for that terminal can be found.
+    #
+    # To find the database which `*`/`+` refers to, get the character's position
+    # on the  line, add 1 and  divide by 2.   The result `n` matches  the `n`-th
+    # database listed at the top of the output.
+    #
+    # Example:
+    #
+    #     --> /home/lgc/.terminfo
+    #     ----> /etc/terminfo
+    #     ------> /lib/terminfo
+    #     --------> /usr/share/terminfo
+    #     *-----+-:	9term     	Plan9 terminal emulator for X
+    #     *---*---:	Eterm     	Eterm with xterm-style color support (X Window System)
+    #         ^
+    #
+    # The second `*` on the `Eterm` line refers to the second database at the top:
+    #
+    #     ----> /lib/terminfo
+    #
+    # Because it's the 5th character on the line, and:  `(5 + 1) / 2 = 3`.
+
+# print long name of given terminal
+tput -T <termname> longname
+
+# record keycodes output of shell command
+script --quiet --timing=$TMPDIR/script_timing.log <script_cmd> $TMPDIR/script_record.log
+
+# replay recording of script(1)
+scriptreplay --typescript=$TMPDIR/script_record.log --timing=$TMPDIR/script_timing.log --divisor=<speed>
+
+% terminal, console
+
+$ dump_how: printf '%s\n' 'append to or overwrite the file?' append overwrite \
+    --- --header-lines 1 \
+        --map "\
+            case $(cat) in \
+                append) printf -- '--append=' ;; \
+                overwrite) printf -- '--file=' ;; \
+            esac \
+        "
+
+$ dump_what: printf '%s\n' current_console $(seq 1 6) \
+    --- --header 'which console to dump?' \
+        --map "\
+            cat >/tmp/.navi \
+          ; case $(< /tmp/.navi) in \
+                current_console) ;; \
+                *) printf -- '--dump=%s' $(< /tmp/.navi) ;; \
+            esac \
+          ; rm /tmp/.navi \
+        "
+
+# turn background color from black to white
+setterm --background=white --foreground=black --store >$(tty) && clear
+
+# set font
+sudo dpkg-reconfigure --priority=low console-setup
+    # `TerminusBold` is a good font, and `16x32` a good size.
+    # In a VM, there is less space; try `10x20` instead.
+    #
+    # For the change to take effect immediately, you might need to run:  `$ setupcon`
+    # If that doesn't work, log out / log in back, or restart the OS.
+    #
+    # ---
+    #
+    # Alternatives:
+    #
+    #     $ sudoedit /etc/default/console-setup
+    #     $ setfont /usr/share/consolefonts/Lat15-TerminusBold32x16.psf.gz
+    #
+    # ---
+    #
+    # To  get more  fonts, install  the `console-data`  package on  Debian-based
+    # systems, or the `console-setup` package on RedHat-based systems.
+    #
+    # ---
+    #
+    # On RedHat-based systems:
+    #
+    #     $ setfont /usr/share/consolefonts/Lat15-TerminusBold...
+    #
+    # To reset to the default font:
+    #
+    #     $ setfont
+
+# dump output of current screen in given file
+setterm <dump_what> <dump_how> file.dump
+
+# open image
+sudo apt install fbi \
+    && sudo adduser "$USER" video
+    && fbi image.jpg
+    # You need to log out for the  `adduser(8)` command to take effect.  And you
+    # need  to  be in  the  video  group, because  `fbi(1)`  needs  to write  on
+    # `/dev/fb0` which is owned by the root user, and the `video` group.

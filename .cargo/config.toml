@@ -1,0 +1,17 @@
+# https://doc.rust-lang.org/cargo/reference/config.html
+
+[build]
+# Be nice with the CPU.{{{
+#
+# By default,  the rust compiler runs  several processes in parallel,  using all
+# our CPU cores.   This makes the system  hard to use.  We don't  want that.  We
+# want our system to  be always a minimum responsive.  Also, we  might work on a
+# machine with  limited resources (e.g. raspberry  pi), where the issue  is even
+# more pronounced.
+#
+# Let's limit  the number of  processes that the compiler  is allowed to  run in
+# parallel to 1.
+#
+# Note that this setting can be overridden with the `--jobs` CLI option.
+#}}}
+jobs = 1

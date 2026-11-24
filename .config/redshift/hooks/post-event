@@ -1,0 +1,19 @@
+#!/bin/bash -
+
+# Commented because  the notifications  are too  distracting and  provide little
+# value.
+
+#     # `man redshift /HOOKS`
+#     case $1 in
+#     period-changed)
+#       notify-send \
+#         --icon='redshift' \
+#         --urgency=low \
+#         'Redshift' "Period changed from $2 to $3"
+#     ;;
+#
+#     *)
+#       printf 'Redshift: invalid argument %s' "$1" >&2
+#       exit 1
+#     ;;
+#     esac

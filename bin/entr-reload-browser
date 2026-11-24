@@ -1,0 +1,21 @@
+#!/bin/bash -
+
+# wrapper for reloading the current browser tab
+
+# Source: https://eradman.com/entrproject/scripts/
+
+readonly SCRIPT="${0##*/}"
+
+function Usage {
+  # xdotool uses regular expressions
+  echo "Usage: $SCRIPT Firefox [Chrome ...]"
+  exit 1
+}
+(( $# < 1 )) && Usage
+
+for browser in "$@"; do
+  xdotool search --onlyvisible --class "$browser" windowfocus key \
+    --window %@ 'ctrl+r' || {
+    1>&2 echo "unable to signal an application named \"$browser\""
+  }
+done

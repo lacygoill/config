@@ -1,0 +1,72 @@
+#!/usr/bin/awk -f
+
+# In a field, we might have a command which ends with a semicolon:
+#
+#     mail; mail --file=$HOME/mbox
+#         ^
+# We need  to trim  it before printing  the command, which  is why  we sometimes
+# execute:
+#
+#     sub(";$", "", cmd)
+
+# But don't trim too much.{{{
+#
+# That is, avoid  the `+` quantifier, and don't trim  other metacharacters (e.g.
+# `|`, `&`, ...).
+#
+# If you  do, you  might give  meaning to  some nonsense  which was  executed by
+# accident.  Besides, in practice, it seems we never append a metacharacter to a
+# command name, except for `;`.
+#}}}
+
+BEGIN {
+  split(SPECIAL_CMDS, array, " ")
+  # turn the indexed `array` into the associative array `special`
+  for (i in array) {
+    special[array[i]] = 1
+  }
+}
+
+/^- cmd: / {
+  cmd = $3
+
+  if (cmd ~ /;$/)
+    sub(";$", "", cmd)
+
+  else if (cmd in special)
+    cmd = combine_till_subcommand(4)
+
+  else if (cmd == "sudo") {
+    # ignore `sudo`; it is meaningless
+    cmd = $4
+    if (cmd ~ /;$/)
+      sub(";$", "", cmd)
+    else if (cmd in special)
+      cmd = combine_till_subcommand(5)
+  }
+
+  ++frequencies[cmd]
+}
+
+END {
+  for (cmd in frequencies)
+    print cmd "\t" frequencies[cmd]
+}
+
+function combine_till_subcommand(start_idx) {
+  for (i = start_idx; i <= NF; i++) {
+    # ignore punctuation (e.g., a pipe)
+    if ($i !~ /^[-0-9A-Za-z_]/)
+      break
+
+    cmd = cmd " " $i
+
+    # stop at a subcommand
+    if ($i !~ /^-/) {
+      sub(";$", "", cmd)
+      break
+    }
+  }
+
+  return cmd
+}

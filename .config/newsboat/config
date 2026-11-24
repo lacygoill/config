@@ -1,0 +1,97 @@
+# Colors {{{1
+
+# Where did you find the code?{{{
+#
+# https://gist.github.com/anonymous/42d2f5956e7bc8ee1ebc
+#
+# From: https://wiki.archlinux.org/index.php/Newsboat#Configuration
+# See Also: http://moparx.com/configs/newsbeuter/
+#}}}
+color listfocus white blue bold
+color listfocus_unread white blue bold
+color info blue default standout
+
+# Default key bindings {{{1
+
+# ENTER           open                    Open feed/article
+# q               quit                    Return to previous dialog/Quit
+# Q               hard-quit               Quit program, no confirmation
+# r               reload                  Reload currently selected feed
+# R               reload-all              Reload all feeds
+# A               mark-feed-read          Mark feed read
+# C               mark-all-feeds-read     Mark all feeds read
+# J               next                    Go to next article
+# K               prev                    Go to previous article
+# n               next-unread             Go to next unread article
+# p               prev-unread             Go to previous unread article
+# ^K              random-unread           Go to a random unread article
+# o               open-in-browser         Open article in browser
+# ?               help                    Open help dialog
+# l               toggle-show-read-feeds  Toggle show read feeds/articles
+# ^T              clear-tag               Clear current tag
+# t               set-tag                 Select tag
+# t               select-tag              Select tag
+# /               open-search             Open search dialog
+# ^R              reload-urls             Reload the list of URLs from the configuration
+# :               cmdline                 Open the commandline
+# F               set-filter              Set a filter
+# f               select-filter           Select a predefined filter
+# ^F              clear-filter            Clear currently set filter
+# ,               macro-prefix            Call a macro
+# E               edit-urls               Edit subscribed URLs
+# v               view-dialogs            View list of open dialogs
+# ^V              next-dialog             Go to next dialog
+# ^G              prev-dialog             Go to previous dialog
+# g               sort                    Sort current list
+# G               rev-sort                Sort current list (reverse)
+
+# Generic bindings:
+
+# ^L              redraw                  Redraw screen
+# UP              up                      Move to the previous entry
+# DOWN            down                    Move to the next entry
+# PAGEUP          pageup                  Move to the previous page
+# PAGEDOWN        pagedown                Move to the next page
+# HOME            home                    Move to the start of page/list
+# END             end                     Move to the end of page/list
+
+# Unbound functions:
+
+# open-all-unread-in-browser                 Open all unread items of selected feed in browser
+# open-all-unread-in-browser-and-mark-read                 Open all unread items of selected feed in browser and mark rea
+
+# Custom key bindings {{{1
+
+bind-key g home
+bind-key G end
+
+bind-key j down
+bind-key k up
+bind-key l open
+
+# by default, it's `p` which I find confusing
+bind-key N prev-unread
+# Now, we've lost the `toggle-article-read` function.
+# Restore it.  We use `X` for “eXchange”.
+bind-key X toggle-article-read
+
+# toggle  the read flag  for the currently  selected article, and  clears delete
+# flag if set
+bind-key SPACE toggle-article-read
+
+bind-key s sort
+bind-key S rev-sort
+bind-key ^S save
+
+# Options {{{1
+
+browser firefox
+
+# reload feeds when newsboat starts up, and then periodically
+auto-reload yes
+
+# don't ask for confirmation when we want to mark a feed as read
+confirm-mark-feed-read no
+
+# reload feeds every 15 minutes
+reload-time 15

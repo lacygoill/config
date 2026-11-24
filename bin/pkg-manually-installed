@@ -1,0 +1,48 @@
+#!/bin/bash -
+
+# Purpose: Print all `.deb` packages which have been manually installed.
+
+if ! command -v aptitude >/dev/null; then
+  echo 'missing dependency: aptitude' >&2
+  exit 1
+fi
+
+readarray -t installed_locally < <(
+  aptitude search '?installed' --display-format='%p %O' \
+    | awk '/installed locally/ { print $1 }'
+)
+
+# We  rely  on   `$ apt-mark showmanual`  to  get  the  base   list.   Then,  we
+# use   `comm(1)`  to   remove   any  package   which   was  already   installed
+# in   the    initial   system    (whose   status    we   can    retrieve   from
+# `/var/log/installer/status`).
+LC_ALL=C comm -23 \
+  <(apt-mark showmanual | LC_ALL=C sort --unique) \
+  <(sed -n 's/^Package: //p' /var/log/installer/status \
+    | LC_ALL=C sort --unique \
+  ) \
+  | while read -r pkg; do
+      # Ignore libraries and compilation-time  dependencies, as well as packages
+      # which were downloaded outside a repo.
+      if [[ "$pkg" =~ -dev$ ]] \
+        || { [[ "$pkg" =~ ^lib ]] && ! [[ "$pkg" =~ -bin ]] ;} \
+        || [[ " ${installed_locally[*]} " == *" $pkg "* ]]; then
+          continue
+      fi
+
+      # You could add one more condition:{{{
+      #
+      #     # echo only if there is no reason install the package
+      #     if ! aptitude why "$pkg" >/dev/null; then
+      #       echo "$pkg"
+      #     fi
+      #
+      # Not sure it would give better results though.
+      # Also, it's slower (adds around 3 minutes).
+      #}}}
+      echo "$pkg"
+    done
+
+echo
+echo 'packages installed locally (i.e. not downloaded by APT from known source):'
+printf '%s\n' "${installed_locally[@]}"

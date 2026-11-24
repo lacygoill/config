@@ -1,0 +1,115 @@
+#!/usr/bin/awk -f
+
+BEGIN {
+  s = "_README README Deepdive LiveOverflow Wiki after bin code config"
+  s = s " cyclic-completions drop-in etc local mine notes opt pack plugin"
+  s = s " plugins pythonx scripts share snippets system vendor"
+  # split the string into an array
+  split(s, a, " ")
+  # The names are stored as values; but  for our future `in array` tests to work
+  # as expected, we need the names to be stored as keys.
+  for (i in a)
+    IGNORE[a[i]] = ""
+    #            ^--^
+    # NOTE: Actually, that's not necessary.{{{
+    #
+    # The mere reference  to an element creates it.  Implicitly,  it's set to an
+    # empty string.  But better be explicit.
+    #}}}
+
+  # It's convenient to also ignore the null string via `IGNORE` rather than with
+  # an extra `dirname == ""`.
+  IGNORE[""] = ""
+}
+
+{
+  fpath = $1
+  lnum = $2
+  header = $3
+
+  # a header might include a colon
+  for (i = 4; i <= NF; i++)
+    header = header ":" $i
+
+  split(fpath, a, "/")
+  i = length(a)
+
+  fname = a[i]
+  sub(/\.md$/, "", fname)
+  if (fname in IGNORE)
+    fname = ""
+
+  tags = fname
+  if (tags == "")
+    ntags = 0
+  else
+    ntags = 1
+  # `ntags < 2`: keep parsing the path until we found 2 tags (i.e. `ntags == 2`).
+  # `i >= 5`: `a` is indexed from 1, and its first element is always an empty string.{{{
+  #
+  # The empty string stands for the missing field before the first slash.
+  #
+  #      /home/user/dir/file
+  #     ^ ^--^ ^--^ ^^^ ^--^
+  #     1  2    3    4   5
+  #}}}
+  while (ntags < 2 && i >= 5) {
+    dirname = ""
+    # `dirname ~ /_[^_]*_/`: Ignore noisy names.{{{
+    #
+    # Like these ones:
+    #
+    #     C_Programming_A_Modern_Approach
+    #     07_Uncrackable_Programs_Key_validation_with_Algorithm_and_creating_a_Keygen_Part_1
+    #}}}
+    while (i >= 5 \
+        && (dirname in IGNORE \
+        || dirname ~ /_[^_]*_/))
+      dirname = a[--i]
+
+    # `.vim` → `vim`, `.ssh` → `ssh`, ...
+    sub(/^\./, "", dirname)
+    # `getty@.service.d` → `getty`
+    # `interSubs.disable` → `interSubs`
+    sub(/[@.].*/, "", dirname)
+
+    if (dirname in IGNORE \
+        || dirname ~ /_[^_]*_/)
+      continue
+
+    if (tags == "")
+      tags = dirname
+    else {
+      # no duplicate tags
+      if (tolower(tags) == tolower(dirname))
+        continue
+      tags = dirname " " tags
+    }
+
+    ntags++
+  }
+
+  # TODO: Get 1 optional extra tag for a possible parent section?{{{
+  #
+  #     $ config jump grep '^#+ (annex|glossary|issues|pitfalls|syntax|todo)$'
+  #
+  # Make sure it's not already in `tags`.
+  #
+  # If you try  to do that, you'll  need to refactor the calling  bash script so
+  # that  it no  longer runs  `grep(1)` to  extract the  headers.  Instead,  the
+  # current script will have to do it.
+  #}}}
+
+  # If you need to log all the tags, uncomment this block:{{{
+  #
+  #     logfile = "/tmp/log"
+  #     print tags >>logfile
+  #     close(logfile)
+  #
+  # Then, use the current script.
+  # Finally, run this Ex command:
+  #
+  #     :split /tmp/log | :% substitute/ /\r/g | :% sort | Uniq | update
+  #}}}
+  print header nbsp green tags reset nbsp fpath nbsp lnum
+}

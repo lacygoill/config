@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=user-session
+Exec=sh -c "$HOME/bin/user-session"
+Terminal=false
+Comment=
+RunHook=0

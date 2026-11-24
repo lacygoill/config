@@ -1,0 +1,15 @@
+# global snippet {{{1
+
+snippet glob "global snippet" bm
+global !p
+$0
+endglobal
+endsnippet
+
+# regular snippet {{{1
+
+snippet snip "regular snippet" bm
+snippet `echo t1234` "${1:Description}" Am
+$0
+`echo endsnippet`
+endsnippet

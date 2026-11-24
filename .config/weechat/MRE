@@ -1,0 +1,9 @@
+/key bind ctrl-^ /buffer jump last_displayed
+/key bind ctrl-g,ctrl-l /buffer clear
+/key bind meta-F /buflist toggle
+/key bind meta-j /window scroll_down
+/key bind meta-k /window scroll_up
+/toggle weechat.look.buffer_time_format
+/set irc.server_default.nicks "cgl"
+/server add undernet irc.undernet.org/6667
+/set irc.server.undernet.tls off

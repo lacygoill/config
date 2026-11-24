@@ -1,0 +1,77 @@
+#!/bin/bash -
+
+# This  script can  be  called  by Vim  (`<space>fn`,  `<space>fN`)  or by  fish
+# (`omni-TUI`) when we want  to jump to some header written in  one of our notes
+# files.
+
+readonly -a NOT_SPECIFIC_ENOUGH=('Annex' 'Glossary' 'Issues' 'Pitfalls' 'Syntax' 'Todo')
+
+readonly SCRIPT="${0##*/}"
+readonly FORMATTING="${0%/*}/notes-headers-formatting"
+readonly CONFIG_FILETYPES="$HOME/.cache/vim/config_filetypes.json"
+
+if ! [[ -f "$CONFIG_FILETYPES" ]]; then
+  printf '%s: cannot find: %s' "$SCRIPT" "$CONFIG_FILETYPES" >&2
+  exit 1
+fi
+
+if (( $# == 3 )); then
+  should_be_filtered='yes'
+
+  filetype="$1"
+  filepath="$2"
+  cwd="$3"
+
+  basename="${filepath##*/}"
+  basename="${basename%.*}"
+  dirname="${filepath%/*}"
+  dirname="${dirname##*/}"
+
+  if [[ "$filetype" == 'markdown' ]]; then
+    unset -v filetype
+  fi
+  # If I'm  reading the glossary about  a given topic, don't  suggest me headers
+  # from all glossaries.
+  for var in 'filetype' 'basename' 'dirname'; do
+    declare -n var
+    if [[ " ${NOT_SPECIFIC_ENOUGH[*]} " == *" $var "* ]]; then
+      unset -v var
+    fi
+  done
+
+elif (( $# != 0 )); then
+  printf '%s: expected 0 or 3 arguments but got %d\n' "$SCRIPT" "$#" >&2
+  exit 1
+fi
+
+green="$(tput setaf 2)"
+reset="$(tput sgr0)"
+
+jq --raw-output '.markdown | values[]' "$CONFIG_FILETYPES" \
+  | if [[ -n "$should_be_filtered" ]]; then
+      # Filter out  any notes  file which is  not under the  CWD of  the current
+      # file, or is not about any of these topics:
+      #
+      #    - the current filetype
+      #    - the current basename
+      #    - the current dirname
+      #
+      # To determine whether a notes file is  about a given topic, we simply try
+      # to match the topic as a whole directory/file name anywhere in the notes'
+      # path.
+      other_info="$filetype"
+      other_info+="${other_info:+\|}${basename}"
+      other_info+="${other_info:+\|}${dirname}"
+      other_info="${other_info:+/\("$other_info"\)\(/\|\.md$\)}"
+      pat="${cwd:+^"$cwd"/}"
+      pat+="${pat:+\|}$other_info"
+      grep -i "$pat" 2>/dev/null
+    else
+      tee
+    fi \
+| xargs --delimiter='\n' grep --with-filename \
+    --line-number \
+    --perl-regexp \
+    --only-matching \
+    '^#+\s+\K.*[[:alpha:]].+' -- \
+| awk -F':' -v nbsp=$'\u00a0' -v green="$green" -v reset="$reset" -f "$FORMATTING"

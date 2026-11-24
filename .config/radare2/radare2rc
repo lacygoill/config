@@ -1,0 +1,24 @@
+# For more info about the config: https://book.rada.re/configuration/intro.html
+# To start without any config:{{{
+#
+#     $ radare2 -NN <binary>
+#
+# `-N` skips any config file.
+# `-NN` does the same but also disables the automatic loading of plugins.
+#}}}
+
+e asm.syntax = intel
+
+# use io.cache.read if binary needs to patch relocations{{{
+#
+# This is useful to suppress this warning:
+#
+#     Warning: run r2 with -e bin.cache=true to fix relocations in disassembly
+#}}}
+e bin.cache = true
+
+# enable 24bit true color
+e scr.color = 3
+
+# select readable color theme
+eco white

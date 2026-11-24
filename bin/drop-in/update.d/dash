@@ -1,0 +1,16 @@
+#!/bin/bash -
+
+# This script is useful to make `sh(1)` support readline commands.
+
+# `libedit-dev`:  `--libedit-dev`
+readonly -a DEPENDENCIES=(
+  'libedit-dev'
+)
+
+source "${0%/*}/_lib"
+_Extract_Archive 'dash' 'http://gondor.apana.org.au/~herbert/dash/files/?C=M;O=D'
+_Install_Dependencies "${DEPENDENCIES[@]}"
+
+./configure --prefix="$HOME/.local" --with-libedit \
+  && make \
+  && make install

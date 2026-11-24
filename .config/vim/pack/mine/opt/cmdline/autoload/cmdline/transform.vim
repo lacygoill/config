@@ -1,0 +1,177 @@
+vim9script
+
+import autoload './util/undo.vim'
+
+const PAT_RANGE: string = '\s*\%([%*]\|[^,]*,[^,]*\)'
+
+# number of times we've transformed the command-line
+var transformed: number = -1
+var orig_cmdline: string
+
+# Interface {{{1
+export def Main(): string #{{{2
+    ++transformed
+    autocmd CmdlineLeave /,\?,: ++once transformed = -1 | orig_cmdline = ''
+
+    var cmdtype: string = getcmdtype()
+    var cmdline: string = getcmdline()
+    # Don't write a guard to prevent multiple transformations on the Ex command-line!{{{
+    #
+    #     if transformed >= 1 && cmdtype == ':'
+    #         return ''
+    #     endif
+    #
+    # It would prevent you from re-applying a transformation, after clearing the
+    # command-line (`C-u`) and writing a new command.
+    #}}}
+    if cmdtype =~ '[/?]'
+        if transformed == 0
+            orig_cmdline = cmdline
+        endif
+        undo.EmitAddToUndolistC()
+        return "\<C-E>\<C-U>"
+            .. (transformed % 2 ? ReplaceWithEquivClass() : SearchOutsideComments(cmdtype))
+    endif
+
+    if cmdtype =~ ':'
+        undo.EmitAddToUndolistC()
+        cmdline = getcmdline()
+        var cmd: string = GuessWhatTheCmdlineIs(cmdline)
+        return Transform(cmd, cmdline)
+    endif
+
+    return ''
+enddef
+# }}}1
+# Core {{{1
+# Ex {{{2
+def GuessWhatTheCmdlineIs(cmdline: string): string #{{{3
+    if cmdline =~ '^' .. PAT_RANGE .. 's[/:]'
+        # a substitution command
+        return ':s'
+    endif
+    if cmdline =~ '\C^\s*echo'
+        return ':echo'
+    endif
+    if cmdline =~ '\C^\s*vim9\s\+echo'
+        return ':vim9 echo'
+    endif
+    if cmdline =~ '\C^\s*eval'
+        return ':eval'
+    endif
+    if cmdline =~ '\C^\s*vim9\s\+eval'
+        return ':vim9 eval'
+    endif
+    return ''
+enddef
+
+def Transform(cmd: string, cmdline: string): string #{{{3
+    if cmd == ':s'
+        return CaptureSubpatterns(cmdline)
+    endif
+    if cmd =~ '\%(echo\|eval\)'
+        return MapFilter(cmdline, cmd =~ 'vim9')
+    endif
+    return ''
+enddef
+
+def MapFilter(cmdline: string, is_vim9: bool): string #{{{3
+    # Purpose:{{{
+    #
+    #     :vim9 echo [1, 2, 3]
+    #     :vim9 echo [1, 2, 3]->map((_, v) => )˜
+    #
+    #     :vim9 echo [1, 2, 3]->map((_, v) => )
+    #     :vim9 echo [1, 2, 3]->filter((_, v) => )˜
+    #
+    #     :vim9 echo [1, 2, 3]->filter((_, v) => v != 2)
+    #     :vim9 echo [1, 2, 3]->filter((_, v) => v != 2)->map((_, v) => )˜
+    #}}}
+    var new_cmdline: string
+    if cmdline =~ '\C^\s*\%(echo\|eval\)\s\+.*->\%(map\|filter\)({[i,_],\s*v\s*->\s*})$'
+        new_cmdline = cmdline
+            ->substitute(
+                '\C^\s*\%(echo\|eval\)\s\+.*->\zs\%(map\|filter\)\ze({[i,_],\s*v\s*->\s*})$',
+                '\={"map": "filter", "filter": "map"}[submatch(0)]',
+                '')
+
+    elseif cmdline =~ '\C^\s*vim9\s\+\%(echo\|eval\)\s\+.*->\%(map\|filter\)(([i,_],\s\+v)\s\+=>\s*)$'
+        new_cmdline = cmdline
+            ->substitute(
+                '\C^\s*vim9\s\+\%(echo\|eval\)\s\+.*->\zs\%(map\|filter\)\ze(([i,_],\s\+v)\s\+=>\s*)$',
+                '\={"map": "filter", "filter": "map"}[submatch(0)]',
+                '')
+
+    else
+        new_cmdline = cmdline
+            ->substitute(
+                '$',
+                is_vim9 ? '->map((_, v) => )' : '->map({_, v -> })',
+                '')
+    endif
+
+    return "\<C-E>\<C-U>" .. new_cmdline .. "\<Left>" .. (is_vim9 ? '' : "\<Left>")
+enddef
+
+def CaptureSubpatterns(cmdline: string): string #{{{3
+# Purpose:{{{
+#
+#     :%s/foo_bar_baz//g
+#     :%s/\(foo\)_\(bar\)_\(baz\)//g˜
+#}}}
+
+    # extract the range, separator and the pattern
+    var range: string
+    var separator: string
+    [range, separator] = matchlist(cmdline, '^\(' .. PAT_RANGE .. '\)s\(.\)')[1 : 2]
+    var pat: string = split(cmdline, separator)[1]
+
+    # from the pattern, extract words between underscores or uppercase letters:{{{
+    #
+    #         'OneTwoThree'   → ['One', 'Two', 'Three']
+    #         'one_two_three' → ['one', 'two', 'three']
+    #}}}
+    var subpatterns: list<string> = split(pat, pat =~ '_' ? '_' : '\ze\u')
+
+    # return the keys to type{{{
+    #
+    #                              ┌ original pattern, with the addition of parentheses around the subpatterns:
+    #                              │
+    #                              │          (One)(Two)(Three)
+    #                              │    or    (one)_(two)_(three)
+    #                              │
+    #                              ├────────────────────────────────────────────────────────────────────┐}}}
+    var new_cmdline: string = range .. 's/'
+        .. subpatterns
+            ->map((_, v: string) => '\(' .. v .. '\)')
+            ->join(pat =~ '_' ? '_' : '')
+        .. '//g'
+
+    return "\<C-E>\<C-U>" .. new_cmdline .. "\<Left>\<Left>"
+enddef
+#}}}2
+# Search {{{2
+def ReplaceWithEquivClass(): string #{{{3
+    return orig_cmdline->substitute('\a', '[[=\0=]]', 'g')
+enddef
+
+def SearchOutsideComments(cmdtype: string): string #{{{3
+    # we should probably save `cmdline` in  a script-local variable if we want
+    # to cycle between several transformations
+    if empty(&commentstring)
+        return orig_cmdline
+    endif
+    var cml: string
+    if b:current_syntax == 'vim9'
+        cml = '#'
+    elseif b:current_syntax == 'vim'
+        cml = '"'
+    else
+        cml = '\V' .. &commentstring->matchstr('\S*\ze\s*%s')->escape('\' .. cmdtype) .. '\m'
+    endif
+    return $'\%(^\s*{cml}.*\)\@<!\%({orig_cmdline}\)'
+    #                            ^^^
+    # The original pattern  might contain several branches.  In  that case, we
+    # want the  lookbehind to be  applied to all of  them, not just  the first
+    # one.
+enddef

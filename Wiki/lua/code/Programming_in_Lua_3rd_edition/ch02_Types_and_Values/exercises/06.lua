@@ -1,0 +1,43 @@
+-- Purpose: Assume the following code:
+--
+--     a = {};  a.a = a
+--
+-- What would be  the value of `a.a.a.a`?   Is any `a` in  that sequence somehow
+-- different from the others?
+-- Now, add the next line to the previous code:
+--
+--     a.a.a.a = 3
+--
+-- What would be the value of `a.a.a.a` now?
+
+-- Reference: page 19 (paper) / 38 (ebook)
+
+
+-- Since `a.a` is the  same as `a`, in any `a.a.a...`  expression, we can always
+-- reduce the last 2 `a`s into a single one (no matter how many `a`s).
+-- And since we can  repeat the process as many times as we  want, we can always
+-- reduce it into simply `a`:
+--
+--     a.a.a.a
+--         ^^^
+--     ==
+--     a.a.a
+--       ^^^
+--     ==
+--     a.a
+--     ^^^
+--     ==
+--     a
+--
+-- `a` is a table with a single key, `a`, which refers to itself.
+--
+-- ---
+--
+-- If we assign `3` to `a.a.a.a`, evaluating the latter gives an error.
+--
+--     $ lua -e 'a = {}; a.a.a.a = 3; print(a.a.a.a)'
+--     lua: (command line):1: attempt to index field 'a' (a nil value)
+--
+-- That's because  Lua has simplified the  lvalue `a.a.a.a` into `a.a`,  and has
+-- assigned  to it  the number  `3`, which  means that  – now  – `a.a`  is a
+-- number; and a number can't be indexed.

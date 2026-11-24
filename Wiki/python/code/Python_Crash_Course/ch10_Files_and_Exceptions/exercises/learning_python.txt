@@ -1,0 +1,3 @@
+In Python, you can create a list by placing comma-separated values inside square brackets.
+In Python, you can define functions using the def keyword followed by the function name and parameters.
+In Python, you can import modules to access additional functionality with the import statement.

@@ -1,0 +1,9 @@
+#!/usr/bin/sed -f
+
+# In the  shebang, if you need  to pass `-n`  to `sed(1)`, combine it  with `-f`
+# into `-nf`:
+#
+#     #!/usr/bin/sed -nf
+#                    ^^^
+#
+# It's the only working syntax.

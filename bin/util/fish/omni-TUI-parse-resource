@@ -1,0 +1,41 @@
+#!/usr/bin/awk -f
+
+BEGIN {
+  relevant_header = "^#[ \\t]+" resource "$"
+  shell_cmd_prompt = "^[ \\t]+\\$[ \\t]+"
+  url = ".*<([^> ]+)>.*"
+}
+
+# ignore irrelevant headers
+$0 ~ relevant_header { in_relevant_header = 1; next }
+in_relevant_header && /^#/ { exit }
+!in_relevant_header { next }
+
+# handle URL
+$0 ~ url {
+  gsub(/^<|>$/, "", $0)
+  print " xdg-open '" $0 "'"
+  exit
+}
+
+# handle single line shell command
+$0 ~ shell_cmd_prompt && /[^\\]$/ {
+  sub(shell_cmd_prompt, " ", $0)
+  print $0
+  exit
+}
+
+# handle multiline shell command
+$0 ~ shell_cmd_prompt && /\$/ { is_multiline_shell_cmd = 1 }
+is_multiline_shell_cmd && /[^\\]$/ {
+  print $0
+  exit
+}
+
+$0 ~ shell_cmd_prompt {
+  sub(shell_cmd_prompt, " ", $0)
+  print $0
+  next
+}
+
+is_multiline_shell_cmd

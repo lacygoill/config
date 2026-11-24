@@ -1,0 +1,42 @@
+#!/bin/bash -
+
+# skopeo is a command line utility that performs various operations on container
+# images and image repositories.
+
+# https://github.com/containers/skopeo/blob/main/install.md#building-from-source
+
+# TODO: Maybe we should not build skopeo locally:{{{
+#
+#    > we also highly recommend you use Buildah, Podman, and Skopeo ONLY from
+#    > EITHER the Kubic repo OR the official Debian repos.
+#    > Mixing and matching may lead to unpredictable situations including
+#    > installation conflicts.
+#
+# Source: https://podman.io/docs/installation#debian
+#}}}
+
+readonly GOPATH="$HOME/.local/go"
+
+readonly -a DEPENDENCIES=(
+  'go-md2man'
+  'libassuan-dev'
+  'libdevmapper-dev'
+  'libgpgme-dev'
+)
+
+source "${0%/*}/_lib"
+_Extract_Archive 'skopeo' 'https://github.com/containers/skopeo/releases'
+_Install_Dependencies "${DEPENDENCIES[@]}"
+
+sudo --validate || exit 1
+
+readonly COMPILE_DIR="$GOPATH/src/github.com/containers/skopeo"
+sudo rm -rf "$COMPILE_DIR"
+mkdir -p "$COMPILE_DIR"
+cp -R ./* "$COMPILE_DIR"
+cd "$COMPILE_DIR" || exit 1
+
+make bin/skopeo
+# Need `sudo(8)` for the installation to completely succeed.
+# Also need to preserve `PATH`, otherwise `sh(1)` fails to find the `go` binary.
+sudo --preserve-env env "PATH=$PATH" make install

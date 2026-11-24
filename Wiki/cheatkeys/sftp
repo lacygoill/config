@@ -1,0 +1,18 @@
+display help                            help
+                                        ?
+
+download file                           get -f ‹file›
+upload file                             put -f ‹file›
+resume partial download                 reget -f ‹file›
+resume partial upload                   reput -f ‹file›
+download directory                      get -f -R ‹dir›
+# `-f`: flush file to disk after transfer
+
+rename file on server                   rename ‹old› ‹new›
+
+change CWD on server                    cd ‹dir›
+change CWD on client                    lcd ‹dir›
+
+quit program                            bye
+                                        exit
+                                        quit

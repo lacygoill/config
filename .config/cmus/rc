@@ -1,0 +1,14 @@
+# rebind `w` and `b` to the `player-next` and `player-prev` commands
+bind -f common w player-next
+bind -f common b player-prev
+#    ^^
+# Forces the mapping to be created even if the LHS is already used.
+# For more info: `man cmus /^KEYBINDINGS` and `man cmus /^COMMANDS`.
+
+# rebind `C-u` and `C-d` to the `win-page-up` and `win-page-down` commands
+bind -f common ^U win-page-up
+bind -f common ^D win-page-down
+
+# by default, the space key is bound to `win-toggle`
+bind -f common space player-pause
+bind -f common c win-toggle

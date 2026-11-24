@@ -1,0 +1,133 @@
+% gpg
+
+$ archive: find . -maxdepth 1 \
+    \( -name '*.bz2' \
+    -o -name '*.gz' \
+    -o -name '*.tar' \
+    -o -name '*.tgz' \
+    -o -name '*.xz' \
+    -o -name '*.zst' \) \
+    -printf '%P\n' 2>/dev/null
+
+$ signature: find . -maxdepth 1 \
+    \( -name '*.asc' \
+    -o -name '*.sig' \) \
+    -printf '%P\n' 2>/dev/null
+
+; `locate(1)` is around 6 times faster than `find(1)` here:
+;
+;     $ time locate --regexp '\.\(gpg\|kbx\)$'
+;     real    0m0.203s
+;
+;     $ time find / -name '.*' -prune -o -name '*.gpg' -o -name '*.kbx' 2>/dev/null
+;     real    0m1.282s
+$ keyring: locate --regexp '\.\(gpg\|kbx\)$'
+
+# list keys from the public keyring
+gpg --list-public-keys
+
+# list keys from given keyring
+gpg --list-public-keys --no-default-keyring --keyring=<keyring>
+
+# print comment about revoked key
+gpg --list-public-keys --with-sig-list <ID>
+    # Example:
+    #
+    #     $ gpg --list-public-keys --with-sig-list 38A4D970ECCD4E3BDB0B22C009E94F95000BEEEE
+    #     ...
+    #     reason for revocation: Key has been compromised
+    #        revocation comment: This key was generated as part of the Evil32 project.
+    #        revocation comment: It is not owned by the user described in the UID.
+    #        revocation comment: See https://evil32.com/revoked for more details.
+
+# remove given key from the public keyring
+gpg --delete-keys <ID>
+    # useful for revoked or expired keys
+
+# check authenticity of downloaded archive
+gpg --verify <signature> <archive>
+    # If this error is given:
+    #
+    #     gpg: Can't check signature: No public key
+    #
+    # From a trusted source (e.g. known encrypted  web site), find the ID of the
+    # public key used  to sign the archive.  For example,  you can find archives
+    # containing the Python source code at: https://www.python.org/downloads
+    # And at this URL, under the section "OpenPGP Public Keys", you can find key
+    # IDs for various archives:
+    #
+    #     Pablo Galindo Salgado (3.10.x and 3.11.x source files and tags) (key id: 64E628F8D684696D)
+    #                                                                              ^--------------^
+    #
+    # Once you found it, import the public key:
+    #
+    #     $ gpg --keyserver=hkps://pgp.mit.edu/ --recv-keys ❬ID❭
+    #
+    # Then, re-run the original command to check the authenticity of the archive.
+    #
+    # If `$ gpg --recv-keys`  fails, there  might be another  way to  import the
+    # key.   For example,  in the  previous example,  click on  the name  of the
+    # release manager (“Pablo Galindo Salgado”); that should open this page:
+    # https://keybase.io/pablogsal/
+    #
+    # Inside this page, click on the key ID; that should open a new popup window.
+    # Inside this popup, you should find a `gpg(1)` command such as:
+    #
+    #     $ curl https://keybase.io/pablogsal/pgp_keys.asc | gpg --import
+
+# get rid of warning when checking authenticity of file
+gpg --edit-key <ID>
+    # At the GPG prompt, run `trust`:
+    #
+    #     gpg> trust
+    #
+    # In the menu, choose 5 ("I trust ultimately").
+    # Afterward, you can re-run:  `$ gpg --verify ...`
+    #
+    # ---
+    #
+    # To find `❬ID❭`:
+    #
+    #     $ gpg --verify ❬signature❭ ❬archive❭
+    #
+    #     gpg: Signature made ...
+    #     gpg:                using RSA key 123ABC...
+    #                                       ^-------^
+    #                                         ❬ID❭
+    #
+    #     gpg: WARNING: This key is not certified with a trusted signature!
+    #     gpg:          There is no indication that the signature belongs to the owner.
+
+# test if downloaded key belongs to owner of repository
+test "$(gpg --show-keys '<keyfile>' | awk '/^ / { print $1 }')" = '<fingerprint>' \
+    && echo 'the key is valid' || echo 'the key is NOT valid'
+
+# import public key
+gpg --keyserver=hkps://pgp.mit.edu/ --recv-keys <ID>
+    # Useful before checking the authenticity of a downloaded archive.
+    # Otherwise, this kind of error is given:
+    #
+    #     Can't check signature: No public key
+
+% gpg, encryption
+@ gpg
+
+# archive and encrypt config
+tar --create --directory=$HOME --file=- --gzip --verbose .cfg \
+    | gpg --batch --output=$TMPDIR/_.png --passphrase-file=$PASSPHRASE_FILE --symmetric --yes -
+    # `gpg(1)` needs `--batch` for `--passphrase-file` to not be ignored.
+    #
+    # It also needs `--yes` to overwrite an existing encrypted archive.
+    #
+    # ---
+    #
+    # We use a symmetric encryption (same key to encrypt and decrypt).
+    # We could also use an *a*symmetric encryption, by passing `--encrypt` to `gpg(1)`.
+    #
+    # It *might* be  safer, but it would  also require that you create  your own key
+    # (`--gen-key`).  And then, you  would need to find a way  to store your private
+    # key securely.  This seems too cumbersome.
+
+# decrypt and extract config
+gpg --batch --decrypt --passphrase-file=$PASSPHRASE_FILE --yes <encrypted_config> \
+    | tar --directory=$HOME --extract --file=- --gzip --verbose
